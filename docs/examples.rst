@@ -159,20 +159,20 @@ Multi-Polygon Analysis
            geojson_path, 
            2024, 
            3, 
-           id_field="district_name"
+           group_by="district_name"
        )
        
        # Convert to DataFrame for analysis
        df = pd.DataFrame(results)
        
        print("PM2.5 by District (March 2024):")
-       print(df[['feature_id', 'mean', 'std']].to_string(index=False))
+       print(df[['district_name', 'mean', 'std']].to_string(index=False))
        
        # Find districts with highest pollution
        worst_districts = df.nlargest(3, 'mean')
        print("\nMost polluted districts:")
        for _, row in worst_districts.iterrows():
-           print(f"  {row['feature_id']}: {row['mean']:.2f} μg/m³")
+           print(f"  {row['district_name']}: {row['mean']:.2f} μg/m³")
            
    except Exception as e:
        print(f"Error in multi-polygon analysis: {e}")
@@ -263,7 +263,7 @@ Batch Data Processing
            """Download data for a single city"""
            try:
                filename = f"{city}_{year}.csv"
-               self.client.download_past_year_AQI_data_cityLevel(city, str(year), filename)
+               self.client.download_past_year_AQI_data_city_level(city, str(year), filename)
                return {"city": city, "year": year, "status": "success", "file": filename}
            except Exception as e:
                return {"city": city, "year": year, "status": "error", "error": str(e)}
