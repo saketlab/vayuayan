@@ -33,82 +33,17 @@ Navigate to the notebooks directory and start Jupyter:
    cd notebooks
    jupyter notebook
 
-Available Notebooks
--------------------
+.. Available Notebooks
+.. -------------------
+.. toctree::
+   :maxdepth: 1
+   :caption: Notebooks
 
-1. Getting Started
-~~~~~~~~~~~~~~~~~~
+   ../notebooks/01_getting_started
+   ../notebooks/02_historical_data_analysis
+   ../notebooks/03_live_monitoring
+   ../notebooks/04_pm25_regional_analysis
 
-**File:** ``01_getting_started.ipynb``
-
-**Level:** Beginner
-
-**Topics Covered:**
-
-- Package installation and imports
-- Exploring available data (states, cities, stations)
-- Finding your location
-- Getting real-time air quality data
-- Downloading historical AQI data
-
-**Ideal for:** First-time users learning the basics
-
-2. Historical Data Analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**File:** ``02_historical_data_analysis.ipynb``
-
-**Level:** Intermediate
-
-**Topics Covered:**
-
-- Downloading city-level historical data
-- Data cleaning and preprocessing
-- Statistical analysis
-- Time series visualization
-- Monthly trend analysis
-- Identifying worst pollution days
-- Pollutant-level analysis
-
-**Prerequisites:** Basic pandas and matplotlib knowledge
-
-3. Live Monitoring
-~~~~~~~~~~~~~~~~~~
-
-**File:** ``03_live_monitoring.ipynb``
-
-**Level:** Intermediate
-
-**Topics Covered:**
-
-- Auto-detecting location
-- Finding nearest monitoring stations
-- Fetching real-time air quality
-- Continuous monitoring setup
-- Creating air quality alerts
-- Data logging and export
-
-**Use Cases:** Real-time monitoring systems, alerting applications
-
-4. PM2.5 Regional Analysis
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**File:** ``04_pm25_regional_analysis.ipynb``
-
-**Level:** Advanced
-
-**Topics Covered:**
-
-- Working with GeoJSON boundaries
-- Regional PM2.5 statistics
-- Multi-polygon analysis
-- Temporal comparisons
-- Choropleth mapping
-- Spatial data visualization
-
-**Prerequisites:** Understanding of GeoJSON and spatial data
-
-**Requirements:** PM2.5 netCDF data files
 
 Data Requirements
 -----------------
@@ -117,11 +52,7 @@ Most notebooks work with real-time CPCB data without additional setup. However:
 
 **PM2.5 Analysis (Notebook 4):**
 
-Requires netCDF files with PM2.5 data. Download from:
-
-https://sites.wustl.edu/acag/datasets/surface-pm2-5/
-
-Place files in the ``examples/`` directory or update paths in the notebook.
+Requires GeoJSON files of region of interest.
 
 Running the Notebooks
 ---------------------
@@ -131,7 +62,6 @@ Running the Notebooks
 3. Read through the markdown cells for context
 4. Run code cells sequentially (Shift+Enter)
 5. Modify and experiment with the code
-6. Uncomment code blocks marked with ``# Uncomment to run``
 
 Tips for Success
 ----------------

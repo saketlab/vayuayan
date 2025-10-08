@@ -24,6 +24,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
+    'myst_nb',
 ]
 
 templates_path = ['_templates']
@@ -78,3 +79,6 @@ html_theme_options = {
     'includehidden': True,
     'titles_only': False
 }
+
+# MyST-NB configuration
+nb_execution_mode = "off"

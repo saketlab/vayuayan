@@ -25,9 +25,8 @@ Analyze historical AQI trends:
 - Downloading city-level historical data
 - Data preprocessing and cleaning
 - Statistical analysis and visualization
-- Monthly and seasonal trend analysis
 - Identifying worst air quality days
-- Analyzing individual pollutant levels
+
 
 **Prerequisites:** Familiarity with pandas and matplotlib
 
@@ -39,10 +38,9 @@ Analyze historical AQI trends:
 Real-time air quality monitoring:
 - Finding your location automatically
 - Locating nearest monitoring stations
-- Continuous monitoring setup
 - Creating air quality alerts
 - Visualizing real-time data
-- Exporting monitoring logs
+- Analyzing individual pollutant levels
 
 **Prerequisites:** Basic understanding of time series data
 
@@ -99,9 +97,7 @@ jupyter notebook
 ## 📊 Data Requirements
 
 - **Notebooks 1-3:** Work out of the box with real-time CPCB data
-- **Notebook 4 (PM2.5):** Requires netCDF files for PM2.5 data
-  - Download from: https://sites.wustl.edu/acag/datasets/surface-pm2-5/
-  - Place files in the `examples/` directory or update paths in the notebook
+- **Notebook 4 (PM2.5):** Requires GEOJson files of region of interest
 
 ## 🎯 Use Cases
 
