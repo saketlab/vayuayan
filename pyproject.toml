@@ -42,7 +42,7 @@ dependencies = [
     "geopandas>=1.0.1",
     "geopy>=2.4.1",
     "rioxarray>=0.19.0",
-    "xarray>=2025.9.0",
+    "xarray>=2025.6.0",
     "netCDF4>=1.7.2",
     "tqdm>=4.62.0"
 ]
