@@ -79,7 +79,6 @@ Command Line Interface
    cli_reference
    examples
    contributing
-   api_reference
 
 Jupyter Notebooks
 ==================
@@ -94,6 +93,22 @@ Interactive notebooks with hands-on examples live in the ``notebooks/`` director
    notebooks/02_historical_data_analysis
    notebooks/03_live_monitoring
    notebooks/04_pm25_regional_analysis
+
+API Reference
+=============
+
+.. toctree::
+   :maxdepth: 2
+
+   api_reference
+
+Release History
+===============
+
+.. toctree::
+   :maxdepth: 1
+
+   history
 
 
 Indices and tables
