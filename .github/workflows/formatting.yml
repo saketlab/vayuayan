@@ -17,18 +17,14 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Install formatting tools
+    - name: Install black
       run: |
         python -m pip install --upgrade pip
-        pip install black isort
+        pip install black
 
     - name: Check black formatting
       run: |
         black --check --diff vayuayan/
-
-    - name: Check import sorting
-      run: |
-        isort --check-only --diff vayuayan/
 
   auto-format:
     runs-on: ubuntu-latest
@@ -44,18 +40,14 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Install formatting tools
+    - name: Install black
       run: |
         python -m pip install --upgrade pip
-        pip install black isort
+        pip install black
 
     - name: Format code with black
       run: |
         black vayuayan/
-
-    - name: Sort imports with isort
-      run: |
-        isort vayuayan/
 
     - name: Check for changes
       id: verify-changed-files
@@ -72,5 +64,5 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add .
-        git commit -m "🤖 Auto-format code with black and isort" -m "Automated formatting applied by GitHub Actions"
+        git commit -m "🤖 Auto-format code with black" -m "Automated formatting applied by GitHub Actions"
         git push

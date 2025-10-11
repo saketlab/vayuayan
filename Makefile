@@ -21,7 +21,6 @@ lint:  ## Run linting
 
 format:  ## Format code
 	black vayuayan/
-	isort vayuayan/
 
 clean:  ## Clean build artifacts
 	rm -rf build/
