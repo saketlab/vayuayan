@@ -6,9 +6,7 @@ Release history and changelog for vayuayan.
 v0.1.2 (2025-10-11)
 ------------------
 
-**Bug Fixes**
-
-* Fixed missing logo on PyPI package page by using absolute GitHub URL
+* Fixed missing logo on PyPI 
 
 v0.1.1 (2025-10-11)
 ------------------
