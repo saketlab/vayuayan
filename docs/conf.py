@@ -35,7 +35,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "myst_nb",
-    "sphinx_multiversion",
+    # "sphinx_multiversion",  # Temporarily disabled due to template error
 ]
 
 templates_path = ["_templates"]
@@ -79,13 +79,15 @@ html_theme = "furo"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
 
+# Logo configuration
+html_logo = "assets/vayuayan.png"
+
 html_sidebars = {
     "**": [
         "sidebar/brand.html",
         "sidebar/search.html",
         "sidebar/scroll-start.html",
         "sidebar/navigation.html",
-        "sidebar/versions.html",
         "sidebar/scroll-end.html",
     ]
 }
@@ -93,7 +95,8 @@ html_sidebars = {
 # -- Theme options -----------------------------------------------------------
 html_theme_options = {
     "navigation_with_keys": True,
-    "sidebar_hide_name": True,
+    "sidebar_hide_name": False,  # Show name alongside logo
+    "default_mode": "dark",  # Set dark theme as default for Furo
     "light_css_variables": {
         "color-brand-primary": "#1b1b1f",
         "color-brand-content": "#1b1b1f",
@@ -108,15 +111,19 @@ html_theme_options = {
     },
 }
 
+# Set default color scheme to dark
+html_css_files = ["css/custom.css"]
+
 # MyST-NB configuration
 nb_execution_mode = "off"
 
-smv_branch_whitelist = os.environ.get(
-    "SMV_BRANCH_WHITELIST",
-    r"^(master|main|release/.+)$",
-)
-smv_tag_whitelist = os.environ.get("SMV_TAG_WHITELIST", r"^v\d+\.\d+\.\d+$")
-smv_remote_whitelist = os.environ.get("SMV_REMOTE_WHITELIST", r"^origin$")
-smv_outputdir_format = "{ref.refname}"
-smv_latest_version = os.environ.get("SMV_LATEST_VERSION", "master")
-smv_rename_latest_version = "latest"
+# Sphinx multiversion settings (disabled)
+# smv_branch_whitelist = os.environ.get(
+#     "SMV_BRANCH_WHITELIST",
+#     r"^(master|main|release/.+)$",
+# )
+# smv_tag_whitelist = os.environ.get("SMV_TAG_WHITELIST", r"^v\d+\.\d+\.\d+$")
+# smv_remote_whitelist = os.environ.get("SMV_REMOTE_WHITELIST", r"^origin$")
+# smv_outputdir_format = "{ref.refname}"
+# smv_latest_version = os.environ.get("SMV_LATEST_VERSION", "master")
+# smv_rename_latest_version = "latest"

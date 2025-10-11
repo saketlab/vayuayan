@@ -380,6 +380,7 @@ def safe_get(
     max_retries: int = DEFAULT_MAX_RETRIES,
     timeout: int = DEFAULT_TIMEOUT,
     verify_ssl: bool = True,
+    allow_ssl_fallback: bool = False,
     verbose: bool = False,
 ) -> requests.Response:
     """Make HTTP GET request with retry logic.
@@ -389,6 +390,7 @@ def safe_get(
         max_retries: Maximum retry attempts.
         timeout: Request timeout.
         verify_ssl: Whether to verify SSL certificates.
+        allow_ssl_fallback: Whether to allow fallback to unverified SSL if verification fails.
         verbose: Whether to print status messages.
 
     Returns:
@@ -410,13 +412,13 @@ def safe_get(
                 f"SSL Error on attempt {attempt + 1}/{max_retries + 1}: {e}", verbose
             )
 
-            if attempt < max_retries:
+            if allow_ssl_fallback and attempt < max_retries:
                 try:
                     _log_if_verbose(
-                        "Retrying with SSL verification disabled...", verbose
+                        "Retrying with SSL verification disabled (explicitly allowed)...", verbose
                     )
                     response = requests.get(
-                        url, headers=DEFAULT_HEADERS, timeout=timeout, verify=False
+                        url, headers=DEFAULT_HEADERS, timeout=timeout, verify=False  # nosec B501
                     )
                     response.raise_for_status()
                     _log_if_verbose(
@@ -425,6 +427,9 @@ def safe_get(
                     return response
                 except Exception as fallback_error:
                     _log_if_verbose(f"Fallback also failed: {fallback_error}", verbose)
+
+            if attempt == max_retries:
+                raise NetworkError(f"SSL verification failed after {max_retries + 1} attempts: {e}") from e
 
         except (
             requests.exceptions.ConnectionError,
@@ -456,6 +461,7 @@ def safe_post(
     backoff_factor: float = 0.3,
     timeout: int = 30,
     verify_ssl: bool = True,
+    allow_ssl_fallback: bool = False,
     verbose: bool = False,
 ) -> Dict[str, Any]:
     """Make robust POST request with retry logic and base64 decoding.
@@ -469,6 +475,7 @@ def safe_post(
         backoff_factor: Backoff factor for exponential retry delay.
         timeout: Request timeout in seconds.
         verify_ssl: Whether to verify SSL certificates.
+        allow_ssl_fallback: Whether to allow fallback to unverified SSL if verification fails.
         verbose: Whether to print status messages.
 
     Returns:
@@ -529,10 +536,10 @@ def safe_post(
                 f"SSL Error on attempt {attempt + 1}/{max_retries + 1}: {e}", verbose
             )
 
-            if attempt < max_retries:
+            if allow_ssl_fallback and attempt < max_retries:
                 try:
                     _log_if_verbose(
-                        "Retrying with SSL verification disabled...", verbose
+                        "Retrying with SSL verification disabled (explicitly allowed)...", verbose
                     )
                     response = requests.post(
                         url=url,
@@ -540,7 +547,7 @@ def safe_post(
                         data=data,
                         cookies=cookies,
                         timeout=timeout,
-                        verify=False,
+                        verify=False,  # nosec B501
                     )
                     response.raise_for_status()
 
@@ -555,6 +562,9 @@ def safe_post(
                     _log_if_verbose(
                         f"SSL fallback also failed: {fallback_error}", verbose
                     )
+
+            if attempt == max_retries:
+                raise NetworkError(f"SSL verification failed after {max_retries + 1} attempts: {e}") from e
 
         except requests.exceptions.HTTPError as e:
             _log_if_verbose(
