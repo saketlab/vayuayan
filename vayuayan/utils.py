@@ -21,14 +21,8 @@ import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .constants import (
-    DATE_FORMATS,
-    DEFAULT_BACKOFF_FACTOR,
-    DEFAULT_HEADERS,
-    DEFAULT_MAX_RETRIES,
-    DEFAULT_TIMEOUT,
-    MONTH_ABBREV,
-)
+from .constants import (DATE_FORMATS, DEFAULT_BACKOFF_FACTOR, DEFAULT_HEADERS,
+                        DEFAULT_MAX_RETRIES, DEFAULT_TIMEOUT, MONTH_ABBREV)
 from .exceptions import NetworkError
 
 # Disable SSL warnings
