@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vayuayan"
 version = "0.1.0"
-description = "Vayuayan - A comprehensive Python package for fetching and analyzing air quality data from multiple sources including CPCB India"
+description = "Package for fetching and analyzing air quality data from multiple sources"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -27,7 +27,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Atmospheric Science",
-    "Topic :: Scientific/Engineering :: Environmental Science",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 requires-python = ">=3.9"
