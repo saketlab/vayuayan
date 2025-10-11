@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format clean build upload docs
+.PHONY: help install install-dev test test-cov lint format clean build upload docs docs-multiversion
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -21,7 +21,6 @@ lint:  ## Run linting
 
 format:  ## Format code
 	black vayuayan/
-	isort vayuayan/
 
 clean:  ## Clean build artifacts
 	rm -rf build/
@@ -45,8 +44,11 @@ upload-test:  ## Upload to Test PyPI
 docs:  ## Build documentation
 	cd docs && make html
 
+docs-multiversion:  ## Build documentation for all versions
+	cd docs && make multiversion
+
 docs-serve:  ## Serve documentation locally
-	cd docs/build/html && python -m http.server 8000
+	cd docs/_build/html && python -m http.server 8000
 
 example-basic:  ## Run basic usage example
 	python examples/basic_usage.py

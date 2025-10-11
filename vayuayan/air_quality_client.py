@@ -11,14 +11,14 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import urljoin
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import requests
-import rioxarray
+import rioxarray  # noqa: F401
 import xarray as xr
 from geopy.distance import geodesic
 from tqdm import tqdm
@@ -62,7 +62,7 @@ class CPCBHistorical:
         """
         return base64.b64decode(data.encode("utf-8")).decode("utf-8")
 
-    def get_complete_list(self) -> Dict:
+    def get_complete_list(self) -> Dict[str, Any]:
         """Fetch the complete list of all India stations and cities.
 
         Returns:
@@ -79,10 +79,12 @@ class CPCBHistorical:
         response.raise_for_status()
 
         decoded_response = self._decode_base64(response.text)
-        parsed_response = json.loads(decoded_response)
+        parsed_response = cast(Dict[str, Any], json.loads(decoded_response))
 
         if parsed_response.get("status") == "success":
-            return parsed_response.get("dropdown", {})
+            dropdown = parsed_response.get("dropdown", {})
+            if isinstance(dropdown, dict):
+                return dropdown
         return {}
 
     def get_state_list(self) -> List[str]:
@@ -146,7 +148,7 @@ class CPCBHistorical:
         year: str,
         frequency: str,
         data_type: str,
-    ) -> Dict:
+    ) -> List[Dict[str, Any]]:
         """Get file path containing data for given query parameters.
 
         Args:
@@ -186,11 +188,17 @@ class CPCBHistorical:
         response.raise_for_status()
 
         decoded_response = self._decode_base64(response.text)
-        parsed_response = json.loads(decoded_response)
+        parsed_response = cast(Dict[str, Any], json.loads(decoded_response))
 
         if parsed_response.get("status") == "success":
-            return parsed_response.get("data", {})
-        return {}
+            data = parsed_response.get("data", [])
+            if isinstance(data, list):
+                return [
+                    cast(Dict[str, Any], entry)
+                    for entry in data
+                    if isinstance(entry, dict)
+                ]
+        return []
 
     def download_past_year_aqi_data_city_level(
         self, city: str, year: str, save_location: str
@@ -214,6 +222,7 @@ class CPCBHistorical:
             if entry.get("year") == year:
                 file_url = f"{self.base_path}{entry['filepath']}"
                 df = pd.read_excel(file_url)
+                df = df.iloc[:31]  # Limit to first 31 rows (max days in month)
                 df.to_csv(save_location, index=False)
                 return df.head()
 
@@ -259,6 +268,7 @@ class CPCBHistorical:
             if entry.get("year") == year:
                 file_url = f"{self.base_path}{entry['filepath']}"
                 df = pd.read_excel(file_url)
+                df = df.iloc[:31]  # Limit to first 31 rows (max days in month)
                 df.to_csv(save_location, index=False)
                 return df.head()
 
@@ -282,7 +292,13 @@ class CPCBLive:
         }
         self.cookies = {"ccr_public": "A"}
 
-    def _make_request(self, url: str, headers: Dict, data: str, cookies: Dict) -> Dict:
+    def _make_request(
+        self,
+        url: str,
+        headers: Dict[str, str],
+        data: str,
+        cookies: Dict[str, str],
+    ) -> Dict[str, Any]:
         """Make a POST request and return base64 decoded JSON response.
 
         Args:
@@ -304,9 +320,9 @@ class CPCBLive:
         response.raise_for_status()
 
         decoded_data = base64.b64decode(response.content)
-        return json.loads(decoded_data)
+        return cast(Dict[str, Any], json.loads(decoded_data))
 
-    def _clean_pollution_data(self, data: Dict) -> Dict:
+    def _clean_pollution_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Clean and format pollution data.
 
         Args:
@@ -368,7 +384,8 @@ class CPCBLive:
         """Get the nearest air quality monitoring station.
 
         Args:
-            coords: Optional tuple of (latitude, longitude). If None, uses IP geolocation.
+            coords: Optional tuple of (latitude, longitude). If None, uses IP
+                geolocation.
 
         Returns:
             Tuple of (station_id, station_name).
@@ -406,7 +423,7 @@ class CPCBLive:
         except Exception as e:
             raise Exception(f"Error finding nearest station: {e}") from e
 
-    def get_all_india(self) -> List[Dict]:
+    def get_all_india(self) -> List[Dict[str, Any]]:
         """Get all air quality monitoring stations in India.
 
         Returns:
@@ -417,14 +434,29 @@ class CPCBLive:
             response = self._make_request(
                 self.station_url, self.headers, body, self.cookies
             )
-            return response.get("stations", [])
+            stations = response.get("stations", [])
+            if isinstance(stations, list):
+                return [
+                    cast(Dict[str, Any], station)
+                    for station in stations
+                    if isinstance(station, dict)
+                ]
         except Exception:
-            # Fallback attempt
-            return self._make_request(
+            response = self._make_request(
                 self.station_url, self.headers, body, self.cookies
             )
+            stations = response.get("stations", [])
+            if isinstance(stations, list):
+                return [
+                    cast(Dict[str, Any], station)
+                    for station in stations
+                    if isinstance(station, dict)
+                ]
+        return []
 
-    def get_live_aqi_data_for_station(self, station_id: str, date_time: str) -> Dict:
+    def get_live_aqi_data_for_station(
+        self, station_id: str, date_time: str
+    ) -> Dict[str, Any]:
         """Get live air quality data for a specific station.
 
         Args:
@@ -454,7 +486,7 @@ class CPCBLive:
         coords: Optional[Tuple[float, float]] = None,
         date: Optional[str] = None,
         hour: Optional[int] = None,
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """Get live AQI data with flexible parameter options.
 
         Args:
@@ -588,11 +620,11 @@ class PM25Client:
                 print(f"Using cached file: {cached_path}")
                 return str(cached_path)
             else:
-                print(f"Warning: Cached file appears incomplete, re-downloading...")
+                print("Warning: Cached file appears incomplete, re-downloading...")
 
         # Download from AWS
         aws_url = self._get_aws_url(year, month)
-        print(f"Downloading PM2.5 data from AWS...")
+        print("Downloading PM2.5 data from AWS...")
         print(f"Source: {aws_url}")
         print(f"Destination: {cached_path}")
 
@@ -646,7 +678,8 @@ class PM25Client:
     ) -> Union[Dict[str, float], pd.DataFrame]:
         """Compute PM2.5 statistics inside a polygon region from GeoJSON.
 
-        This function automatically downloads the required NetCDF data from AWS if not cached locally.
+        This function automatically downloads the required NetCDF data from AWS
+        if not cached locally.
 
         Args:
             geojson_file: Path to GeoJSON file with polygon.
@@ -686,11 +719,13 @@ class PM25Client:
             # Validate all columns exist
             missing_cols = [col for col in group_cols if col not in gdf.columns]
             if missing_cols:
+                available_columns = list(gdf.columns)
                 raise ValueError(
-                    f"Column(s) {missing_cols} not found in GeoJSON. Available columns: {list(gdf.columns)}"
+                    f"Column(s) {missing_cols} not found in GeoJSON. "
+                    f"Available columns: {available_columns}"
                 )
 
-            return self._get_pm25_stats_grouped(gdf, nc_file, group_cols)
+            return self._get_pm25_stats_grouped(gdf, Path(nc_file), group_cols)
 
         # Otherwise, process as combined polygon
         polygon = gdf.union_all()  # Combine polygons if multiple
@@ -788,7 +823,8 @@ class PM25Client:
             group_by: Column name(s) to group by. Can be a string or list of strings.
 
         Returns:
-            DataFrame with statistics for each unique value/combination in group_by column(s).
+            DataFrame with statistics for each unique value or combination in the
+            group_by column(s).
         """
         # Ensure group_by is a list
         group_cols = [group_by] if isinstance(group_by, str) else group_by
@@ -948,7 +984,8 @@ class PM25Client:
         Raises:
             FileNotFoundError: If NetCDF or GeoJSON file not found.
 
-        This function automatically downloads the required NetCDF data from AWS if not cached locally.
+        This function automatically downloads the required NetCDF data from AWS
+        if not cached locally.
         """
         # Check GeoJSON file first
         if not os.path.exists(geojson_file):

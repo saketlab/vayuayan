@@ -1,15 +1,15 @@
 """
 CPCB Client module for interacting with Central Pollution Control Board services.
 
-This module provides the main client class for fetching air quality monitoring data
-from CPCB web services, including station data, raw data downloads, and geographic
-station lookups.
+This module provides the main client class for fetching air quality
+monitoring data from CPCB web services, including station data,
+raw data downloads, and geographic station lookups.
 """
 
 import heapq
 import math
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import pandas as pd
 
@@ -22,18 +22,18 @@ from .utils import (
     safe_post,
     sort_station_data,
     stations_to_dataframe,
-    url_encode,
 )
 
 
 class CPCBClient:
-    """Main client for fetching air quality data from Central Pollution Control Board."""
+    """Main client for fetching CPCB air quality data."""
 
     def __init__(self, use_test_endpoint: bool = True) -> None:
         """Initialize the CPCB Client.
 
         Args:
-            use_test_endpoint: Whether to use the test endpoint (unused, kept for compatibility).
+            use_test_endpoint: Whether to use the test endpoint (unused,
+                kept for compatibility).
         """
         self.station_url = ALL_STATION_URL
         self.cookies = {"ccr_public": "A"}
@@ -133,14 +133,16 @@ class CPCBClient:
         """Download CSV file from CPCB data repository.
 
         Args:
-            url: Direct URL to download from (if provided, other parameters are ignored).
+            url: Direct URL to download from. If provided, other parameters
+                are ignored.
             site_id: Station site ID (required if url not provided).
             station_name: Station name (required if url not provided).
             time_period: Time period for data (required if url not provided).
             year: Year for data (required if url not provided).
             output_dir: Directory to save downloaded file.
             filename: Custom filename (optional, auto-generated if not provided).
-            return_dataframe: Whether to return pandas DataFrame instead of file path.
+            return_dataframe: Whether to return pandas DataFrame instead of a
+                file path.
             verbose: Whether to print status messages.
 
         Returns:
@@ -169,13 +171,18 @@ class CPCBClient:
         if url is None:
             if not all([site_id, station_name, time_period, year]):
                 raise CPCBError(
-                    "Either 'url' must be provided, or all of 'site_id', 'station_name', "
-                    "'time_period', and 'year' must be provided"
+                    "Either 'url' must be provided, or all of 'site_id', "
+                    "'station_name', 'time_period', and 'year' must be provided"
                 )
 
-            cleaned_station_name = clean_station_name(station_name)
-            csv_filename = f"{site_id}_{cleaned_station_name}_{time_period}.csv"
-            url = f"{DOWNLOAD_URL}/{time_period}/{year}/{csv_filename}"
+            site_id_str = cast(str, site_id)
+            station_name_str = cast(str, station_name)
+            time_period_str = cast(str, time_period)
+            year_str = cast(str, year)
+
+            cleaned_station_name = clean_station_name(station_name_str)
+            csv_filename = f"{site_id_str}_{cleaned_station_name}_{time_period_str}.csv"
+            url = f"{DOWNLOAD_URL}/{time_period_str}/{year_str}/{csv_filename}"
             self._log_if_verbose(f"Constructed URL: {url}", verbose)
 
         self._log_if_verbose(f"Downloading CSV from: {url}", verbose)
@@ -244,7 +251,8 @@ class CPCBClient:
             return_distance: Whether to return distance along with station ID.
 
         Returns:
-            Station ID of nearest station, or tuple of (station_id, distance) if return_distance=True.
+            Station ID of nearest station, or tuple of (station_id, distance)
+            if return_distance is True.
 
         Raises:
             CPCBError: If failed to fetch station data or no stations available.
@@ -259,7 +267,7 @@ class CPCBClient:
 
         target_lat, target_lon = float(lat), float(lon)
         min_distance = float("inf")
-        nearest_station_id = None
+        nearest_station_id: Optional[str] = None
 
         # Single pass through all stations
         for city in cities:
@@ -274,8 +282,11 @@ class CPCBClient:
                     )
 
                     if distance < min_distance:
+                        candidate_id = station.get("id")
+                        if candidate_id is None:
+                            continue
                         min_distance = distance
-                        nearest_station_id = station["id"]
+                        nearest_station_id = str(candidate_id)
 
                 except (ValueError, KeyError, TypeError):
                     # Skip stations with invalid coordinates
@@ -300,7 +311,8 @@ class CPCBClient:
 
         Returns:
             List of tuples: [(station_info, distance), ...] sorted by distance.
-            Each station_info dict contains: id, name, latitude, longitude, live, avg, cityID, stateID.
+            Each station_info dict contains: id, name, latitude, longitude,
+            live, avg, cityID, and stateID.
 
         Raises:
             CPCBError: If failed to fetch station data or no stations available.
@@ -316,7 +328,7 @@ class CPCBClient:
         target_lat, target_lon = float(lat), float(lon)
 
         # Use a min-heap to efficiently track k nearest stations
-        heap = []
+        heap: List[Tuple[float, str, float, Dict[str, Any]]] = []
 
         for city in cities:
             for station in city.get("stationsInCity", []):
@@ -328,22 +340,24 @@ class CPCBClient:
                         target_lat, target_lon, station_lat, station_lon
                     )
 
+                    station_id = str(station.get("id", ""))
+
                     if len(heap) < k:
                         # Heap not full, add station
-                        heapq.heappush(
-                            heap, (-distance, station["id"], distance, station)
-                        )
+                        heapq.heappush(heap, (-distance, station_id, distance, station))
                     elif distance < -heap[0][0]:
                         # Found closer station, replace farthest
                         heapq.heapreplace(
-                            heap, (-distance, station["id"], distance, station)
+                            heap, (-distance, station_id, distance, station)
                         )
 
                 except (ValueError, KeyError, TypeError):
                     continue
 
         # Extract results and sort by distance (closest first)
-        results = [(station_info, distance) for _, _, distance, station_info in heap]
+        results: List[Tuple[Dict[str, Any], float]] = [
+            (station_info, distance) for _, _, distance, station_info in heap
+        ]
         return sorted(results, key=lambda x: x[1])
 
     def get_nearest_station_within_radius(

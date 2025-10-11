@@ -9,9 +9,11 @@ description = "Vayuayan - A comprehensive Python package for fetching and analyz
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
+    {name = "Mahesh Kumar Prajapat", email = "22b0433@iitb.ac.in"},
     {name = "Saket Choudhary", email = "saketc@iitb.ac.in"}
 ]
 maintainers = [
+    {name = "Mahesh Kumar Prajapat", email = "22b0433@iitb.ac.in"},
     {name = "Saket Choudhary", email = "saketc@iitb.ac.in"}
 ]
 classifiers = [
@@ -20,25 +22,25 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Atmospheric Science",
     "Topic :: Scientific/Engineering :: Environmental Science",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 dependencies = [
     "requests>=2.25.0",
     "pandas>=1.3.0",
     "openpyxl==3.1.5",
     "urllib3>=1.26.0",
-    "geopandas>=1.1.1",
+    "geopandas>=1.0.1",
     "geopy>=2.4.1",
-    "rioxarray>=0.19.0",
-    "xarray>=2025.9.0",
+    "rioxarray>=0.15.0",
+    "xarray>=2024.7.0",
     "netCDF4>=1.7.2",
     "tqdm>=4.62.0"
 ]
@@ -53,8 +55,15 @@ dev = [
     "pre-commit",
 ]
 docs = [
-    "sphinx",
-    "sphinx-rtd-theme",
+    "myst-nb>=1.3.0",
+    "sphinx>=8.2.3",
+    "furo>=2024.8.6",
+    "sphinx-multiversion>=0.2.4",
+]
+notebooks = [
+    "jupyter",
+    "matplotlib",
+    "seaborn",
 ]
 
 [project.urls]
@@ -74,7 +83,7 @@ vayuayan = ["py.typed"]
 
 [tool.black]
 line-length = 88
-target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
+target-version = ['py37', 'py38', 'py39', 'py310', 'py311', 'py312', 'py313']
 extend-exclude = '''
 /(
   # directories
@@ -89,6 +98,12 @@ extend-exclude = '''
 )/
 '''
 
+[tool.flake8]
+max-line-length = 88
+extend-ignore = [
+    "E203",
+]
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --strict-markers --strict-config"
@@ -101,7 +116,7 @@ python_files = [
 ]
 
 [tool.mypy]
-python_version = "3.7"
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -119,5 +134,16 @@ strict_equality = true
 module = [
     "bs4.*",
     "pandas.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "geopandas.*",
+    "geopy.*",
+    "requests.*",
+    "tqdm.*",
+    "xarray.*",
+    "rioxarray.*",
 ]
 ignore_missing_imports = true

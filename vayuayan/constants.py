@@ -2,7 +2,7 @@
 Constants for CPCB data fetching.
 
 This module contains URL endpoints, headers, timeouts, and other configuration
-constants used throughout the cpcbfetch package.
+constants used throughout the vayuayan package.
 """
 
 from typing import Dict, List
@@ -98,4 +98,4 @@ SUPPORTED_FILE_EXTENSIONS: List[str] = [".csv", ".xlsx", ".xls", ".json"]
 
 # Default File Paths
 DEFAULT_DOWNLOAD_DIR: str = "downloads"
-DEFAULT_CONFIG_DIR: str = ".cpcbfetch"
+DEFAULT_CONFIG_DIR: str = ".vayuayan"

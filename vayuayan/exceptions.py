@@ -1,7 +1,7 @@
 """
 Custom exceptions for the CPCB data fetching package.
 
-This module defines exception classes used throughout the cpcbfetch package
+This module defines exception classes used throughout the vayuayan package
 to provide specific error handling for different types of failures.
 """
 
@@ -9,7 +9,7 @@ to provide specific error handling for different types of failures.
 class CPCBError(Exception):
     """Base exception for all CPCB related errors.
 
-    This is the base class for all custom exceptions in the cpcbfetch package.
+    This is the base class for all custom exceptions in the vayuayan package.
     All other exceptions inherit from this class.
     """
 

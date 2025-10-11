@@ -21,7 +21,7 @@ from .commands import (
 )
 
 
-def main():
+def main() -> None:
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
         description="vayuayan CLI - Get air quality monitoring data",
@@ -34,25 +34,23 @@ Examples:
   vayuayan city_data --city "Mumbai" --year 2024 --path "output.json"
   vayuayan station_data --station_id "site_5964" --year 2024 --path "output.json"
 
-  vayuayan locate_me                       # Return lat, lon based on IP
-  vayuayan nearest_station                 # Uses IP-based geolocation
+  vayuayan locate_me
   vayuayan nearest_station --lat 19.0760 --lon 72.8777
-  vayuayan live_aqi --date 2024-02-25 --hour 10 --path "output.json"   # Uses IP-based geolocation
-  vayuayan live_aqi --lat 19.0760 --lon 72.8777 --path "output.json"
   vayuayan live_aqi --station_id "site_5964" --path "output.json"
+  vayuayan live_aqi --date 2024-02-25 --hour 10 --path "output.json"
+  vayuayan live_aqi --lat 19.0760 --lon 72.8777 --path "output.json"
 
-  For PM2.5 data:
   vayuayan pm25 --geojson_path "districts.geojson" --year 2019 --month 2
-  vayuayan pm25 --geojson_path "districts.geojson" --year 2019 --month 2 --group_by state_name
-  vayuayan pm25 --geojson_path "districts.geojson" --year 2019 --month 2 --group_by state_name,district_name
+  vayuayan pm25 --geojson_path "districts.geojson" --year 2019 --month 2 \
+      --group_by state_name
         """,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    ## ------------------------------ AQI Commands ------------------------------ ##
+    # ------------------------------ AQI Commands ------------------------------ #
     # List states command
-    list_states_parser = subparsers.add_parser("list_states", help="List all states")
+    subparsers.add_parser("list_states", help="List all states")
 
     # List cities command
     list_cities_parser = subparsers.add_parser(
@@ -94,13 +92,17 @@ Examples:
         "--path", required=True, help="Path to output file"
     )
 
-    ## ------------------------------ Live AQI Commands ------------------------------ ##
-    locate_me_parser = subparsers.add_parser(
-        "locate_me", help="Fetch current geolocation based on IP address"
+    # ------------------------------ Live AQI Commands ------------------------------ #
+    subparsers.add_parser(
+        "locate_me",
+        help="Fetch current geolocation based on IP address",
     )
     nearest_station_parser = subparsers.add_parser(
         "nearest_station",
-        help="Fetch nearest station details using IP-based geolocation or provided coordinates",
+        help=(
+            "Fetch nearest station details using IP-based geolocation or "
+            "provided coordinates"
+        ),
     )
     nearest_station_parser.add_argument(
         "--lat", type=float, help="Latitude of geolocation"
@@ -110,7 +112,8 @@ Examples:
     )
 
     live_aqi_parser = subparsers.add_parser(
-        "live_aqi", help="Fetch live AQI data for nearest station or specified station"
+        "live_aqi",
+        help="Fetch live AQI data for nearest station or specified station",
     )
     live_aqi_parser.add_argument("--lat", type=float, help="Latitude of geolocation")
     live_aqi_parser.add_argument("--lon", type=float, help="Longitude of geolocation")
@@ -125,9 +128,10 @@ Examples:
     )
     live_aqi_parser.add_argument("--path", help="Path to output file")
 
-    ## ------------------------------ PM2.5 Commands ------------------------------ ##
+    # ------------------------------ PM2.5 Commands ------------------------------ #
     pm25_parser = subparsers.add_parser(
-        "pm25", help="Fetch PM2.5 data for given geographic polygon"
+        "pm25",
+        help="Fetch PM2.5 data for given geographic polygon",
     )
     pm25_parser.add_argument(
         "--geojson_path", required=True, help="Path to the GeoJSON file with polygon"
@@ -143,7 +147,11 @@ Examples:
     pm25_parser.add_argument(
         "--group_by",
         type=str,
-        help="Column name(s) to group polygons by. Can be a single column (e.g., 'state_name') or comma-separated multiple columns (e.g., 'state_name,district_name').",
+        help=(
+            "Column name(s) to group polygons by. Can be a single column "
+            "(e.g., 'state_name') or comma-separated multiple columns "
+            "(e.g., 'state_name,district_name')."
+        ),
     )
 
     args = parser.parse_args()
@@ -187,7 +195,11 @@ Examples:
 
         elif args.command == "pm25":
             get_pm25_data(
-                pm25_client, args.geojson_path, args.year, args.month, args.group_by
+                pm25_client,
+                args.geojson_path,
+                args.year,
+                args.month,
+                args.group_by,
             )
 
     except KeyboardInterrupt:

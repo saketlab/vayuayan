@@ -70,6 +70,8 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/.buildinfo
+docs/.buildinfo.bak
 
 # PyBuilder
 target/
@@ -134,18 +136,14 @@ dmypy.json
 *.swp
 *.swo
 
-# macOS
+# OS
 .DS_Store
-
-# Windows
 Thumbs.db
-ehthumbs.db
-Desktop.ini
 
-examples/india_state.geojson
-examples/usa_states.geojson
-examples/usa_whole.geojson
-examples/V6GL01.0p10.CNNPM25.Global.201902-201902.nc
-examples/V6GL01.0p10.CNNPM25.Global.201801-201812.nc
-
-docs/build
+# Project specific
+*.csv
+*.json
+*.xlsx
+*.nc
+*.geojson
+examples/V6GL01*

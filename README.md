@@ -7,7 +7,7 @@
 **Vayuayan** is a comprehensive Python package for fetching and analysing air quality data from multiple sources worldwide:
 
 - **WUSTL ACAG**: [Washington University satellite PM2.5 data](https://sites.wustl.edu/acag/datasets/surface-pm2-5/) (Global)
-- **CPCB India**: pCentral Pollution Control Board](https://cpcb.nic.in/) monitoring network (India only)
+- **CPCB India**: Central Pollution Control Board](https://cpcb.nic.in/) monitoring network (India only)
 
 ## Installation
 
