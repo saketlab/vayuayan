@@ -95,13 +95,6 @@ Interactive notebooks with hands-on examples live in the ``notebooks/`` director
    notebooks/03_live_monitoring
    notebooks/04_pm25_regional_analysis
 
-API Reference
-=============
-
-.. toctree::
-   :maxdepth: 2
-
-   api/vayuayan
 
 Indices and tables
 ==================

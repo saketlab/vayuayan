@@ -18,7 +18,7 @@ except Exception:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "vayuayan"
-copyright = "2025"
+copyright = "2025, Mahesh Prajapat and Saket Choudhary"
 author = "Mahesh Prajapat and Saket Choudhary"
 release = package_version
 version = os.environ.get("SMV_CURRENT_VERSION") or os.environ.get(
