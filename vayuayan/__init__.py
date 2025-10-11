@@ -25,7 +25,7 @@ __description__ = (
     "Vayuayan - Comprehensive Python package for fetching and analyzing "
     "air quality data from multiple sources including CPCB India"
 )
-__url__ = "https://github.com/saketkc/vayuayan"
+__url__ = "https://github.com/saketlab/vayuayan"
 
 # Import main client classes
 from .air_quality_client import CPCBHistorical, CPCBLive, PM25Client

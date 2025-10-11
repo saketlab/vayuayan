@@ -65,10 +65,10 @@ notebooks = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/saketkc/vayuayan"
-Repository = "https://github.com/saketkc/vayuayan.git"
+Homepage = "https://github.com/saketlab/vayuayan"
+Repository = "https://github.com/saketlab/vayuayan.git"
 Documentation = "https://vayuayan.readthedocs.io/"
-"Bug Tracker" = "https://github.com/saketkc/vayuayan/issues"
+"Bug Tracker" = "https://github.com/saketlab/vayuayan/issues"
 
 [project.scripts]
 vayuayan = "vayuayan.cli:main"
