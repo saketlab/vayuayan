@@ -67,7 +67,7 @@ notebooks = [
 [project.urls]
 Homepage = "https://github.com/saketlab/vayuayan"
 Repository = "https://github.com/saketlab/vayuayan.git"
-Documentation = "https://vayuayan.readthedocs.io/"
+Documentation = "https://saketlab.github.io/vayuayan"
 "Bug Tracker" = "https://github.com/saketlab/vayuayan/issues"
 
 [project.scripts]
