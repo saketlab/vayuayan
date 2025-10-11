@@ -3,6 +3,11 @@ History
 
 Release history and changelog for vayuayan.
 
+v0.1.1 (2025-10-11)
+------------------
+
+* Updated installation instructions to use PyPI as primary method
+
 v0.1.0 (2025-10-11)
 ------------------
 
