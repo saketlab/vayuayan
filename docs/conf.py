@@ -8,13 +8,22 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
+try:
+    from vayuayan import __version__ as package_version
+except Exception:
+    package_version = "0.1.0"
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "vayuayan"
 copyright = "2025"
 author = ""
-release = "0.1.0"
+release = package_version
+version = os.environ.get("SMV_CURRENT_VERSION") or os.environ.get(
+    "READTHEDOCS_VERSION_NAME",
+    release,
+)
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -26,6 +35,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "myst_nb",
+    "sphinx_multiversion",
 ]
 
 templates_path = ["_templates"]
@@ -65,21 +75,48 @@ intersphinx_mapping = {
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
 html_static_path = ["_static"]
+html_css_files = ["css/custom.css"]
+
+html_sidebars = {
+    "**": [
+        "sidebar/brand.html",
+        "sidebar/search.html",
+        "sidebar/scroll-start.html",
+        "sidebar/navigation.html",
+        "sidebar/versions.html",
+        "sidebar/scroll-end.html",
+    ]
+}
 
 # -- Theme options -----------------------------------------------------------
 html_theme_options = {
-    "analytics_id": "",
-    "logo_only": False,
-    "prev_next_buttons_location": "bottom",
-    "style_external_links": False,
-    "collapse_navigation": True,
-    "sticky_navigation": True,
-    "navigation_depth": 4,
-    "includehidden": True,
-    "titles_only": False,
+    "navigation_with_keys": True,
+    "sidebar_hide_name": True,
+    "light_css_variables": {
+        "color-brand-primary": "#1b1b1f",
+        "color-brand-content": "#1b1b1f",
+        "font-stack": '"SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        "font-stack--monospace": '"SF Mono", "JetBrains Mono", Menlo, monospace',
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#f5f5f7",
+        "color-brand-content": "#f5f5f7",
+        "background-color": "#050505",
+        "background-color-secondary": "#121214",
+    },
 }
 
 # MyST-NB configuration
 nb_execution_mode = "off"
+
+smv_branch_whitelist = os.environ.get(
+    "SMV_BRANCH_WHITELIST",
+    r"^(master|main|release/.+)$",
+)
+smv_tag_whitelist = os.environ.get("SMV_TAG_WHITELIST", r"^v\d+\.\d+\.\d+$")
+smv_remote_whitelist = os.environ.get("SMV_REMOTE_WHITELIST", r"^origin$")
+smv_outputdir_format = "{ref.refname}"
+smv_latest_version = os.environ.get("SMV_LATEST_VERSION", "master")
+smv_rename_latest_version = "latest"

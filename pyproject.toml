@@ -59,7 +59,8 @@ dev = [
 docs = [
     "myst-nb>=1.3.0",
     "sphinx>=8.2.3",
-    "sphinx-rtd-theme>=3.0.2",
+    "furo>=2024.8.6",
+    "sphinx-multiversion>=0.2.4",
 ]
 notebooks = [
     "jupyter",

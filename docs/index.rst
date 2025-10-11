@@ -1,5 +1,5 @@
 vayuayan: Collect and Analyze Air Quality and Pollution Data
-========================================================
+============================================================
 
 A Python package for fetching and analysing air quality data from multiple sources worldwide:
 
@@ -79,26 +79,21 @@ Command Line Interface
    api_reference
    cli_reference
    examples
-   notebooks
    contributing
 
 Jupyter Notebooks
 ==================
 
-Interactive Jupyter notebooks with hands-on examples are available in the ``notebooks/`` directory:
+Interactive notebooks with hands-on examples live in the ``notebooks/`` directory:
 
-1. **Getting Started** - Learn the basics of vayuayan
-2. **Historical Data Analysis** - Analyze AQI trends and patterns
-3. **Live Monitoring** - Real-time air quality monitoring
-4. **PM2.5 Regional Analysis** - Geographic analysis using GeoJSON
+.. toctree::
+   :maxdepth: 1
 
-To run the notebooks::
-
-   pip install vayuayan[notebooks]
-   cd notebooks
-   jupyter notebook
-
-See the notebooks README for detailed information about each notebook.
+   notebooks/README
+   notebooks/01_getting_started
+   notebooks/02_historical_data_analysis
+   notebooks/03_live_monitoring
+   notebooks/04_pm25_regional_analysis
 
 API Reference
 =============
