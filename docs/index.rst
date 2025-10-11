@@ -11,8 +11,8 @@ A Python package for fetching and analysing air quality data from multiple sourc
    :target: https://pypi.org/project/vayuayan/
    :alt: Python versions
 
-.. image:: https://img.shields.io/github/license/saketkc/vayuayan.svg
-   :target: https://github.com/saketkc/vayuayan/blob/master/LICENSE
+.. image:: https://img.shields.io/github/license/saketlab/vayuayan.svg
+   :target: https://github.com/saketlab/vayuayan/blob/master/LICENSE
    :alt: License
 
 Overview

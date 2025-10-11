@@ -11,14 +11,22 @@
 
 ## Installation
 
+Install from PyPI (recommended):
+
 ```bash
-pip install git+https://github.com/saketkc/vayuayan.git
+pip install vayuayan
+```
+
+Install development version from GitHub:
+
+```bash
+pip install git+https://github.com/saketlab/vayuayan.git
 ```
 
 Or install from source:
 
 ```bash
-git clone https://github.com/saketkc/vayuayan.git
+git clone https://github.com/saketlab/vayuayan.git
 cd vayuayan
 pip install -e .
 ```
