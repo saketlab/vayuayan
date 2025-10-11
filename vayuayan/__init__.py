@@ -21,7 +21,10 @@ Usage:
 __version__ = "0.1.0"
 __author__ = "Saket Choudhary"
 __email__ = "saketc@iitb.ac.in"
-__description__ = "Vayuayan - Comprehensive Python package for fetching and analyzing air quality data from multiple sources including CPCB India"
+__description__ = (
+    "Vayuayan - Comprehensive Python package for fetching and analyzing "
+    "air quality data from multiple sources including CPCB India"
+)
 __url__ = "https://github.com/saketkc/vayuayan"
 
 # Import main client classes

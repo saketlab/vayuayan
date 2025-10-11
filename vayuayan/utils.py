@@ -8,18 +8,15 @@ station data conversion, and analysis functions.
 import json
 import math
 import re
-import ssl
 import time
 from base64 import b64decode, b64encode
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
 import requests
 import urllib3
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from .constants import (
     DATE_FORMATS,
@@ -344,8 +341,8 @@ def analyze_station_data(data: List[Dict]) -> Dict[str, Any]:
     analysis = {
         "total_cities": len(data),
         "total_stations": len(df),
-        "live_stations": len(df[df["live"] == True]),
-        "offline_stations": len(df[df["live"] == False]),
+        "live_stations": int(df["live"].sum()),
+        "offline_stations": int((~df["live"]).sum()),
         "states": df["state_id"].nunique(),
         "unique_states": sorted(df["state_id"].unique().tolist()),
         "stations_with_aqi_data": len(df[~pd.isna(df["avg_aqi"])]),
@@ -396,7 +393,8 @@ def safe_get(
         max_retries: Maximum retry attempts.
         timeout: Request timeout.
         verify_ssl: Whether to verify SSL certificates.
-        allow_ssl_fallback: Whether to allow fallback to unverified SSL if verification fails.
+        allow_ssl_fallback: Whether to allow fallback to unverified SSL if
+            verification fails.
         verbose: Whether to print status messages.
 
     Returns:
@@ -421,7 +419,7 @@ def safe_get(
             if allow_ssl_fallback and attempt < max_retries:
                 try:
                     _log_if_verbose(
-                        "Retrying with SSL verification disabled (explicitly allowed)...",
+                        "Retrying with SSL verification disabled (per config)...",
                         verbose,
                     )
                     response = requests.get(
@@ -487,7 +485,8 @@ def safe_post(
         backoff_factor: Backoff factor for exponential retry delay.
         timeout: Request timeout in seconds.
         verify_ssl: Whether to verify SSL certificates.
-        allow_ssl_fallback: Whether to allow fallback to unverified SSL if verification fails.
+        allow_ssl_fallback: Whether to allow fallback to unverified SSL if
+            verification fails.
         verbose: Whether to print status messages.
 
     Returns:
@@ -511,8 +510,7 @@ def safe_post(
     for attempt in range(max_retries + 1):
         try:
             _log_if_verbose(
-                f"Attempt {attempt + 1}/{max_retries + 1}: Making POST request to {url}",
-                verbose,
+                f"Attempt {attempt + 1}/{max_retries + 1}: POST {url}", verbose
             )
 
             response = requests.post(
@@ -535,7 +533,7 @@ def safe_post(
                     raise DataProcessingError("Response content is empty")
 
                 decoded_data = b64decode(response.content)
-                json_data = json.loads(decoded_data)
+                json_data = cast(Dict[str, Any], json.loads(decoded_data))
                 return json_data
 
             except Exception as decode_error:
@@ -551,7 +549,7 @@ def safe_post(
             if allow_ssl_fallback and attempt < max_retries:
                 try:
                     _log_if_verbose(
-                        "Retrying with SSL verification disabled (explicitly allowed)...",
+                        "Retrying with SSL verification disabled (per config)...",
                         verbose,
                     )
                     response = requests.post(
@@ -565,7 +563,7 @@ def safe_post(
                     response.raise_for_status()
 
                     decoded_data = b64decode(response.content)
-                    json_data = json.loads(decoded_data)
+                    json_data = cast(Dict[str, Any], json.loads(decoded_data))
                     _log_if_verbose(
                         "Request succeeded with SSL verification disabled", verbose
                     )

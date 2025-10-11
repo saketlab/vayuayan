@@ -4,7 +4,7 @@ Command functions for vayuayan CLI.
 
 import json
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Optional
 
 from .air_quality_client import CPCBHistorical, CPCBLive, PM25Client
 
@@ -195,15 +195,11 @@ def get_nearest_station(
     """
     try:
         coords = (lat, lon) if lat is not None and lon is not None else None
-        station_info = client.get_nearest_station(coords)
+        station_id, station_name = client.get_nearest_station(coords)
 
         print("Nearest station details:")
-        if isinstance(station_info, (list, tuple)) and len(station_info) == 2:
-            station_id, station_name = station_info
-            print(f"   Station ID: {station_id}")
-            print(f"   Station Name: {station_name}")
-        else:
-            print(f"   {station_info}")
+        print(f"   Station ID: {station_id}")
+        print(f"   Station Name: {station_name}")
         return True
     except Exception as e:
         _print_error(f"Error fetching nearest station: {e}")
@@ -256,10 +252,6 @@ def get_live_aqi(
         aqi_data = client.get_live_aqi_data(
             station_id=station_id, coords=coords, date=date, hour=hour
         )
-
-        if isinstance(aqi_data, Exception):
-            _print_error(str(aqi_data))
-            return False
 
         metrics = aqi_data.get("metrics", [])
         if metrics:

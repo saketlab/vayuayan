@@ -98,6 +98,12 @@ extend-exclude = '''
 )/
 '''
 
+[tool.flake8]
+max-line-length = 88
+extend-ignore = [
+    "E203",
+]
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --strict-markers --strict-config"
@@ -110,7 +116,7 @@ python_files = [
 ]
 
 [tool.mypy]
-python_version = "3.7"
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -128,5 +134,16 @@ strict_equality = true
 module = [
     "bs4.*",
     "pandas.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "geopandas.*",
+    "geopy.*",
+    "requests.*",
+    "tqdm.*",
+    "xarray.*",
+    "rioxarray.*",
 ]
 ignore_missing_imports = true
