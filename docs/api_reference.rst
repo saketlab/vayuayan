@@ -7,7 +7,7 @@ Core Classes
 ------------
 
 CPCBHistorical
-~~~~~~~~~
+~~~~~~~~~~~~~~
 
 .. autoclass:: vayuayan.CPCBHistorical
    :members:

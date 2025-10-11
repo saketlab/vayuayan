@@ -3,6 +3,7 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import importlib
 import os
 import sys
 
@@ -51,6 +52,24 @@ autodoc_default_options = {
     "undoc-members": True,
     "exclude-members": "__weakref__",
 }
+
+# Mock heavy optional dependencies if they are unavailable so autodoc can
+# import vayuayan modules without requiring compiled geospatial stacks.
+_OPTIONAL_LIBS = [
+    "geopandas",
+    "geopy",
+    "netCDF4",
+    "rioxarray",
+    "tqdm",
+    "xarray",
+]
+
+autodoc_mock_imports = []
+for _module in _OPTIONAL_LIBS:
+    try:
+        importlib.import_module(_module)
+    except Exception:
+        autodoc_mock_imports.append(_module)
 
 # -- Napoleon settings -------------------------------------------------------
 napoleon_google_docstring = True
