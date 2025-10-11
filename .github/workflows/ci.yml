@@ -85,3 +85,63 @@ jobs:
       with:
         name: bandit-report
         path: bandit-report.json
+
+  notebooks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-notebooks-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-notebooks-
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies with notebook support
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        pip install nbconvert jupyter
+
+    - name: Execute notebooks
+      run: |
+        cd docs/notebooks
+        for notebook in *.ipynb; do
+          echo "Executing $notebook..."
+          jupyter nbconvert --to notebook --execute --inplace "$notebook" --ExecutePreprocessor.timeout=300
+        done
+
+    - name: Check for notebook execution errors
+      run: |
+        cd docs/notebooks
+        for notebook in *.ipynb; do
+          echo "Checking $notebook for errors..."
+          python -c "
+import json
+import sys
+with open('$notebook', 'r') as f:
+    nb = json.load(f)
+    for cell in nb.get('cells', []):
+        if cell.get('cell_type') == 'code':
+            for output in cell.get('outputs', []):
+                if output.get('output_type') == 'error':
+                    print(f'Error in $notebook: {output.get(\"ename\", \"Unknown\")}')
+                    sys.exit(1)
+print('$notebook executed successfully')
+"
+        done
+
+    - name: Upload executed notebooks
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: executed-notebooks
+        path: docs/notebooks/*.ipynb
