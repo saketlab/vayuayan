@@ -4,17 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vayuayan"
-version = "0.1.1"
+version = "0.1.2"
 description = "Package for fetching and analyzing air quality data from multiple sources"
 readme = "README.md"
 license = "MIT"
 authors = [
-    {name = "Mahesh Kumar Prajapat", email = "22b0433@iitb.ac.in"},
-    {name = "Saket Choudhary", email = "saketc@iitb.ac.in"}
+    {name = "Saket Choudhary", email = "saketc@iitb.ac.in"},
+    {name = "Mahesh Kumar Prajapat", email = "22b0433@iitb.ac.in"}
 ]
 maintainers = [
-    {name = "Mahesh Kumar Prajapat", email = "22b0433@iitb.ac.in"},
-    {name = "Saket Choudhary", email = "saketc@iitb.ac.in"}
+    {name = "Saket Choudhary", email = "saketc@iitb.ac.in"},
+    {name = "Mahesh Kumar Prajapat", email = "22b0433@iitb.ac.in"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

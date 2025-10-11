@@ -3,6 +3,11 @@ History
 
 Release history and changelog for vayuayan.
 
+v0.1.2 (2025-10-11)
+------------------
+
+* Fixed missing logo on PyPI 
+
 v0.1.1 (2025-10-11)
 ------------------
 
