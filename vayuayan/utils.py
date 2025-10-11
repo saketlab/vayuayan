@@ -21,8 +21,14 @@ import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .constants import (DATE_FORMATS, DEFAULT_BACKOFF_FACTOR, DEFAULT_HEADERS,
-                        DEFAULT_MAX_RETRIES, DEFAULT_TIMEOUT, MONTH_ABBREV)
+from .constants import (
+    DATE_FORMATS,
+    DEFAULT_BACKOFF_FACTOR,
+    DEFAULT_HEADERS,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_TIMEOUT,
+    MONTH_ABBREV,
+)
 from .exceptions import NetworkError
 
 # Disable SSL warnings
@@ -415,10 +421,14 @@ def safe_get(
             if allow_ssl_fallback and attempt < max_retries:
                 try:
                     _log_if_verbose(
-                        "Retrying with SSL verification disabled (explicitly allowed)...", verbose
+                        "Retrying with SSL verification disabled (explicitly allowed)...",
+                        verbose,
                     )
                     response = requests.get(
-                        url, headers=DEFAULT_HEADERS, timeout=timeout, verify=False  # nosec B501
+                        url,
+                        headers=DEFAULT_HEADERS,
+                        timeout=timeout,
+                        verify=False,  # nosec B501
                     )
                     response.raise_for_status()
                     _log_if_verbose(
@@ -429,7 +439,9 @@ def safe_get(
                     _log_if_verbose(f"Fallback also failed: {fallback_error}", verbose)
 
             if attempt == max_retries:
-                raise NetworkError(f"SSL verification failed after {max_retries + 1} attempts: {e}") from e
+                raise NetworkError(
+                    f"SSL verification failed after {max_retries + 1} attempts: {e}"
+                ) from e
 
         except (
             requests.exceptions.ConnectionError,
@@ -539,7 +551,8 @@ def safe_post(
             if allow_ssl_fallback and attempt < max_retries:
                 try:
                     _log_if_verbose(
-                        "Retrying with SSL verification disabled (explicitly allowed)...", verbose
+                        "Retrying with SSL verification disabled (explicitly allowed)...",
+                        verbose,
                     )
                     response = requests.post(
                         url=url,
@@ -564,7 +577,9 @@ def safe_post(
                     )
 
             if attempt == max_retries:
-                raise NetworkError(f"SSL verification failed after {max_retries + 1} attempts: {e}") from e
+                raise NetworkError(
+                    f"SSL verification failed after {max_retries + 1} attempts: {e}"
+                ) from e
 
         except requests.exceptions.HTTPError as e:
             _log_if_verbose(

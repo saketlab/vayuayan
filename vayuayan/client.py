@@ -15,9 +15,15 @@ import pandas as pd
 
 from .constants import ALL_STATION_URL, DOWNLOAD_URL, POST_HEADERS
 from .exceptions import CPCBError, NetworkError
-from .utils import (clean_station_name, haversine_distance, safe_get,
-                    safe_post, sort_station_data, stations_to_dataframe,
-                    url_encode)
+from .utils import (
+    clean_station_name,
+    haversine_distance,
+    safe_get,
+    safe_post,
+    sort_station_data,
+    stations_to_dataframe,
+    url_encode,
+)
 
 
 class CPCBClient:

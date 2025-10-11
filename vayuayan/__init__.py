@@ -27,15 +27,30 @@ __url__ = "https://github.com/saketkc/vayuayan"
 # Import main client classes
 from .air_quality_client import CPCBHistorical, CPCBLive, PM25Client
 from .client import CPCBClient
+
 # Import exceptions for convenience
-from .exceptions import (AuthenticationError, CityNotFoundError,
-                         ConfigurationError, CPCBError, DataParsingError,
-                         DataProcessingError, InvalidDataError, NetworkError,
-                         RateLimitError, StationNotFoundError)
+from .exceptions import (
+    AuthenticationError,
+    CityNotFoundError,
+    ConfigurationError,
+    CPCBError,
+    DataParsingError,
+    DataProcessingError,
+    InvalidDataError,
+    NetworkError,
+    RateLimitError,
+    StationNotFoundError,
+)
+
 # Import utility functions that might be useful for users
-from .utils import (analyze_station_data, clean_station_name,
-                    convert_station_data_to_dataframe, get_aqi_category,
-                    haversine_distance, stations_to_dataframe)
+from .utils import (
+    analyze_station_data,
+    clean_station_name,
+    convert_station_data_to_dataframe,
+    get_aqi_category,
+    haversine_distance,
+    stations_to_dataframe,
+)
 
 # Define what gets exported when using "from vayuayan import *"
 __all__ = [

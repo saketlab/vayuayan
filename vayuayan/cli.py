@@ -8,9 +8,17 @@ import sys
 from datetime import datetime
 
 from . import CPCBHistorical, CPCBLive, PM25Client
-from .commands import (get_city_data, get_city_list, get_live_aqi,
-                       get_nearest_station, get_pm25_data, get_state_list,
-                       get_station_data, get_station_list, locate_me)
+from .commands import (
+    get_city_data,
+    get_city_list,
+    get_live_aqi,
+    get_nearest_station,
+    get_pm25_data,
+    get_state_list,
+    get_station_data,
+    get_station_list,
+    locate_me,
+)
 
 
 def main():
