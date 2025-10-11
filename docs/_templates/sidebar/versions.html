@@ -1,0 +1,24 @@
+{%- if versions is defined and (versions.branches or versions.tags) %}
+<div class="sidebar-item version-switcher">
+  <h3>{{ _('Versions') }}</h3>
+  {%- if versions.branches %}
+  <ul>
+    {%- for item in versions.branches %}
+    <li class="{{ 'current' if item.name == current_version.name else '' }}">
+      <a href="{{ item.url }}">{{ item.name }}</a>
+    </li>
+    {%- endfor %}
+  </ul>
+  {%- endif %}
+  {%- if versions.tags %}
+  <h4>{{ _('Releases') }}</h4>
+  <ul>
+    {%- for item in versions.tags %}
+    <li class="{{ 'current' if item.name == current_version.name else '' }}">
+      <a href="{{ item.url }}">{{ item.name }}</a>
+    </li>
+    {%- endfor %}
+  </ul>
+  {%- endif %}
+</div>
+{%- endif %}

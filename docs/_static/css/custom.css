@@ -1,0 +1,62 @@
+body {
+    font-feature-settings: "liga", "kern";
+    font-weight: 400;
+}
+
+.toc-tree a {
+    font-weight: 500;
+}
+
+/* Logo styling */
+.sidebar-brand {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-decoration: none !important;
+    padding: 1rem 0.5rem !important;
+    font-weight: 600;
+}
+
+.sidebar-logo-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+}
+
+.sidebar-logo {
+    max-height: 80px !important;
+    max-width: 120px !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+    margin: 0 !important;
+}
+
+.sidebar-brand-text {
+    text-align: center !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+}
+
+/* Ensure logo shows in both light and dark modes */
+html[data-theme="light"] .sidebar-logo,
+html[data-theme="dark"] .sidebar-logo {
+    opacity: 1 !important;
+}
+
+/* Set dark theme as default */
+html {
+    color-scheme: dark !important;
+}
+
+html:not([data-theme]) {
+    color-scheme: dark;
+}
+
+/* Force dark theme on initial load */
+html:not([data-theme="light"]) {
+    --color-foreground-primary: var(--color-foreground-primary--dark);
+    --color-background-primary: var(--color-background-primary--dark);
+    --color-background-secondary: var(--color-background-secondary--dark);
+}
