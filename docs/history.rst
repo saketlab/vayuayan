@@ -3,6 +3,11 @@ History
 
 Release history and changelog for vayuayan.
 
+v0.1.3 (2025-10-12)
+------------------
+
+* Fixed documentation link 
+
 v0.1.2 (2025-10-11)
 ------------------
 
