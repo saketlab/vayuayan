@@ -76,10 +76,10 @@ Command Line Interface
 
    installation
    quickstart
-   api_reference
    cli_reference
    examples
    contributing
+   api_reference
 
 Jupyter Notebooks
 ==================

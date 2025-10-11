@@ -5,6 +5,7 @@ vayuayan package
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 Submodules
 ----------

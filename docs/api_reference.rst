@@ -13,6 +13,7 @@ CPCBHistorical
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 CPCBLive
 ~~~~~~~~~~~~~
@@ -21,6 +22,7 @@ CPCBLive
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 PM25Client
 ~~~~~~~~~~
@@ -29,6 +31,7 @@ PM25Client
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 CPCBClient
 ~~~~~~~~~~
@@ -37,6 +40,7 @@ CPCBClient
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 Utility Functions
 -----------------
@@ -44,6 +48,7 @@ Utility Functions
 .. automodule:: vayuayan.utils
    :members:
    :undoc-members:
+   :no-index:
 
 Constants
 ---------
@@ -51,6 +56,7 @@ Constants
 .. automodule:: vayuayan.constants
    :members:
    :undoc-members:
+   :no-index:
 
 Exceptions
 ----------
@@ -59,3 +65,4 @@ Exceptions
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
