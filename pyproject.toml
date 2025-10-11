@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,7 @@ name = "vayuayan"
 version = "0.1.0"
 description = "Vayuayan - A comprehensive Python package for fetching and analyzing air quality data from multiple sources including CPCB India"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Mahesh Kumar Prajapat", email = "22b0433@iitb.ac.in"},
     {name = "Saket Choudhary", email = "saketc@iitb.ac.in"}
@@ -19,7 +19,6 @@ maintainers = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
