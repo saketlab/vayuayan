@@ -18,7 +18,7 @@ except Exception:
 
 project = "vayuayan"
 copyright = "2025"
-author = ""
+author = "Mahesh Prajapat and Saket Choudhary"
 release = package_version
 version = os.environ.get("SMV_CURRENT_VERSION") or os.environ.get(
     "READTHEDOCS_VERSION_NAME",
