@@ -1,0 +1,40 @@
+Package: vayuayan
+Type: Package
+Title: Comprehensive Air Quality Data Analysis for India
+Version: 0.1.3
+Authors@R: c(
+    person("Saket", "Choudhary", email = "saketc@iitb.ac.in", role = c("aut", "cre")),
+    person("Mahesh Kumar", "Prajapat", email = "22b0433@iitb.ac.in", role = "aut")
+    )
+Description: Fetch and analyze air quality data from multiple sources including 
+    CPCB (Central Pollution Control Board) India and WUSTL ACAG satellite PM2.5 data.
+    Provides functions for historical and real-time AQI monitoring, geospatial 
+    station location services, and satellite PM2.5 data processing.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Depends: 
+    R (>= 4.0.0)
+Imports:
+    httr,
+    jsonlite,
+    dplyr,
+    sf,
+    terra,
+    geosphere,
+    readxl,
+    tidyr,
+    purrr,
+    lubridate,
+    cli,
+    glue
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    ggplot2
+VignetteBuilder: knitr
+URL: https://github.com/saketlab/vayuayan
+BugReports: https://github.com/saketlab/vayuayan/issues
