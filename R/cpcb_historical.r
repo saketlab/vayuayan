@@ -6,49 +6,49 @@
 #' @export
 CPCBHistorical <- R6::R6Class(
   "CPCBHistorical",
-  
+
   public = list(
     #' @field base_url Base URL for CPCB services
     base_url = "https://airquality.cpcb.gov.in",
-    
+
     #' @field headers HTTP headers for requests
     headers = list(
       "Content-Type" = "application/x-www-form-urlencoded; charset=UTF-8",
       "Accept" = "q=0.8;application/json;q=0.9"
     ),
-    
+
     #' @description
     #' Initialize the CPCBHistorical client
     #' @return A new CPCBHistorical object
     initialize = function() {
       invisible(self)
     },
-    
+
     #' @description
     #' Fetch the complete list of all India stations and cities
     #' @return List containing station and city data
     get_complete_list = function() {
       endpoint <- paste0(self$base_url, "/dataRepository/all_india_stationlist")
       form_body <- private$encode_base64("{}")
-      
+
       response <- httr::POST(
         endpoint,
         body = form_body,
         encode = "form",
         httr::timeout(30)
       )
-      
+
       httr::stop_for_status(response)
       decoded_response <- private$decode_base64(httr::content(response, "text"))
       parsed_response <- jsonlite::fromJSON(decoded_response)
-      
+
       if (parsed_response$status == "success") {
         return(parsed_response$dropdown)
       }
-      
+
       return(list())
     },
-    
+
     #' @description
     #' Get list of states available for AQI data
     #' @return Character vector of state names
@@ -62,7 +62,7 @@ CPCBHistorical <- R6::R6Class(
         return(character(0))
       })
     },
-    
+
     #' @description
     #' Get list of cities in a given state
     #' @param state State name
@@ -71,7 +71,7 @@ CPCBHistorical <- R6::R6Class(
       tryCatch({
         complete_list <- self$get_complete_list()
         if (state %in% names(complete_list$cities)) {
-          cities <- sapply(complete_list$cities[[state]], function(x) x$value)
+          cities <- complete_list$cities[[state]]$value
           return(sort(cities))
         }
         return(character(0))
@@ -80,7 +80,7 @@ CPCBHistorical <- R6::R6Class(
         return(character(0))
       })
     },
-    
+
     #' @description
     #' Get station list available in given city
     #' @param city City name
@@ -90,14 +90,7 @@ CPCBHistorical <- R6::R6Class(
         complete_list <- self$get_complete_list()
         if (city %in% names(complete_list$stations)) {
           stations <- complete_list$stations[[city]]
-          df <- do.call(rbind, lapply(stations, function(s) {
-            data.frame(
-              station_id = s$value,
-              station_name = s$label,
-              stringsAsFactors = FALSE
-            )
-          }))
-          return(df[order(df$station_name), ])
+          return(stations)
         }
         return(data.frame())
       }, error = function(e) {
@@ -105,7 +98,7 @@ CPCBHistorical <- R6::R6Class(
         return(data.frame())
       })
     },
-    
+
     #' @description
     #' Get file path for downloading data
     #' @param station_id Station ID
@@ -116,8 +109,8 @@ CPCBHistorical <- R6::R6Class(
     #' @param frequency Data frequency ('hourly' or 'daily')
     #' @param data_type Type of data ('cityLevel' or 'stationLevel')
     #' @return List of file path information
-    get_file_path = function(station_id = "", station_name = "", state = "", 
-                            city = "", year = "", frequency = "daily", 
+    get_file_path = function(station_id = "", station_name = "", state = "",
+                            city = "", year = "", frequency = "daily",
                             data_type = "cityLevel") {
       payload <- list(
         station_id = station_id,
@@ -128,30 +121,40 @@ CPCBHistorical <- R6::R6Class(
         frequency = frequency,
         dataType = data_type
       )
-      
+
       payload_str <- jsonlite::toJSON(payload, auto_unbox = TRUE)
       encoded_payload <- private$encode_base64(payload_str)
-      
+
       endpoint <- paste0(self$base_url, "/dataRepository/file_Path")
-      
+
       response <- httr::POST(
         endpoint,
         body = encoded_payload,
-        httr::add_headers(.headers = self$headers),
+        httr::add_headers(.headers = unlist(self$headers)),
         httr::timeout(30)
       )
-      
+
       httr::stop_for_status(response)
       decoded_response <- private$decode_base64(httr::content(response, "text"))
       parsed_response <- jsonlite::fromJSON(decoded_response)
-      
+
       if (parsed_response$status == "success") {
-        return(parsed_response$data)
+        df <- parsed_response$data
+        if (is.data.frame(df) && nrow(df) > 0) {
+          result <- lapply(seq_len(nrow(df)), function(i) {
+            list(
+              filePath = as.character(df$filepath[i]),
+              year = as.integer(df$year[i])
+            )
+          })
+          return(result)
+        }
+        return(list())
       }
-      
+
       return(list())
     },
-    
+
     #' @description
     #' Download past year AQI data for a city
     #' @param city City name
@@ -160,30 +163,35 @@ CPCBHistorical <- R6::R6Class(
     #' @return Data frame preview of downloaded data
     download_city_data = function(city, year, save_location) {
       data_files <- self$get_file_path(
-        city = city, 
-        frequency = "daily", 
+        city = city,
+        frequency = "daily",
         data_type = "cityLevel"
       )
-      
       for (entry in data_files) {
         if (entry$year == year) {
+          cat(entry$year, '\n')
+          cat(entry$filePath, '\n')
           base_path <- paste0(
-            self$base_url, 
+            self$base_url,
             "/dataRepository/download_file?file_name="
           )
-          file_url <- paste0(base_path, entry$filepath)
-          
-          df <- readxl::read_excel(file_url)
+          file_url <- paste0(base_path, entry$filePath)
+          tmp <- tempfile(fileext = ".xlsx")
+          res <- httr::GET(file_url, httr::write_disk(tmp, overwrite = TRUE), httr::timeout(60))
+          httr::stop_for_status(res)
+          df <- readxl::read_excel(tmp)
+          unlink(tmp)
           df <- df[1:min(31, nrow(df)), ]  # Limit to 31 rows
-          
-          readr::write_csv(df, save_location)
+
+          utils::write.csv(df, file = save_location, row.names = FALSE)
+          cat('File Saved to mentioned location','\n')
           return(head(df))
         }
       }
-      
+
       stop(sprintf("Data not found for city %s in year %s", city, year))
     },
-    
+
     #' @description
     #' Download past year AQI data for a station
     #' @param station_id Station ID
@@ -192,55 +200,58 @@ CPCBHistorical <- R6::R6Class(
     #' @return Data frame preview of downloaded data
     download_station_data = function(station_id, year, save_location) {
       complete_list <- self$get_complete_list()
-      
+
       # Find station name
       station_name <- NULL
-      for (city_stations in complete_list$stations) {
-        for (station in city_stations) {
-          if (station$value == station_id) {
-            station_name <- station$label
-            break
-          }
+      for (city in names(complete_list$stations)) {
+        df <- complete_list$stations[[city]]
+        idx <- which(df$value == station_id)
+        if (length(idx) > 0) {
+          station_name <- as.character(df$label[idx[1]])
+          break
         }
-        if (!is.null(station_name)) break
       }
-      
+
       if (is.null(station_name)) {
         stop(sprintf("Station ID %s not found", station_id))
       }
-      
+
       data_files <- self$get_file_path(
         station_id = station_id,
         station_name = station_name,
         frequency = "daily",
         data_type = "stationLevel"
       )
-      
+
       for (entry in data_files) {
         if (entry$year == year) {
           base_path <- paste0(
             self$base_url,
             "/dataRepository/download_file?file_name="
           )
-          file_url <- paste0(base_path, entry$filepath)
-          
-          df <- readxl::read_excel(file_url)
-          df <- df[1:min(31, nrow(df)), ]
-          
-          readr::write_csv(df, save_location)
+          file_url <- paste0(base_path, entry$filePath)
+          tmp <- tempfile(fileext = ".xlsx")
+          res <- httr::GET(file_url, httr::write_disk(tmp, overwrite = TRUE), httr::timeout(60))
+          httr::stop_for_status(res)
+          df <- readxl::read_excel(tmp)
+          unlink(tmp)
+          df <- df[1:min(31, nrow(df)), ]  # Limit to 31 rows
+
+          utils::write.csv(df, file = save_location, row.names = FALSE)
+          cat('File Saved to mentioned location','\n')
           return(head(df))
         }
       }
-      
+
       stop(sprintf("Data not found for station %s in year %s", station_id, year))
     }
   ),
-  
+
   private = list(
     encode_base64 = function(data) {
       jsonlite::base64_enc(charToRaw(data))
     },
-    
+
     decode_base64 = function(data) {
       rawToChar(jsonlite::base64_dec(data))
     }

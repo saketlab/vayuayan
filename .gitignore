@@ -52,3 +52,7 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Test files
+.geojson
+.nc
