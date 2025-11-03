@@ -117,8 +117,31 @@ PM25Client <- R6::R6Class(
       }
       
       # Otherwise, process as combined polygon
-      polygon <- sf::st_union(gdf)
+      # Simplify geometries
+      gdf <- sf::st_simplify(gdf, dTolerance = 1e-6, preserveTopology = TRUE)
+
+      # Remove empty or zero-area geometries
+      gdf <- gdf[!sf::st_is_empty(gdf) & as.numeric(sf::st_area(gdf)) > 0, ]
+
+      # Attempt union
+      polygon <- tryCatch({
+        sf::st_union(gdf)
+      }, error = function(e) {
+        cat("Union failed, attempting fallback...\n")
+        tmp_geojson <- tempfile(fileext = ".geojson")
+        sf::st_write(gdf, tmp_geojson, delete_dsn = TRUE, quiet = TRUE)
+        gdf <- sf::st_read(tmp_geojson, quiet = TRUE)
+        sf::st_union(gdf)
+      })
+      if (sf::st_is_empty(polygon) || is.null(polygon)) {
+        stop("Polygon is empty or invalid.")
+      }
+      # polygon <- sf::st_union(gdf)
       bbox <- sf::st_bbox(polygon)
+      # Validate bbox
+      if (any(is.na(bbox)) || any(is.infinite(bbox))) {
+        stop("Bounding box contains invalid values.")
+      }
       
       # Load and process NetCDF data
       pm25_raster <- terra::rast(nc_file)
@@ -142,11 +165,14 @@ PM25Client <- R6::R6Class(
       
       # Crop to bounding box with buffer
       bbox_buffered <- sf::st_bbox(c(
-        xmin = bbox$xmin - 0.1,
-        ymin = bbox$ymin - 0.1,
-        xmax = bbox$xmax + 0.1,
-        ymax = bbox$ymax + 0.1
+        xmin = as.numeric(bbox$xmin) - 0.1,
+        ymin = as.numeric(bbox$ymin) - 0.1,
+        xmax = as.numeric(bbox$xmax) + 0.1,
+        ymax = as.numeric(bbox$ymax) + 0.1
       ))
+      if (any(is.na(bbox_buffered)) || any(is.infinite(bbox_buffered))) {
+        stop("Buffered bounding box contains invalid values.")
+      }
       
       pm25_cropped <- terra::crop(pm25_layer, terra::ext(bbox_buffered))
       
@@ -246,7 +272,12 @@ PM25Client <- R6::R6Class(
     },
     
     get_pm25_stats_grouped = function(gdf, nc_file, group_cols) {
+      # polygon <- sf::st_union(gdf)
       bbox <- sf::st_bbox(gdf)
+      # Validate bbox
+      if (any(is.na(bbox)) || any(is.infinite(bbox))) {
+        stop("Bounding box contains invalid values.")
+      }
       
       # Load NetCDF
       pm25_raster <- terra::rast(nc_file)
@@ -267,13 +298,16 @@ PM25Client <- R6::R6Class(
       
       pm25_layer <- pm25_raster[[pm25_var]]
       
-      # Crop to overall bounding box
+      # Crop to bounding box with buffer
       bbox_buffered <- sf::st_bbox(c(
-        xmin = bbox$xmin - 0.1,
-        ymin = bbox$ymin - 0.1,
-        xmax = bbox$xmax + 0.1,
-        ymax = bbox$ymax + 0.1
+        xmin = as.numeric(bbox$xmin) - 0.1,
+        ymin = as.numeric(bbox$ymin) - 0.1,
+        xmax = as.numeric(bbox$xmax) + 0.1,
+        ymax = as.numeric(bbox$ymax) + 0.1
       ))
+      if (any(is.na(bbox_buffered)) || any(is.infinite(bbox_buffered))) {
+        stop("Buffered bounding box contains invalid values.")
+      }
       
       pm25_cropped <- terra::crop(pm25_layer, terra::ext(bbox_buffered))
       

@@ -54,5 +54,5 @@ po/*~
 rsconnect/
 
 # Test files
-.geojson
-.nc
+*.geojson
+*.nc
