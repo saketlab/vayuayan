@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vayuayan"
-version = "0.1.3"
+version = "0.1.4"
 description = "Package for fetching and analyzing air quality data from multiple sources"
 readme = "README.md"
 license = "MIT"
@@ -26,6 +26,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Atmospheric Science",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]

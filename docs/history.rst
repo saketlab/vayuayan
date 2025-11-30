@@ -3,6 +3,12 @@ History
 
 Release history and changelog for vayuayan.
 
+v0.1.4 (2025-11-30)
+------------------
+
+* Added ssl fallback
+* Return full dataframe for historical data
+
 v0.1.3 (2025-10-12)
 ------------------
 
@@ -32,4 +38,5 @@ v0.1.0 (2025-10-11)
 
 * Central Pollution Control Board (CPCB) India
 * WUSTL ACAG PM2.5 satellite data
+
 

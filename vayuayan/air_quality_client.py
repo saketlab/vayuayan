@@ -19,9 +19,83 @@ import numpy as np
 import pandas as pd
 import requests
 import rioxarray  # noqa: F401
+import urllib3
 import xarray as xr
 from geopy.distance import geodesic
 from tqdm import tqdm
+
+# Disable SSL warnings for CPCB endpoints with certificate issues
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def _request_with_ssl_fallback(
+    method: str,
+    url: str,
+    headers: Optional[Dict[str, str]] = None,
+    data: Optional[Union[str, bytes]] = None,
+    cookies: Optional[Dict[str, str]] = None,
+    timeout: int = 30,
+    stream: bool = False,
+    **kwargs: Any,
+) -> requests.Response:
+    """Make HTTP request with SSL fallback on certificate errors.
+
+    First attempts with SSL verification enabled. If that fails with an SSL error,
+    retries with SSL verification disabled.
+
+    Args:
+        method: HTTP method ('get' or 'post').
+        url: Request URL.
+        headers: Optional request headers.
+        data: Optional request data.
+        cookies: Optional request cookies.
+        timeout: Request timeout in seconds.
+        stream: Whether to stream the response.
+        **kwargs: Additional arguments to pass to requests.
+
+    Returns:
+        Response object.
+
+    Raises:
+        requests.RequestException: If request fails after SSL fallback attempt.
+    """
+    request_kwargs = {
+        "timeout": timeout,
+        "stream": stream,
+        **kwargs,
+    }
+    if headers:
+        request_kwargs["headers"] = headers
+    if data is not None:
+        request_kwargs["data"] = data
+    if cookies:
+        request_kwargs["cookies"] = cookies
+
+    # Try with SSL verification first
+    try:
+        request_kwargs["verify"] = True
+        if method.lower() == "get":
+            response = requests.get(url, **request_kwargs)
+        else:
+            response = requests.post(url, **request_kwargs)
+        response.raise_for_status()
+        return response
+    except requests.exceptions.SSLError as e:
+        # SSL verification failed, retry without verification
+        print(f"SSL verification failed: {e}")
+        print("Retrying with SSL verification disabled...")
+        try:
+            request_kwargs["verify"] = False
+            if method.lower() == "get":
+                response = requests.get(url, **request_kwargs)
+            else:
+                response = requests.post(url, **request_kwargs)
+            response.raise_for_status()
+            return response
+        except Exception as fallback_error:
+            raise requests.RequestException(
+                f"Request failed even with SSL verification disabled: {fallback_error}"
+            ) from fallback_error
 
 
 class CPCBHistorical:
@@ -73,10 +147,12 @@ class CPCBHistorical:
             json.JSONDecodeError: If response cannot be parsed as JSON.
         """
         form_body = self._encode_base64(b"{}")
-        response = requests.post(
-            f"{self.base_url}{self.dropdown_endpoint}", data=form_body, timeout=30
+        response = _request_with_ssl_fallback(
+            method="post",
+            url=f"{self.base_url}{self.dropdown_endpoint}",
+            data=form_body,
+            timeout=30,
         )
-        response.raise_for_status()
 
         decoded_response = self._decode_base64(response.text)
         parsed_response = cast(Dict[str, Any], json.loads(decoded_response))
@@ -179,13 +255,13 @@ class CPCBHistorical:
         payload_str = json.dumps(payload)
         encoded_payload = self._encode_base64(payload_str.encode("utf-8"))
 
-        response = requests.post(
-            f"{self.base_url}{self.file_path_endpoint}",
+        response = _request_with_ssl_fallback(
+            method="post",
+            url=f"{self.base_url}{self.file_path_endpoint}",
             data=encoded_payload,
             headers=self.headers,
             timeout=30,
         )
-        response.raise_for_status()
 
         decoded_response = self._decode_base64(response.text)
         parsed_response = cast(Dict[str, Any], json.loads(decoded_response))
@@ -219,12 +295,12 @@ class CPCBHistorical:
         data_file_paths = self.get_file_path("", "", "", city, "", "daily", "cityLevel")
 
         for entry in data_file_paths:
-            if entry.get("year") == year:
+            if entry.get("year") == str(year):
                 file_url = f"{self.base_path}{entry['filepath']}"
                 df = pd.read_excel(file_url)
                 df = df.iloc[:31]  # Limit to first 31 rows (max days in month)
                 df.to_csv(save_location, index=False)
-                return df.head()
+                return df
 
         raise Exception(f"Data not found for city {city} in year {year}")
 
@@ -314,10 +390,14 @@ class CPCBLive:
             requests.RequestException: If request fails.
             json.JSONDecodeError: If response cannot be decoded.
         """
-        response = requests.post(
-            url=url, headers=headers, data=data, cookies=cookies, timeout=30
+        response = _request_with_ssl_fallback(
+            method="post",
+            url=url,
+            headers=headers,
+            data=data,
+            cookies=cookies,
+            timeout=30,
         )
-        response.raise_for_status()
 
         decoded_data = base64.b64decode(response.content)
         return cast(Dict[str, Any], json.loads(decoded_data))
@@ -367,8 +447,9 @@ class CPCBLive:
             Exception: If geolocation lookup fails.
         """
         try:
-            response = requests.get(self.coordinate_url, timeout=30)
-            response.raise_for_status()
+            response = _request_with_ssl_fallback(
+                method="get", url=self.coordinate_url, timeout=30
+            )
             data = response.json()
 
             if data.get("status") == "success":
@@ -629,8 +710,9 @@ class PM25Client:
         print(f"Destination: {cached_path}")
 
         try:
-            response = requests.get(aws_url, stream=True, timeout=300)
-            response.raise_for_status()
+            response = _request_with_ssl_fallback(
+                method="get", url=aws_url, stream=True, timeout=300
+            )
 
             # Ensure directory exists
             cached_path.parent.mkdir(parents=True, exist_ok=True)
