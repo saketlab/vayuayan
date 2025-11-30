@@ -299,7 +299,8 @@ class CPCBHistorical:
                 file_url = f"{self.base_path}{entry['filepath']}"
                 df = pd.read_excel(file_url)
                 df = df.iloc[:31]  # Limit to first 31 rows (max days in month)
-                df.to_csv(save_location, index=False)
+                if save_location:
+                    df.to_csv(save_location, index=False)
                 return df
 
         raise Exception(f"Data not found for city {city} in year {year}")
