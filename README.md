@@ -6,13 +6,20 @@
 - **CPCB India**: Central Pollution Control Board monitoring network (India only)
 
 This is the R port of the Python package [vayuayan](https://github.com/saketlab/vayuayan).
+## Etymology
+
+**Vayuayan** (वायुअयन) combines two Sanskrit words:
+- **Vayu** (वायु): Wind, air
+- **Ayan** (अयन): Path, journey, movement
+
+Together, "Vayuayan" means "the path of wind" - representing the journey and movement of air quality data across space and time.
 
 ## Installation
 
 Install from GitHub using devtools:
 
 ```r
-# Install devtools if you haven't already
+# Install devtools
 install.packages("devtools")
 
 # Install vayuayan
@@ -24,6 +31,7 @@ devtools::install_github("saketlab/vayuayan-r")
 ### Historical AQI Data
 
 ```r
+# Load package
 library(vayuayan)
 
 # Create historical data client
@@ -245,21 +253,9 @@ ggplot(stations_sf) +
 
 Contributions are welcome! Please feel free to submit a pull request.
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Disclaimer
 
 This package is not officially affiliated with any government agency or air quality monitoring network. It's a third-party tool for accessing publicly available environmental data. Users are responsible for verifying data accuracy and following proper attribution guidelines.
-
-## Etymology
-
-**Vayuayan** (वायुअयन) combines two Sanskrit words:
-- **Vayu** (वायु): Wind, air
-- **Ayan** (अयन): Path, journey, movement
-
-Together, "Vayuayan" means "the path of wind" - representing the journey and movement of air quality data across space and time.
 
 ## Citation
 
