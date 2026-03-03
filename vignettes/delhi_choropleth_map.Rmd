@@ -1,0 +1,279 @@
+---
+title: "Mumbai PM2.5 Analysis (2023–2025)"
+author: "Saket Choudhary and Darakhshan Nehal"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Mumbai PM2.5 Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Introduction 
+
+```{r}
+
+```
+
+# Methods 
+(GeoJSON boundary, NetCDF satellite data, CPCB comparison).
+
+```{r}
+
+```
+
+
+## Dual line chart
+CPCB data is 'Real-time/Hourly' while Satellite data is 'Monthly/Annual Mean'. aggregated the ground data to monthly means to ensure a fair comparison.
+
+The satellite data represents a spatial mean over the Mumbai GeoJSON area, whereas CPCB data is an average of point-source monitoring stations. Some divergence is expected due to this 'point-to-area' difference.
+
+## Chloropleth Delhi
+### Prepare the data
+
+```{r}
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+#  Load packages
+pacman::p_load(
+  vayuayan,
+  tidyverse,
+  tidylog,
+  terra,
+  sf,
+  tidyterra,
+  gstat,
+  ggview,
+  gstat,
+  sp,
+  exactextractr
+)
+```
+
+```{r}
+
+# Get Delhi Ground Data (CPCB)
+hist_client <- CPCBHistorical$new()
+
+delhi_ground <- hist_client$download_city_data(
+  city = "Delhi",
+  year = 2023,
+  "delhi_aqi_2023.csv"
+)
+
+# Load the wide data
+delhi_wide <- read.csv("delhi_aqi_2023.csv")
+
+# Reshape from Wide to Long
+delhi_ground <- delhi_wide %>%
+  # Remove the 'Day' column and pivot all months
+  pivot_longer(
+    cols = -Day,
+    names_to = "Month_Name",
+    values_to = "ground_pm25"
+  ) %>%
+  # Convert month names to numbers (January -> 1, etc.)
+  mutate(month = match(Month_Name, month.name)) %>%
+  # Remove any NAs (like Feb 30th) and aggregate to monthly mean
+  filter(!is.na(ground_pm25)) %>%
+  group_by(month) %>%
+  summarise(ground_pm25 = mean(ground_pm25, na.rm = TRUE), .groups = "drop")
+
+print(delhi_ground)
+```
+
+```{r}
+
+# Initialize the client pointing to your folder
+client <- PM25Client$new(cache_dir = "pm25_data")
+
+# Extract the 12 months
+delhi_sat_results <- lapply(1:12, function(m) {
+  message(paste("Processing Month:", m))
+  stats <- client$get_pm25_stats(
+    geojson_file = "E:/geojson/DELHI.geojson",
+    year = 2023,
+    month = m
+  )
+  data.frame(month = m, sat_pm25 = stats$mean)
+})
+
+# Combine into satellite dataframe
+delhi_sat_df <- do.call(rbind, delhi_sat_results)
+
+# Check results
+print(delhi_sat_df)
+```
+
+```{r}
+# Join the ground spikes with the new satellite spikes
+delhi_final <- delhi_ground %>%
+  inner_join(delhi_sat_df, by = "month")
+```
+
+### Plotting Line chart
+```{r}
+# Plotting the "Seasonal Reality"
+ggplot(delhi_final, aes(x = month)) +
+  geom_line(aes(y = ground_pm25, color = "CPCB Ground"), linewidth = 1) +
+  geom_line(
+    aes(y = sat_pm25, color = "WUSTL Satellite (Monthly)"),
+    linewidth = 1,
+    linetype = "dashed"
+  ) +
+  geom_point(aes(y = ground_pm25, color = "CPCB Ground"), size = 2) +
+  geom_point(aes(y = sat_pm25, color = "WUSTL Satellite (Monthly)"), size = 2) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  scale_color_manual(
+    values = c(
+      "CPCB Ground" = "#d77027ff",
+      "WUSTL Satellite (Monthly)" = "#4575b4"
+    )
+  ) +
+  labs(
+    title = "Delhi 2023: PM2.5 Satellite data Vs CPCBHistorical estimates",
+    y = expression(paste("PM2.5 Concentration (", mu, "g/m"^3, ")")),
+    x = NULL,
+    color = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom") #+
+# ggview::canvas(width = 9, height = 6, dpi = 300)
+```
+
+For 2024 and 2025, the ground data is ready, but the satellite component is pending the official release of the NetCDF files from Washington University.
+
+## Geospatial Analysis
+
+Only satellite data
+```{r}
+# Load Delhi shape
+delhi_shape <- st_read("E:/geojson/DELHI.geojson")
+
+# Load November Satellite file (202311)
+# Make sure the name matches downloadeded .nc file
+nov_file <- "pm25_data/V6GL02.04.CNNPM25.GL.202311-202311.nc"
+r_nov <- rast(nov_file)
+
+# Crop and Mask the satellite data to Delhi's boundary
+# This 'cuts' the global map into a Delhi-sized piece
+delhi_raster <- crop(r_nov, vect(delhi_shape))
+delhi_raster_masked <- mask(delhi_raster, vect(delhi_shape))
+
+# Create Map
+ggplot() +
+  geom_spatraster(data = delhi_raster_masked) +
+  geom_sf(
+    data = delhi_shape,
+    fill = NA,
+    color = "royalblue4",
+    linewidth = 0.65
+  ) +
+  scale_fill_whitebox_c(
+    palette = "muted",
+    name = expression(paste("PM2.5 (", mu, "g/m"^3, ")"))
+  ) +
+  labs(
+    title = "Spatial Distribution of PM2.5 in Delhi",
+    subtitle = "Satellite Estimate: November 2023",
+    caption = "Source: WUSTL ACAG V6.GL.02.04"
+  ) +
+  theme_minimal()
+```
+
+### Station Data
+
+```{r}
+# For the whole list of stations.
+# Initialize the historical client
+hist_client <- CPCBHistorical$new()
+
+# Get ALL stations for Delhi
+delhi_station_list <- hist_client$get_station_list("Delhi")
+print(delhi_station_list)
+```
+
+```{r}
+# Add coordinates via OpenStreetMap geocoding
+delhi_station_list <- hist_client$add_coords(delhi_station_list)
+
+# Save to avoid re-geocoding on every render
+write.csv(
+  delhi_station_list,
+  "delhi_stations_with_coords.csv",
+  row.names = FALSE
+)
+
+delhi_full_sf <- st_as_sf(
+  delhi_station_list,
+  coords = c("lon", "lat"),
+  crs = 4326
+)
+```
+
+
+## Chloropeth (Zonal statistics)
+Objective: Correlation b/w sensors & pollution
+
+```{r}
+
+# Load the District GeoJSON
+delhi_districts <- st_read("E:/geojson/DELHI.geojson")
+
+# Load the Satellite Raster (e.g., Nov 2023)
+nov_raster <- rast("pm25_data/V6GL02.04.CNNPM25.GL.202311-202311.nc")
+
+# Zonal Statistics: Get average PM2.5 per district
+# Step to turn a heatmap into a choropleth
+district_means <- terra::extract(
+  nov_raster,
+  vect(delhi_districts),
+  fun = mean,
+  na.rm = TRUE
+)
+
+# Join the data back to the shapes
+delhi_districts$sat_pm25 <- district_means[, 2]
+```
+
+```{r}
+ggplot() +
+  # Choropleth layer
+  geom_sf(
+    data = delhi_districts,
+    aes(fill = sat_pm25),
+    color = "white",
+    linewidth = 0.3
+  ) +
+  # Ground Stations (All 40)
+  geom_sf(
+    data = delhi_full_sf,
+    color = "royalblue4",
+    size = 2.5,
+    alpha = 0.65
+  ) +
+  scale_fill_distiller(
+    palette = "Spectral",
+    direction = -1
+  ) +
+  labs(
+    title = "Delhi District-Wise PM2.5 Choropleth",
+    subtitle = "District colors = Satellite Average | Red dots = CPCB Station Locations",
+    caption = "Do districts with more dots show better ground-satellite alignment?"
+  ) +
+  theme_minimal() +
+  ggview::canvas(width = 8, height = 6, dpi = 300)
+
+```
+
+# Results 
+(plots for 2023).
+
+
+# Discussion 
+
+# Session Information
+
+```{r session_info}
+sessionInfo()
+```
