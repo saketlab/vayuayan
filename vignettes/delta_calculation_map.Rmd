@@ -3,10 +3,18 @@ title: "Delhi PM2.5 Analysis (2023)"
 author: "Saket Choudhary and Darakhshan Nehal"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Delhi PM2.5 Analysis}
+  %\VignetteIndexEntry{Delhi PM2.5 Analysis (2023)}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
+
+```{r knitr-setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
 
 # Introduction
 
@@ -26,9 +34,9 @@ are there under-monitored regions where PM2.5 is being systematically missed?
 
 ---
 
-# Data & Methods
+# Data & methods
 
-## Satellite Data
+## Satellite data
 
 Monthly PM2.5 estimates are sourced from the Washington University in St. Louis
 Atmospheric Composition Analysis Group (WUSTL ACAG) V6.GL.02.04 product. This
@@ -36,17 +44,17 @@ dataset provides gridded PM2.5 concentrations at approximately 0.01° resolution
 (~1km), derived from a combination of satellite aerosol optical depth retrievals,
 chemical transport modelling, and ground-based calibration.
 
-Files are downloaded as NetCDF (`.nc`) format using the `PM25Client` class in
-`vayuayan`.
+Files are downloaded as NetCDF (`.nc`) format using the `pm25_download_netcdf()`
+function in `vayuayan`.
 
-## Ground Data (CPCB)
+## Ground data (CPCB)
 
 Daily PM2.5 readings from the Central Pollution Control Board's Continuous
 Ambient Air Quality Monitoring Stations (CAAQMS) are fetched using the
-`CPCBHistorical` class. Delhi has 40 operational monitoring stations managed
-by DPCC, CPCB, IMD, and IITM.
+`cpcb_download_city_data()` function. Delhi has 40 operational monitoring
+stations managed by DPCC, CPCB, IMD, and IITM.
 
-## Comparison Caveat
+## Comparison caveat
 
 The satellite data represents a **spatial mean over an area** (the Delhi
 GeoJSON boundary), whereas CPCB data is a **point-source average** across
@@ -80,20 +88,18 @@ pacman::p_load(
 
 # Results
 
-## 1. Seasonal Trend: Ground vs Satellite PM2.5
+## 1. Seasonal trend: ground vs satellite PM2.5
 
 ```{r ground-data, message=FALSE, warning=FALSE}
 # Get Delhi city-level ground data
-hist_client <- CPCBHistorical$new()
-
-delhi_ground <- hist_client$download_city_data(
+delhi_ground <- cpcb_download_city_data(
   city          = "Delhi",
   year          = 2023,
   save_location = "delhi_aqi_2023.csv"
 )
 
 # Load and reshape wide → long
-delhi_wide   <- read.csv("delhi_aqi_2023.csv")
+delhi_wide <- read.csv("delhi_aqi_2023.csv")
 
 delhi_ground <- delhi_wide %>%
   pivot_longer(
@@ -110,11 +116,11 @@ print(delhi_ground)
 ```
 
 ```{r satellite-data, message=FALSE, warning=FALSE}
-client <- PM25Client$new(cache_dir = "pm25_data")
+delhi_geojson <- system.file("extdata", "delhi_ncr.geojson", package = "vayuayan")
 
 delhi_sat_results <- lapply(1:12, function(m) {
-  stats <- client$get_pm25_stats(
-    geojson_file = "E:/geojson/DELHI.geojson",
+  stats <- pm25_get_stats(
+    geojson_file = delhi_geojson,
     year         = 2023,
     month        = m
   )
@@ -122,7 +128,7 @@ delhi_sat_results <- lapply(1:12, function(m) {
 })
 
 delhi_sat_df <- do.call(rbind, delhi_sat_results)
-delhi_final  <- inner_join(delhi_ground, delhi_sat_df, by = "month")
+delhi_final <- inner_join(delhi_ground, delhi_sat_df, by = "month")
 
 print(delhi_final)
 ```
@@ -133,10 +139,10 @@ ggplot(delhi_final, aes(x = month)) +
   geom_line(
     aes(y = sat_pm25, color = "WUSTL Satellite (Monthly)"),
     linewidth = 1,
-    linetype  = "dashed"
+    linetype = "dashed"
   ) +
   geom_point(aes(y = ground_pm25, color = "CPCB Ground"), size = 2) +
-  geom_point(aes(y = sat_pm25,    color = "WUSTL Satellite (Monthly)"), size = 2) +
+  geom_point(aes(y = sat_pm25, color = "WUSTL Satellite (Monthly)"), size = 2) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
   scale_color_manual(values = c(
     "CPCB Ground"               = "#d77027ff",
@@ -157,15 +163,16 @@ ggplot(delhi_final, aes(x = month)) +
 
 ---
 
-## 2. Spatial Distribution: PM2.5 Heatmap (November 2023)
+## 2. Spatial distribution: PM2.5 heatmap (November 2023)
 
 November represents peak pollution season in Delhi due to crop burning,
 Diwali firecrackers, and temperature inversion trapping pollutants near the surface.
 
 ```{r heatmap, fig.width=8, fig.height=7}
-delhi_shape       <- st_read("E:/geojson/DELHI.geojson", quiet = TRUE)
-nov_raster        <- rast("pm25_data/V6GL02.04.CNNPM25.GL.202311-202311.nc")
-delhi_raster      <- crop(nov_raster, vect(delhi_shape))
+delhi_geojson <- system.file("extdata", "delhi_ncr.geojson", package = "vayuayan")
+delhi_shape <- st_read(delhi_geojson, quiet = TRUE)
+nov_raster <- rast("pm25_data/V6GL02.04.CNNPM25.GL.202311-202311.nc")
+delhi_raster <- crop(nov_raster, vect(delhi_shape))
 delhi_raster_mask <- mask(delhi_raster, vect(delhi_shape))
 
 ggplot() +
@@ -190,18 +197,18 @@ ggplot() +
 
 ---
 
-## 3. Station Network: Choropleth + CPCB Locations
+## 3. Station network: choropleth + CPCB locations
 
 ```{r station-list, message=FALSE, warning=FALSE}
 # Get station list
-delhi_station_list <- hist_client$get_station_list("Delhi")
+delhi_station_list <- cpcb_get_station_list("Delhi")
 
 # Add coordinates via OpenStreetMap geocoding
 # Cached to CSV to avoid re-geocoding on every render (~40 seconds)
 if (file.exists("delhi_stations_with_coords.csv")) {
   delhi_station_list <- read.csv("delhi_stations_with_coords.csv")
 } else {
-  delhi_station_list <- hist_client$add_coords(delhi_station_list)
+  delhi_station_list <- cpcb_add_coords(delhi_station_list)
   write.csv(delhi_station_list, "delhi_stations_with_coords.csv", row.names = FALSE)
 }
 
@@ -215,17 +222,19 @@ print(delhi_station_list[, c("value", "label", "lat", "lon")])
 ```
 
 ```{r choropleth, fig.width=8, fig.height=6}
-delhi_districts <- st_read("E:/geojson/DELHI.geojson", quiet = TRUE)
-nov_raster      <- rast("pm25_data/V6GL02.04.CNNPM25.GL.202311-202311.nc")
+delhi_geojson <- system.file("extdata", "delhi_ncr.geojson", package = "vayuayan")
+delhi_districts <- st_read(delhi_geojson, quiet = TRUE)
+nov_raster <- rast("pm25_data/V6GL02.04.CNNPM25.GL.202311-202311.nc")
 
-district_means          <- terra::extract(nov_raster, vect(delhi_districts),
-                                          fun = mean, na.rm = TRUE)
+district_means <- terra::extract(nov_raster, vect(delhi_districts),
+  fun = mean, na.rm = TRUE
+)
 delhi_districts$sat_pm25 <- district_means[, 2]
 
 ggplot() +
   geom_sf(
     data      = delhi_districts,
-    aes(fill  = sat_pm25),
+    aes(fill = sat_pm25),
     color     = "white",
     linewidth = 0.3
   ) +
@@ -246,7 +255,7 @@ ggplot() +
 
 ---
 
-## 4. Monitoring Gap Analysis: Where Are Sensors Missing Pollution?
+## 4. Monitoring gap analysis: where are sensors missing pollution?
 
 A key limitation of ground-based monitoring is spatial coverage. The 40 CPCB
 stations are not uniformly distributed across Delhi — some districts have
@@ -265,29 +274,31 @@ missing pollution.
 if (!dir.exists("station_data")) dir.create("station_data")
 
 station_raw <- lapply(seq_along(delhi_station_list$value), function(i) {
-  id   <- delhi_station_list$value[i]
+  id <- delhi_station_list$value[i]
   file <- paste0("station_data/", id, ".csv")
 
-  tryCatch({
-    if (!file.exists(file)) {
-      hist_client$download_station_data(
-        station_id    = id,
-        year          = 2023,
-        save_location = file
-      )
+  tryCatch(
+    {
+      if (!file.exists(file)) {
+        cpcb_download_station_data(
+          station_id    = id,
+          year          = 2023,
+          save_location = file
+        )
+      }
+      df <- read.csv(file)
+
+      df %>%
+        pivot_longer(cols = -Day, names_to = "Month_Name", values_to = "pm25") %>%
+        mutate(month = match(Month_Name, month.name)) %>%
+        filter(month %in% c(1, 10, 11, 12), !is.na(pm25)) %>%
+        summarise(ground_pm25 = mean(pm25, na.rm = TRUE)) %>%
+        mutate(value = id)
+    },
+    error = function(e) {
+      data.frame(value = id, ground_pm25 = NA)
     }
-    df <- read.csv(file)
-
-    df %>%
-      pivot_longer(cols = -Day, names_to = "Month_Name", values_to = "pm25") %>%
-      mutate(month = match(Month_Name, month.name)) %>%
-      filter(month %in% c(1, 10, 11, 12), !is.na(pm25)) %>%
-      summarise(ground_pm25 = mean(pm25, na.rm = TRUE)) %>%
-      mutate(value = id)
-
-  }, error = function(e) {
-    data.frame(value = id, ground_pm25 = NA)
-  })
+  )
 })
 
 station_ground <- do.call(rbind, station_raw)
@@ -312,24 +323,25 @@ winter_rasters <- rast(lapply(c(1, 10, 11, 12), function(m) {
 }))
 winter_raster <- mean(winter_rasters)
 
-delhi_shape_union <- st_read("E:/geojson/DELHI.geojson", quiet = TRUE) %>%
+delhi_geojson <- system.file("extdata", "delhi_ncr.geojson", package = "vayuayan")
+delhi_shape_union <- st_read(delhi_geojson, quiet = TRUE) %>%
   st_union()
 winter_delhi <- crop(winter_raster, vect(delhi_shape_union))
-winter_delhi <- mask(winter_delhi,  vect(delhi_shape_union))
+winter_delhi <- mask(winter_delhi, vect(delhi_shape_union))
 
 # District winter means for choropleth base
 delhi_districts$winter_sat_pm25 <- exact_extract(
-  winter_delhi, delhi_districts, 'mean'
+  winter_delhi, delhi_districts, "mean"
 )
 ```
 
 ```{r idw, message=FALSE, warning=FALSE}
 # Project to UTM zone 43N for distance-based interpolation
 station_utm <- st_transform(station_ground_sf, crs = 32643)
-delhi_utm   <- st_transform(st_as_sf(delhi_shape_union), crs = 32643)
+delhi_utm <- st_transform(st_as_sf(delhi_shape_union), crs = 32643)
 
 # 1km prediction grid over Delhi
-bbox    <- st_bbox(delhi_utm)
+bbox <- st_bbox(delhi_utm)
 grid_sf <- expand.grid(
   x = seq(bbox["xmin"], bbox["xmax"], by = 1000),
   y = seq(bbox["ymin"], bbox["ymax"], by = 1000)
@@ -339,11 +351,11 @@ grid_sf <- expand.grid(
 
 # IDW interpolation (idp=2: inverse square distance weighting)
 station_sp <- as(station_utm, "Spatial")
-grid_sp    <- as(grid_sf,     "Spatial")
-idw_out    <- idw(ground_pm25 ~ 1, station_sp, grid_sp, idp = 2)
+grid_sp <- as(grid_sf, "Spatial")
+idw_out <- idw(ground_pm25 ~ 1, station_sp, grid_sp, idp = 2)
 
 # Convert to raster
-idw_sf   <- st_as_sf(idw_out) %>% st_transform(crs = 4326)
+idw_sf <- st_as_sf(idw_out) %>% st_transform(crs = 4326)
 idw_rast <- rasterize(vect(idw_sf), winter_delhi, field = "var1.pred")
 ```
 
@@ -360,7 +372,7 @@ ggplot() +
   # Base: district satellite PM2.5
   geom_sf(
     data      = delhi_districts,
-    aes(fill  = winter_sat_pm25),
+    aes(fill = winter_sat_pm25),
     color     = "white",
     linewidth = 0.2
   ) +
@@ -384,7 +396,7 @@ ggplot() +
     mid      = "#f7f7f7",
     high     = "#d6604d",
     midpoint = 0,
-    name     = expression(paste(Delta ~ PM[2.5] ~ (mu * g/m^3)))
+    name     = expression(paste(Delta ~ PM[2.5] ~ (mu * g / m^3)))
   ) +
   labs(
     title    = "Delhi Winter 2023: Where Are Sensors Missing Pollution?",
@@ -426,7 +438,7 @@ should be prioritised.
 
 ---
 
-# Session Information
+# Session information
 
 ```{r session-info}
 sessionInfo()

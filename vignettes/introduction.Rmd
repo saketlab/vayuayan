@@ -10,12 +10,13 @@ vignette: >
 ---
 
 ```{r setup, include = FALSE}
+NOT_CRAN <- identical(tolower(Sys.getenv("NOT_CRAN", "true")), "true")
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
   fig.height = 5,
-  eval = FALSE # Set to FALSE to avoid API calls during package build
+  eval = NOT_CRAN
 )
 ```
 
@@ -32,10 +33,10 @@ Together, "Vayuayan" means "the path of wind" - representing the journey and mov
 
 ```{r install, eval=FALSE}
 # Install from GitHub
-devtools::install_github("saketlab/vayuayan-r")
+devtools::install_github("saketkc/vayuayanR")
 ```
 
-## Data Sources
+## Data sources
 
 The package provides access to:
 
@@ -49,7 +50,7 @@ The package provides access to:
    - Monthly and annual data
    - High-resolution gridded data
 
-## Quick Start
+## Quick start
 
 ```{r quickstart}
 library(vayuayan)
@@ -58,120 +59,118 @@ library(vayuayan)
 vayuayan_welcome()
 ```
 
-# Historical AQI Data
+# Historical AQI data
 
-The `CPCBHistorical` class provides access to historical air quality data from the Central Pollution Control Board.
+The `cpcb_` functions provide access to historical air quality data from the Central Pollution Control Board.
 
-## Exploring Available Data
+## Exploring available data
 
 ```{r historical_explore}
-# Initialize client
-historical <- CPCBHistorical$new()
-
 # Get list of states
-states <- historical$get_state_list()
+states <- cpcb_get_state_list()
 head(states)
 
 # Get cities in Maharashtra
-cities <- historical$get_city_list("Maharashtra")
+cities <- cpcb_get_city_list("Maharashtra")
 head(cities)
 
 # Get monitoring stations in Mumbai
-stations <- historical$get_station_list("Mumbai")
+stations <- cpcb_get_station_list("Mumbai")
 head(stations)
-
-# Get coordinates for stations in Delhi
-delhi_station_list <- hist_client$add_coords(delhi_station_list)
 ```
 
-## Downloading Historical Data
+### Adding coordinates to stations
 
-### City-Level Data
+```{r add_coords, eval = FALSE}
+# Get coordinates for stations in Delhi (slow: ~1 req/sec to Nominatim)
+delhi_station_list <- cpcb_get_station_list("Delhi")
+delhi_station_list <- cpcb_add_coords(delhi_station_list)
+```
 
-```{r city_data}
+## Downloading historical data
+
+### City-level data
+
+```{r city_data, eval = FALSE}
 # Download city-level AQI data for Mumbai in 2024
-historical$download_city_data(
+cpcb_download_city_data(
   city = "Mumbai",
   year = 2024,
   save_location = "mumbai_aqi_2024.csv"
 )
 ```
 
-### Station-Level Data
+### Station-level data
 
-```{r station_data}
+```{r station_data, eval = FALSE}
 # Download station-level data
-historical$download_station_data(
+cpcb_download_station_data(
   station_id = "site_5964",
   year = 2024,
   save_location = "station_data_2024.csv"
 )
 ```
 
-# Live AQI Monitoring
+# Live AQI monitoring
 
-The `CPCBLive` class enables real-time air quality monitoring.
+The `cpcb_` live functions enable real-time air quality monitoring.
 
-## Location-Based Monitoring
+## Location-based monitoring
 
 ```{r live_location}
-# Initialize live monitoring client
-live <- CPCBLive$new()
-
 # Get your current location (IP-based)
-location <- live$get_system_location()
+location <- cpcb_get_system_location()
 print(location)
 
 # Find nearest monitoring station
-nearest <- live$get_nearest_station()
+nearest <- cpcb_get_nearest_station()
 cat("Nearest Station:", nearest$station_name)
 cat("Distance:", round(nearest$distance_km, 2), "km")
 ```
 
-## Getting Live AQI Data
+## Getting live AQI data
 
 ```{r live_aqi}
 # Get live AQI data for nearest station
-aqi_data <- live$get_live_aqi_data()
+aqi_data <- cpcb_get_live_aqi_data()
 
 # Display pollutant metrics
-if (!is.null(aqi_data$metrics)) {
-  for (metric in aqi_data$metrics) {
+if (!is.null(aqi_data$metrics) && is.data.frame(aqi_data$metrics)) {
+  for (i in seq_len(nrow(aqi_data$metrics))) {
     cat(sprintf(
       "%s: Avg=%s, Min=%s, Max=%s\n",
-      metric$name,
-      metric$avg,
-      metric$min,
-      metric$max
+      aqi_data$metrics$name[i],
+      aqi_data$metrics$avg[i],
+      aqi_data$metrics$min[i],
+      aqi_data$metrics$max[i]
     ))
   }
 }
 
 # Get AQI for specific coordinates
 mumbai_coords <- c(19.0760, 72.8777)
-aqi_data <- live$get_live_aqi_data(coords = mumbai_coords)
+aqi_data <- cpcb_get_live_aqi_data(coords = mumbai_coords)
 
 # Get historical live data (specific date and hour)
-aqi_data <- live$get_live_aqi_data(
+aqi_data <- cpcb_get_live_aqi_data(
   station_id = "site_5964",
   date = "2024-02-25",
   hour = 10
 )
 ```
 
-# Data Analysis with tidyverse
+# Data analysis with tidyverse
 
 The package integrates seamlessly with tidyverse workflows.
 
-## Station Data Analysis
+## Station data analysis
 
 ```{r tidyverse_analysis}
 library(dplyr)
 library(ggplot2)
 
 # Get all station data
-live <- CPCBLive$new()
-all_stations <- live$get_all_india()
+all_stations <- cpcb_get_all_india()
 
 # Convert to tidy dataframe
 df <- stations_to_dataframe(all_stations)
@@ -191,7 +190,7 @@ state_summary <- df %>%
 print(head(state_summary, 10))
 ```
 
-## AQI Distribution Analysis
+## AQI distribution analysis
 
 ```{r aqi_distribution}
 # Analyze AQI distribution
@@ -228,18 +227,15 @@ ggplot(df_with_categories, aes(x = avg_aqi, fill = aqi_category)) +
   theme_minimal()
 ```
 
-# PM2.5 Satellite Data
+# PM2.5 satellite data
 
-The `PM25Client` class processes satellite-based PM2.5 data from WUSTL ACAG.
+The `pm25_` functions process satellite-based PM2.5 data from WUSTL ACAG.
 
-## Basic Usage
+## Basic usage
 
-```{r pm25_basic}
-# Initialize PM2.5 client
-pm25 <- PM25Client$new(cache_dir = "pm25_cache")
-
+```{r pm25_basic, eval = FALSE}
 # Get PM2.5 statistics for a region (requires GeoJSON file)
-delhi_stats <- pm25$get_pm25_stats(
+delhi_stats <- pm25_get_stats(
   geojson_file = "delhi_ncr.geojson",
   year = 2023,
   month = 11
@@ -249,11 +245,11 @@ print(delhi_stats)
 # Output: List with mean, std, min, max PM2.5 values
 ```
 
-## Grouped Analysis
+## Grouped analysis
 
-```{r pm25_grouped}
+```{r pm25_grouped, eval = FALSE}
 # Analyze PM2.5 grouped by state
-state_stats <- pm25$get_pm25_stats(
+state_stats <- pm25_get_stats(
   geojson_file = "india_districts.geojson",
   year = 2023,
   month = 11,
@@ -263,7 +259,7 @@ state_stats <- pm25$get_pm25_stats(
 print(head(state_stats))
 
 # Analyze with multiple grouping columns
-district_stats <- pm25$get_pm25_stats(
+district_stats <- pm25_get_stats(
   geojson_file = "india_districts.geojson",
   year = 2023,
   month = 11,
@@ -271,34 +267,33 @@ district_stats <- pm25$get_pm25_stats(
 )
 ```
 
-## Cache Management
+## Cache management
 
-```{r pm25_cache}
+```{r pm25_cache, eval = FALSE}
 # List cached NetCDF files
-pm25$list_cached_files()
+pm25_list_cached_files()
 
 # Clear cache to free disk space
-pm25$clear_cache()
+pm25_clear_cache()
 
 # Force re-download of data
-pm25$download_netcdf_if_needed(
+pm25_download_netcdf(
   year = 2023,
   month = 11,
   force_download = TRUE
 )
 ```
 
-# Geospatial Analysis
+# Geospatial analysis
 
-## Mapping Monitoring Stations
+## Mapping monitoring stations
 
 ```{r geospatial}
 library(sf)
 library(ggplot2)
 
 # Get station data
-live <- CPCBLive$new()
-all_stations <- live$get_all_india()
+all_stations <- cpcb_get_all_india()
 df <- stations_to_dataframe(all_stations)
 
 # Filter live stations with valid coordinates
@@ -334,7 +329,7 @@ ggplot(stations_sf) +
   theme_minimal()
 ```
 
-## Spatial Filtering
+## Spatial filtering
 
 ```{r spatial_filtering}
 # Find stations within a specific region (Maharashtra)
@@ -348,9 +343,9 @@ mh_stations <- st_crop(stations_sf, mh_bbox)
 cat("Stations in Maharashtra region:", nrow(mh_stations))
 ```
 
-# Utility Functions
+# Utility functions
 
-## Station Name Cleaning
+## Station name cleaning
 
 ```{r clean_names}
 # Clean station names for file naming
@@ -361,7 +356,7 @@ clean_station_name("ITO, Delhi - DPCC")
 # Output: "ITO_Delhi_DPCC"
 ```
 
-## Distance Calculations
+## Distance calculations
 
 ```{r distance}
 # Calculate distance between two locations (km)
@@ -378,12 +373,11 @@ distance <- haversine_distance(
 cat("Distance from Mumbai to Delhi:", round(distance), "km")
 ```
 
-## Comprehensive Analysis
+## Comprehensive analysis
 
 ```{r comprehensive}
 # Comprehensive station analysis
-live <- CPCBLive$new()
-all_stations <- live$get_all_india()
+all_stations <- cpcb_get_all_india()
 
 analysis <- analyze_station_data(all_stations)
 
@@ -391,15 +385,14 @@ analysis <- analyze_station_data(all_stations)
 str(analysis)
 ```
 
-# Best Practices
+# Best practices
 
-## Error Handling
+## Error handling
 ```{r error_handling}
 # Always use tryCatch for API calls
 tryCatch(
   {
-    live <- CPCBLive$new()
-    aqi_data <- live$get_live_aqi_data()
+    aqi_data <- cpcb_get_live_aqi_data()
     print(aqi_data$metrics)
   },
   error = function(e) {
@@ -408,22 +401,19 @@ tryCatch(
 )
 ```
 
-## Caching Strategy
+## Caching strategy
 
-```{r caching}
-# Use a consistent cache directory
-pm25 <- PM25Client$new(cache_dir = "~/.vayuayan_cache")
-
+```{r caching, eval = FALSE}
 # Check cache before downloading
-cached_files <- pm25$list_cached_files()
+cached_files <- pm25_list_cached_files("~/.vayuayan_cache")
 
 # Clear old cache periodically
 if (length(cached_files) > 10) {
-  pm25$clear_cache()
+  pm25_clear_cache("~/.vayuayan_cache")
 }
 ```
 
-## Data Validation
+## Data validation
 
 ```{r validation}
 # Validate data before analysis
@@ -450,23 +440,3 @@ if (invalid_aqi > 0) {
 }
 ```
 
-# Conclusion
-
-The vayuayan package provides comprehensive tools for:
-
-- Accessing historical and real-time air quality data
-- Processing satellite-based PM2.5 measurements
-- Performing geospatial analysis of monitoring networks
-- Integrating with tidyverse workflows
-
-For more information:
-
-- Package documentation: `?vayuayan`
-- GitHub repository: https://github.com/saketlab/vayuayan-r
-- Report issues: https://github.com/saketlab/vayuayan-r/issues
-
-# Session Information
-
-```{r session_info}
-sessionInfo()
-```

@@ -1,0 +1,151 @@
+url: https://saketkc.github.io/vayuayanR/
+
+development:
+  mode: auto
+
+template:
+  bootstrap: 5
+  light-switch: true
+  preset: default
+  bslib:
+    primary: "#0071e3"
+    border-radius: "0.5rem"
+  includes:
+    in_header: |
+      <link rel="stylesheet" href="extra.css">
+      <meta name="keywords" content="CPCB, PM2.5, air quality, AQI, R package, India, pollution, satellite, WUSTL, monitoring stations, Delhi, NetCDF, geospatial">
+      <meta name="author" content="Saket Choudhary">
+      <meta name="robots" content="index, follow">
+      <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+      <link rel="canonical" href="https://saketkc.github.io/vayuayanR/">
+      <meta property="og:type" content="website">
+      <meta property="og:url" content="https://saketkc.github.io/vayuayanR/">
+      <meta property="og:title" content="vayuayanR - Air Quality Data Analysis for India">
+      <meta property="og:description" content="R package for fetching and analyzing air quality data from CPCB monitoring stations and WUSTL satellite PM2.5 estimates for India.">
+      <meta property="og:site_name" content="vayuayanR">
+      <meta property="og:locale" content="en_US">
+      <meta name="twitter:card" content="summary_large_image">
+      <meta name="twitter:title" content="vayuayanR - Air Quality Data Analysis for India">
+      <meta name="twitter:description" content="R package for fetching and analyzing air quality data from CPCB monitoring stations and WUSTL satellite PM2.5 estimates for India.">
+      <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "vayuayanR",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Windows, macOS, Linux",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "description": "R package for fetching and analyzing air quality data from CPCB and WUSTL satellite PM2.5 data for India",
+        "author": {
+          "@type": "Person",
+          "name": "Saket Choudhary",
+          "url": "https://saketlab.org"
+        },
+        "url": "https://saketkc.github.io/vayuayanR/",
+        "downloadUrl": "https://github.com/saketkc/vayuayanR",
+        "softwareVersion": "0.1.3",
+        "programmingLanguage": "R"
+      }
+      </script>
+
+home:
+  title: "vayuayanR - Air Quality Data Analysis for India"
+  description: >
+    R package for fetching and analyzing air quality data from CPCB monitoring
+    stations and WUSTL satellite PM2.5 estimates.
+
+  links:
+  - text: Browse source code
+    href: https://github.com/saketkc/vayuayanR
+  - text: Report a bug
+    href: https://github.com/saketkc/vayuayanR/issues
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, tutorials, news]
+    right: [search, github, lightswitch]
+
+  components:
+    reference:
+      text: Reference
+      href: reference/index.html
+
+    articles:
+      text: Articles
+      menu:
+      - text: Introduction to vayuayan
+        href: articles/introduction.html
+      - text: Delhi PM2.5 analysis (2023)
+        href: articles/delta_calculation_map.html
+      - text: Delhi choropleth map
+        href: articles/delhi_choropleth_map.html
+
+    news:
+      text: Changelog
+      href: news/index.html
+
+    github:
+      icon: fab fa-github fa-lg
+      href: https://github.com/saketkc/vayuayanR
+      aria-label: GitHub
+
+reference:
+- title: "CPCB historical data"
+  desc: "Fetch historical air quality data from CPCB data repository"
+  contents:
+  - cpcb_get_complete_list
+  - cpcb_get_state_list
+  - cpcb_get_city_list
+  - cpcb_get_station_list
+  - cpcb_add_coords
+  - cpcb_get_file_path
+  - cpcb_download_city_data
+  - cpcb_download_station_data
+
+- title: "CPCB live data"
+  desc: "Real-time AQI monitoring from CPCB live dashboard"
+  contents:
+  - cpcb_get_system_location
+  - cpcb_get_all_india
+  - cpcb_get_nearest_station
+  - cpcb_get_live_aqi_data
+  - cpcb_get_live_aqi_data_for_station
+
+- title: "Satellite PM2.5 data"
+  desc: "Download and analyze WUSTL ACAG satellite PM2.5 estimates"
+  contents:
+  - pm25_download_netcdf
+  - pm25_get_stats
+  - pm25_list_cached_files
+  - pm25_clear_cache
+
+- title: "Utility functions"
+  desc: "Helper functions for data processing and analysis"
+  contents:
+  - stations_to_dataframe
+  - analyze_station_data
+  - clean_station_name
+  - get_aqi_category
+  - get_aqi_categories
+  - haversine_distance
+  - vayuayan_welcome
+
+- title: internal
+  contents:
+  - has_keyword("internal")
+
+authors:
+  Saket Choudhary:
+    href: https://github.com/saketkc
+
+footer:
+  structure:
+    left: developed_by
+    right: built_with
+  components:
+    developed_by: "Developed by [Saket Lab](https://saketlab.org)"
+    built_with: "Built with [pkgdown](https://pkgdown.r-lib.org/)"

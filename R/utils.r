@@ -1,4 +1,4 @@
-#' Clean Station Name
+#' Clean station name
 #'
 #' @description
 #' Convert station name to clean underscore-separated format
@@ -10,37 +10,22 @@ clean_station_name <- function(station_name) {
   if (is.null(station_name) || !is.character(station_name) || nchar(station_name) == 0) {
     return("")
   }
-  
+
   cleaned <- trimws(station_name)
-  
-  # Handle "City - Organization" pattern
+
   cleaned <- gsub("\\s*-\\s*", " ", cleaned)
-  
-  # Remove commas and replace with space
   cleaned <- gsub(",\\s*", " ", cleaned)
-  
-  # Remove dots but keep the text
   cleaned <- gsub("\\.", "", cleaned)
-  
-  # Remove other punctuation and special characters
   cleaned <- gsub("[^\\w\\s]", " ", cleaned, perl = TRUE)
-  
-  # Replace multiple whitespace with single space
   cleaned <- gsub("\\s+", " ", cleaned)
-  
-  # Replace spaces with underscores
   cleaned <- gsub(" ", "_", cleaned)
-  
-  # Remove multiple consecutive underscores
   cleaned <- gsub("_+", "_", cleaned)
-  
-  # Remove leading and trailing underscores
   cleaned <- gsub("^_+|_+$", "", cleaned)
-  
+
   return(cleaned)
 }
 
-#' Get AQI Category
+#' Get AQI category
 #'
 #' @description
 #' Convert AQI numeric value to category
@@ -66,7 +51,7 @@ get_aqi_category <- function(aqi_value) {
   }
 }
 
-#' Vectorized AQI Category
+#' Vectorized AQI category
 #'
 #' @description
 #' Convert vector of AQI values to categories
@@ -78,7 +63,7 @@ get_aqi_categories <- function(aqi_values) {
   sapply(aqi_values, get_aqi_category)
 }
 
-#' Calculate Haversine Distance
+#' Calculate haversine distance
 #'
 #' @description
 #' Calculate great circle distance between two points
@@ -90,72 +75,115 @@ get_aqi_categories <- function(aqi_values) {
 #' @return Distance in kilometers
 #' @export
 haversine_distance <- function(lat1, lon1, lat2, lon2) {
-  # Convert to radians
   lat1_rad <- lat1 * pi / 180
   lon1_rad <- lon1 * pi / 180
   lat2_rad <- lat2 * pi / 180
   lon2_rad <- lon2 * pi / 180
-  
-  # Haversine formula
+
   dlat <- lat2_rad - lat1_rad
   dlon <- lon2_rad - lon1_rad
-  
+
   a <- sin(dlat / 2)^2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)^2
   c <- 2 * asin(sqrt(a))
-  
-  # Earth's radius in kilometers
+
   return(c * 6371)
 }
 
-#' Convert Station Data to DataFrame
+#' Convert station data to data frame
 #'
 #' @description
-#' Convert nested station data to a flat data frame
+#' Convert nested station data to a flat data frame with geographic
+#' information, AQI values, and categories. This is the primary way to
+#' get station coordinates (latitude/longitude) from live CPCB data.
 #'
-#' @param data List of cities with nested stations
-#' @return Data frame with station information
+#' @param data List of cities with nested stations (from cpcb_get_all_india())
+#' @return Data frame with columns: station_id, station_name, city_name,
+#'   city_id, state_id, longitude, latitude, live, avg_aqi, status,
+#'   aqi_category
 #' @export
 stations_to_dataframe <- function(data) {
   rows <- list()
-  
-  for (city in data) {
-    city_name <- city$cityName %||% ""
-    city_id <- city$cityID %||% ""
-    state_id <- city$stateID %||% ""
-    
-    for (station in city$stationsInCity) {
-      rows[[length(rows) + 1]] <- data.frame(
-        city_name = city_name,
-        city_id = city_id,
-        state_id = state_id,
-        station_id = station$id %||% "",
-        station_name = station$name %||% "",
-        longitude = as.numeric(station$longitude %||% NA),
-        latitude = as.numeric(station$latitude %||% NA),
-        live = station$live %||% FALSE,
-        avg_aqi = as.numeric(station$avg %||% NA),
-        stringsAsFactors = FALSE
-      )
+
+  .extract_stations <- function(stations, city_name, city_id, state_id) {
+    if (is.data.frame(stations)) {
+      for (i in seq_len(nrow(stations))) {
+        lon <- suppressWarnings(as.numeric(stations$longitude[i]))
+        lat <- suppressWarnings(as.numeric(stations$latitude[i]))
+        if (is.na(lon) || is.na(lat)) next
+
+        is_live <- stations$live[i] %||% FALSE
+        avg_aqi <- suppressWarnings(as.numeric(stations$avg[i]))
+
+        rows[[length(rows) + 1]] <<- data.frame(
+          station_id = as.character(stations$id[i] %||% ""),
+          station_name = as.character(stations$name[i] %||% ""),
+          city_name = city_name,
+          city_id = city_id,
+          state_id = state_id,
+          longitude = lon,
+          latitude = lat,
+          live = is_live,
+          avg_aqi = avg_aqi,
+          status = if (isTRUE(is_live)) "Live" else "Offline",
+          aqi_category = get_aqi_category(avg_aqi),
+          stringsAsFactors = FALSE
+        )
+      }
+    } else if (is.list(stations)) {
+      for (station in stations) {
+        lon <- suppressWarnings(as.numeric(station$longitude %||% NA))
+        lat <- suppressWarnings(as.numeric(station$latitude %||% NA))
+        if (is.na(lon) || is.na(lat)) next
+
+        is_live <- station$live %||% FALSE
+        avg_aqi <- suppressWarnings(as.numeric(station$avg %||% NA))
+
+        rows[[length(rows) + 1]] <<- data.frame(
+          station_id = as.character(station$id %||% ""),
+          station_name = as.character(station$name %||% ""),
+          city_name = city_name,
+          city_id = city_id,
+          state_id = state_id,
+          longitude = lon,
+          latitude = lat,
+          live = is_live,
+          avg_aqi = avg_aqi,
+          status = if (isTRUE(is_live)) "Live" else "Offline",
+          aqi_category = get_aqi_category(avg_aqi),
+          stringsAsFactors = FALSE
+        )
+      }
     }
   }
-  
+
+  if (is.data.frame(data)) {
+    for (i in seq_len(nrow(data))) {
+      city_name <- data$cityName[i] %||% ""
+      city_id <- data$cityID[i] %||% ""
+      state_id <- data$stateID[i] %||% ""
+      stations <- data$stationsInCity[[i]]
+      if (is.null(stations)) next
+      .extract_stations(stations, city_name, city_id, state_id)
+    }
+  } else {
+    for (city in data) {
+      city_name <- city$cityName %||% ""
+      city_id <- city$cityID %||% ""
+      state_id <- city$stateID %||% ""
+      stations <- city$stationsInCity
+      if (is.null(stations)) next
+      .extract_stations(stations, city_name, city_id, state_id)
+    }
+  }
+
   dplyr::bind_rows(rows)
 }
 
-#' Null Default Operator
-#'
-#' @description
-#' Return default value if x is NULL
-#'
-#' @param x Value to check
-#' @param y Default value
-#' @return x if not NULL, else y
-#' @keywords internal
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
 }
 
-#' Analyze Station Data
+#' Analyze station data
 #'
 #' @description
 #' Comprehensive analysis of station data
@@ -165,7 +193,7 @@ stations_to_dataframe <- function(data) {
 #' @export
 analyze_station_data <- function(data) {
   df <- stations_to_dataframe(data)
-  
+
   analysis <- list(
     total_cities = length(data),
     total_stations = nrow(df),
@@ -178,38 +206,38 @@ analyze_station_data <- function(data) {
     min_aqi = min(df$avg_aqi, na.rm = TRUE),
     max_aqi = max(df$avg_aqi, na.rm = TRUE)
   )
-  
-  # Add AQI category distribution
+
   df$aqi_category <- get_aqi_categories(df$avg_aqi)
   analysis$aqi_categories <- table(df$aqi_category)
-  
+
   return(analysis)
 }
 
-#' Print Vayuayan Welcome Message
+#' Print vayuayan welcome message
 #'
 #' @description
 #' Display package information and usage
 #'
 #' @export
 vayuayan_welcome <- function() {
-  cli::cli_h1("Vayuayan - Air Quality Data Analysis")
+  cli::cli_h1("Vayuayan - Air quality data analysis")
   cli::cli_text("Version 0.1.3")
-  cli::cli_text("")
-  cli::cli_h2("Available Clients:")
+  cli::cli_text(" ")
+  cli::cli_h2("Available functions:")
   cli::cli_ul(c(
-    "CPCBHistorical - Historical AQI data from CPCB",
-    "CPCBLive - Real-time AQI monitoring",
-    "PM25Client - Satellite PM2.5 data processing"
+    "cpcb_get_state_list(), cpcb_get_city_list() - Historical AQI data from CPCB",
+    "cpcb_get_live_aqi_data(), cpcb_get_nearest_station() - Real-time AQI monitoring",
+    "pm25_get_stats(), pm25_download_netcdf() - Satellite PM2.5 data processing"
   ))
-  cli::cli_text("")
-  cli::cli_h2("Quick Start:")
-  cli::cli_code("historical <- CPCBHistorical$new()")
-  cli::cli_code("states <- historical$get_state_list()")
-  cli::cli_code("")
-  cli::cli_code("live <- CPCBLive$new()")
-  cli::cli_code("location <- live$get_system_location()")
-  cli::cli_code("")
-  cli::cli_code("pm25 <- PM25Client$new()")
-  cli::cli_code("stats <- pm25$get_pm25_stats('region.geojson', 2023, 11)")
+  cli::cli_text(" ")
+  cli::cli_h2("Quick start:")
+  cli::cli_code(c(
+    "states <- cpcb_get_state_list()",
+    "cities <- cpcb_get_city_list('Maharashtra')",
+    " ",
+    "location <- cpcb_get_system_location()",
+    "aqi <- cpcb_get_live_aqi_data()",
+    " ",
+    "stats <- pm25_get_stats('region.geojson', 2023, 11)"
+  ))
 }

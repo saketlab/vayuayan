@@ -3,22 +3,28 @@ title: "Mumbai PM2.5 Analysis (2023–2025)"
 author: "Saket Choudhary and Darakhshan Nehal"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Mumbai PM2.5 Analysis}
+  %\VignetteIndexEntry{Mumbai PM2.5 Analysis (2023–2025)}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-# Introduction 
-
-```{r}
-
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
 ```
 
-# Methods 
+# Introduction
+
+```{r}
+```
+
+# Methods
 (GeoJSON boundary, NetCDF satellite data, CPCB comparison).
 
 ```{r}
-
 ```
 
 
@@ -27,7 +33,7 @@ CPCB data is 'Real-time/Hourly' while Satellite data is 'Monthly/Annual Mean'. a
 
 The satellite data represents a spatial mean over the Mumbai GeoJSON area, whereas CPCB data is an average of point-source monitoring stations. Some divergence is expected due to this 'point-to-area' difference.
 
-## Chloropleth Delhi
+## Choropleth Delhi
 ### Prepare the data
 
 ```{r}
@@ -51,11 +57,8 @@ pacman::p_load(
 ```
 
 ```{r}
-
 # Get Delhi Ground Data (CPCB)
-hist_client <- CPCBHistorical$new()
-
-delhi_ground <- hist_client$download_city_data(
+delhi_ground <- cpcb_download_city_data(
   city = "Delhi",
   year = 2023,
   "delhi_aqi_2023.csv"
@@ -83,15 +86,12 @@ print(delhi_ground)
 ```
 
 ```{r}
-
-# Initialize the client pointing to your folder
-client <- PM25Client$new(cache_dir = "pm25_data")
-
 # Extract the 12 months
 delhi_sat_results <- lapply(1:12, function(m) {
   message(paste("Processing Month:", m))
-  stats <- client$get_pm25_stats(
-    geojson_file = "E:/geojson/DELHI.geojson",
+  delhi_geojson <- system.file("extdata", "delhi_ncr.geojson", package = "vayuayan")
+  stats <- pm25_get_stats(
+    geojson_file = delhi_geojson,
     year = 2023,
     month = m
   )
@@ -111,7 +111,7 @@ delhi_final <- delhi_ground %>%
   inner_join(delhi_sat_df, by = "month")
 ```
 
-### Plotting Line chart
+### Plotting line chart
 ```{r}
 # Plotting the "Seasonal Reality"
 ggplot(delhi_final, aes(x = month)) +
@@ -131,7 +131,7 @@ ggplot(delhi_final, aes(x = month)) +
     )
   ) +
   labs(
-    title = "Delhi 2023: PM2.5 Satellite data Vs CPCBHistorical estimates",
+    title = "Delhi 2023: PM2.5 Satellite data Vs CPCB Historical estimates",
     y = expression(paste("PM2.5 Concentration (", mu, "g/m"^3, ")")),
     x = NULL,
     color = NULL
@@ -143,12 +143,12 @@ ggplot(delhi_final, aes(x = month)) +
 
 For 2024 and 2025, the ground data is ready, but the satellite component is pending the official release of the NetCDF files from Washington University.
 
-## Geospatial Analysis
+## Geospatial analysis
 
 Only satellite data
 ```{r}
-# Load Delhi shape
-delhi_shape <- st_read("E:/geojson/DELHI.geojson")
+delhi_geojson <- system.file("extdata", "delhi_ncr.geojson", package = "vayuayan")
+delhi_shape <- st_read(delhi_geojson)
 
 # Load November Satellite file (202311)
 # Make sure the name matches downloadeded .nc file
@@ -181,21 +181,18 @@ ggplot() +
   theme_minimal()
 ```
 
-### Station Data
+### Station data
 
 ```{r}
 # For the whole list of stations.
-# Initialize the historical client
-hist_client <- CPCBHistorical$new()
-
 # Get ALL stations for Delhi
-delhi_station_list <- hist_client$get_station_list("Delhi")
+delhi_station_list <- cpcb_get_station_list("Delhi")
 print(delhi_station_list)
 ```
 
 ```{r}
 # Add coordinates via OpenStreetMap geocoding
-delhi_station_list <- hist_client$add_coords(delhi_station_list)
+delhi_station_list <- cpcb_add_coords(delhi_station_list)
 
 # Save to avoid re-geocoding on every render
 write.csv(
@@ -212,13 +209,12 @@ delhi_full_sf <- st_as_sf(
 ```
 
 
-## Chloropeth (Zonal statistics)
+## Choropleth (zonal statistics)
 Objective: Correlation b/w sensors & pollution
 
 ```{r}
-
-# Load the District GeoJSON
-delhi_districts <- st_read("E:/geojson/DELHI.geojson")
+delhi_geojson <- system.file("extdata", "delhi_ncr.geojson", package = "vayuayan")
+delhi_districts <- st_read(delhi_geojson)
 
 # Load the Satellite Raster (e.g., Nov 2023)
 nov_raster <- rast("pm25_data/V6GL02.04.CNNPM25.GL.202311-202311.nc")
@@ -263,16 +259,15 @@ ggplot() +
   ) +
   theme_minimal() +
   ggview::canvas(width = 8, height = 6, dpi = 300)
-
 ```
 
-# Results 
+# Results
 (plots for 2023).
 
 
-# Discussion 
+# Discussion
 
-# Session Information
+# Session information
 
 ```{r session_info}
 sessionInfo()

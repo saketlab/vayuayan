@@ -6,13 +6,16 @@
 \alias{vayuayan-package}
 \title{vayuayan: Comprehensive Air Quality Data Analysis for India}
 \description{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
 Fetch and analyze air quality data from multiple sources including CPCB (Central Pollution Control Board) India and WUSTL ACAG satellite PM2.5 data. Provides functions for historical and real-time AQI monitoring, geospatial station location services, and satellite PM2.5 data processing.
 }
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/saketlab/vayuayan}
-  \item Report bugs at \url{https://github.com/saketlab/vayuayan/issues}
+  \item \url{https://saketkc.github.io/vayuayanR/}
+  \item \url{https://github.com/saketkc/vayuayanR}
+  \item Report bugs at \url{https://github.com/saketkc/vayuayanR/issues}
 }
 
 }

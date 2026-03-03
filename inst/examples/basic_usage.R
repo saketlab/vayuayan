@@ -11,29 +11,26 @@ library(ggplot2)
 
 cat("\n=== Historical AQI Data Examples ===\n\n")
 
-# Initialize historical data client
-historical <- CPCBHistorical$new()
-
 # Get list of all states
 cat("Fetching state list...\n")
-states <- historical$get_state_list()
+states <- cpcb_get_state_list()
 cat("Available states:", length(states), "\n")
 print(head(states, 10))
 
 # Get cities in a specific state
 cat("\nFetching cities in Maharashtra...\n")
-cities_mh <- historical$get_city_list("Maharashtra")
+cities_mh <- cpcb_get_city_list("Maharashtra")
 cat("Cities in Maharashtra:", length(cities_mh), "\n")
 print(head(cities_mh, 10))
 
 # Get monitoring stations in a city
 cat("\nFetching stations in Mumbai...\n")
-stations_mumbai <- historical$get_station_list("Mumbai")
+stations_mumbai <- cpcb_get_station_list("Mumbai")
 cat("Stations in Mumbai:", nrow(stations_mumbai), "\n")
 print(head(stations_mumbai))
 
 # Download city-level AQI data (commented out to avoid actual download)
-# historical$download_city_data(
+# cpcb_download_city_data(
 #   city = "Mumbai",
 #   year = 2024,
 #   save_location = "data/mumbai_aqi_2024.csv"
@@ -42,7 +39,7 @@ print(head(stations_mumbai))
 # Download station-level AQI data (commented out to avoid actual download)
 # if (nrow(stations_mumbai) > 0) {
 #   station_id <- stations_mumbai$station_id[1]
-#   historical$download_station_data(
+#   cpcb_download_station_data(
 #     station_id = station_id,
 #     year = 2024,
 #     save_location = "data/station_data_2024.csv"
@@ -56,27 +53,24 @@ print(head(stations_mumbai))
 
 cat("\n\n=== Live AQI Monitoring Examples ===\n\n")
 
-# Initialize live monitoring client
-live <- CPCBLive$new()
-
 # Get current location using IP geolocation
 cat("Getting current location...\n")
 tryCatch({
-  location <- live$get_system_location()
+  location <- cpcb_get_system_location()
   cat("Current location (lat, lon):", location, "\n")
-  
+
   # Find nearest monitoring station
   cat("\nFinding nearest station...\n")
-  nearest <- live$get_nearest_station(location)
+  nearest <- cpcb_get_nearest_station(location)
   cat("Nearest station:\n")
   cat("  ID:", nearest$station_id, "\n")
   cat("  Name:", nearest$station_name, "\n")
   cat("  Distance:", round(nearest$distance_km, 2), "km\n")
-  
+
   # Get live AQI data for nearest station
   cat("\nFetching live AQI data...\n")
-  aqi_data <- live$get_live_aqi_data(station_id = nearest$station_id)
-  
+  aqi_data <- cpcb_get_live_aqi_data(station_id = nearest$station_id)
+
   if (!is.null(aqi_data$metrics) && length(aqi_data$metrics) > 0) {
     cat("Live AQI metrics:\n")
     for (metric in aqi_data$metrics) {
@@ -100,15 +94,15 @@ cat("\n\n=== All India Station Data Analysis ===\n\n")
 tryCatch({
   # Get all stations across India
   cat("Fetching all India station data...\n")
-  all_stations <- live$get_all_india()
-  
+  all_stations <- cpcb_get_all_india()
+
   # Convert to tidy dataframe
   df <- stations_to_dataframe(all_stations)
-  
+
   cat("Total stations:", nrow(df), "\n")
   cat("Live stations:", sum(df$live, na.rm = TRUE), "\n")
   cat("Offline stations:", sum(!df$live, na.rm = TRUE), "\n")
-  
+
   # State-wise summary
   cat("\nState-wise station summary:\n")
   state_summary <- df %>%
@@ -122,23 +116,23 @@ tryCatch({
     ) %>%
     arrange(desc(live_stations)) %>%
     head(10)
-  
+
   print(state_summary)
-  
+
   # AQI category distribution
   cat("\nAQI Category Distribution:\n")
   df_with_aqi <- df %>%
     filter(!is.na(avg_aqi)) %>%
     mutate(aqi_category = get_aqi_categories(avg_aqi))
-  
+
   category_counts <- table(df_with_aqi$aqi_category)
   print(category_counts)
-  
+
   # Comprehensive analysis
   cat("\nComprehensive Station Analysis:\n")
   analysis <- analyze_station_data(all_stations)
   print(str(analysis))
-  
+
 }, error = function(e) {
   cat("Error:", e$message, "\n")
 })
@@ -150,16 +144,12 @@ tryCatch({
 
 cat("\n\n=== PM2.5 Satellite Data Examples ===\n\n")
 
-# Initialize PM2.5 client
-pm25 <- PM25Client$new(cache_dir = "pm25_cache")
-
-cat("PM2.5 client initialized with cache directory: pm25_cache\n")
 cat("Note: PM2.5 analysis requires GeoJSON files with polygon boundaries\n")
 
 # Example usage (commented out - requires GeoJSON file)
 # cat("\nExample: Analyzing PM2.5 for Delhi NCR...\n")
 # if (file.exists("data/delhi_ncr.geojson")) {
-#   delhi_stats <- pm25$get_pm25_stats(
+#   delhi_stats <- pm25_get_stats(
 #     geojson_file = "data/delhi_ncr.geojson",
 #     year = 2023,
 #     month = 11
@@ -172,7 +162,7 @@ cat("Note: PM2.5 analysis requires GeoJSON files with polygon boundaries\n")
 
 # Example with grouping (commented out)
 # if (file.exists("data/india_states.geojson")) {
-#   state_stats <- pm25$get_pm25_stats(
+#   state_stats <- pm25_get_stats(
 #     geojson_file = "data/india_states.geojson",
 #     year = 2023,
 #     month = 11,
@@ -184,7 +174,7 @@ cat("Note: PM2.5 analysis requires GeoJSON files with polygon boundaries\n")
 
 # List cached NetCDF files
 cat("\nListing cached NetCDF files:\n")
-cached_files <- pm25$list_cached_files()
+cached_files <- pm25_list_cached_files()
 
 if (length(cached_files) == 0) {
   cat("No cached files found.\n")
@@ -193,7 +183,7 @@ if (length(cached_files) == 0) {
 
 # Clear cache (commented out to preserve downloads)
 # cat("\nClearing cache...\n")
-# pm25$clear_cache()
+# pm25_clear_cache()
 
 
 # ============================================================================
@@ -204,32 +194,32 @@ cat("\n\n=== Geospatial Analysis Example ===\n\n")
 
 if (requireNamespace("sf", quietly = TRUE)) {
   tryCatch({
-    all_stations <- live$get_all_india()
+    all_stations <- cpcb_get_all_india()
     df <- stations_to_dataframe(all_stations)
-    
+
     # Filter live stations with valid coordinates
     live_stations <- df %>%
       filter(live == TRUE, !is.na(longitude), !is.na(latitude))
-    
+
     cat("Creating spatial object with", nrow(live_stations), "live stations...\n")
-    
+
     # Convert to sf object
     stations_sf <- sf::st_as_sf(
       live_stations,
       coords = c("longitude", "latitude"),
       crs = 4326
     )
-    
+
     cat("Spatial object created successfully\n")
     cat("CRS:", sf::st_crs(stations_sf)$input, "\n")
-    
+
     # Find stations within a bounding box (example: Maharashtra region)
-    mh_bbox <- sf::st_bbox(c(xmin = 72.5, ymin = 15.5, xmax = 80.5, ymax = 22.5), 
+    mh_bbox <- sf::st_bbox(c(xmin = 72.5, ymin = 15.5, xmax = 80.5, ymax = 22.5),
                            crs = 4326)
     mh_stations <- sf::st_crop(stations_sf, mh_bbox)
-    
+
     cat("Stations in Maharashtra region:", nrow(mh_stations), "\n")
-    
+
   }, error = function(e) {
     cat("Error in geospatial analysis:", e$message, "\n")
   })

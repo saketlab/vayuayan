@@ -3,12 +3,12 @@ test_that("clean_station_name removes special characters", {
     clean_station_name("Dr. Karni Singh Shooting Range, Delhi - DPCC"),
     "Dr_Karni_Singh_Shooting_Range_Delhi_DPCC"
   )
-  
+
   expect_equal(
     clean_station_name("ITO, Delhi - DPCC"),
     "ITO_Delhi_DPCC"
   )
-  
+
   expect_equal(
     clean_station_name("Station  with    spaces"),
     "Station_with_spaces"
@@ -41,7 +41,7 @@ test_that("get_aqi_category returns correct categories", {
 test_that("get_aqi_categories works with vectors", {
   aqi_values <- c(25, 75, 150, 250, 350, 450, NA)
   categories <- get_aqi_categories(aqi_values)
-  
+
   expect_equal(length(categories), length(aqi_values))
   expect_equal(categories[1], "Good")
   expect_equal(categories[2], "Satisfactory")
@@ -56,12 +56,12 @@ test_that("haversine_distance calculates correctly", {
   # Mumbai to Delhi (approximately 1150 km)
   mumbai <- c(19.0760, 72.8777)
   delhi <- c(28.7041, 77.1025)
-  
+
   distance <- haversine_distance(
     mumbai[1], mumbai[2],
     delhi[1], delhi[2]
   )
-  
+
   expect_type(distance, "double")
   expect_gt(distance, 1100)
   expect_lt(distance, 1200)
@@ -75,7 +75,7 @@ test_that("haversine_distance handles same point", {
 test_that("haversine_distance is symmetric", {
   dist1 <- haversine_distance(19.0760, 72.8777, 28.7041, 77.1025)
   dist2 <- haversine_distance(28.7041, 77.1025, 19.0760, 72.8777)
-  
+
   expect_equal(dist1, dist2)
 })
 
@@ -112,9 +112,9 @@ test_that("stations_to_dataframe converts correctly", {
       )
     )
   )
-  
+
   df <- stations_to_dataframe(mock_data)
-  
+
   expect_s3_class(df, "data.frame")
   expect_equal(nrow(df), 2)
   expect_true("city_name" %in% names(df))
@@ -133,16 +133,20 @@ test_that("analyze_station_data computes statistics", {
       cityID = "C1",
       stateID = "S1",
       stationsInCity = list(
-        list(id = "s1", name = "Station 1", latitude = "19", longitude = "72", 
-             live = TRUE, avg = "50"),
-        list(id = "s2", name = "Station 2", latitude = "19.1", longitude = "72.1", 
-             live = FALSE, avg = "100")
+        list(
+          id = "s1", name = "Station 1", latitude = "19", longitude = "72",
+          live = TRUE, avg = "50"
+        ),
+        list(
+          id = "s2", name = "Station 2", latitude = "19.1", longitude = "72.1",
+          live = FALSE, avg = "100"
+        )
       )
     )
   )
-  
+
   analysis <- analyze_station_data(mock_data)
-  
+
   expect_type(analysis, "list")
   expect_equal(analysis$total_cities, 1)
   expect_equal(analysis$total_stations, 2)

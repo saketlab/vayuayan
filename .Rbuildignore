@@ -13,11 +13,10 @@
 ^\.vscode$
 ^\.idea$
 ^\.DS_Store$
-^examples/.*\.csv$
-^examples/.*\.json$
-^examples/.*\.nc$
 ^pm25_data/.*\.nc$
 ^pm25_cache/.*\.nc$
 ^data/.*\.geojson$
 ^dev_setup\.R$
 ^CONTRIBUTING\.md$
+^\.claude$
+^CLAUDE\.md$
