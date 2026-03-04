@@ -56,8 +56,14 @@ rsconnect/
 # Test files
 *.geojson
 *.nc
+.tif
 
 # Ignore downloaded data files
+# Cached outputs that shouldn't be versioned
+
 station_data/*.csv
 delhi_stations_with_coords.csv
 delhi_aqi_2023.csv
+fig*.png
+*.png
+
