@@ -56,7 +56,7 @@ rsconnect/
 # Test files
 *.geojson
 *.nc
-.tif
+*.tif
 
 # Ignore downloaded data files
 # Cached outputs that shouldn't be versioned
