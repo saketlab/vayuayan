@@ -60,10 +60,10 @@ rsconnect/
 
 # Ignore downloaded data files
 # Cached outputs that shouldn't be versioned
+vignettes/station_data/
+vignettes/delhi_aqi_2022.csv
+vignettes/delhi_aqi_2023.csv
+vignettes/delhi_stations_with_coords.csv
+vignettes/fig*.png
 
-station_data/*.csv
-delhi_stations_with_coords.csv
-delhi_aqi_2023.csv
-fig*.png
-*.png
 
