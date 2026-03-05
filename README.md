@@ -1,267 +1,218 @@
 # vayuayan: Air Quality Data Analysis for India
 
-**vayuayan** is an R package for fetching and analyzing air quality data from multiple sources:
+**vayuayan** is an R package for fetching and analysing air quality data from multiple sources:
 
 - **WUSTL ACAG**: Washington University satellite PM2.5 data (Global)
 - **CPCB India**: Central Pollution Control Board monitoring network (India only)
 
 This is the R port of the Python package [vayuayan](https://github.com/saketlab/vayuayan).
+
 ## Etymology
 
 **Vayuayan** (वायुअयन) combines two Sanskrit words:
+
 - **Vayu** (वायु): Wind, air
 - **Ayan** (अयन): Path, journey, movement
 
-Together, "Vayuayan" means "the path of wind" - representing the journey and movement of air quality data across space and time.
+Together, "Vayuayan" means "the path of wind" — representing the journey and movement of air quality data across space and time.
+
+---
 
 ## Installation
 
 Install from GitHub using devtools:
 
 ```r
-# Install devtools
+# Install devtools 
 install.packages("devtools")
 
 # Install vayuayan
-devtools::install_github("saketlab/vayuayan-r")
+devtools::install_github("saketkc/vayuayanR")
 ```
+
+---
 
 ## Quick Start
 
-### Historical AQI Data
+### CPCB Historical AQI Data
 
 ```r
-# Load package
 library(vayuayan)
 
-# Create historical data client
-historical <- CPCBHistorical$new()
-
-# Get list of states
-states <- historical$get_state_list()
+# Get list of available states
+states <- cpcb_get_state_list()
 print(states)
 
-# Get cities in Maharashtra
-cities <- historical$get_city_list("Maharashtra")
+# Get cities in a state
+cities <- cpcb_get_city_list("Maharashtra")
 print(cities)
 
-# Get stations in Mumbai
-stations <- historical$get_station_list("Mumbai")
+# Get stations in a city
+stations <- cpcb_get_station_list("Mumbai")
 print(stations)
 
-# Download city-level data
-historical$download_city_data(
-  city = "Mumbai",
-  year = 2024,
-  save_location = "mumbai_aqi_2024.csv"
+# Add coordinates to station list via OpenStreetMap geocoding
+stations <- cpcb_add_coords(stations)
+print(stations[, c("label", "lat", "lon")])
+
+# Download city-level daily PM2.5 data
+cpcb_download_city_data(
+  city          = "Mumbai",
+  year          = 2022,
+  save_location = "mumbai_aqi_2022.csv"
 )
 
-# Download station-level data
-historical$download_station_data(
-  station_id = "site_5964",
-  year = 2024,
-  save_location = "station_data_2024.csv"
-)
-```
-
-### Live AQI Monitoring
-
-```r
-# Create live monitoring client
-live <- CPCBLive$new()
-
-# Get your current location (IP-based)
-location <- live$get_system_location()
-print(location)
-
-# Find nearest monitoring station
-nearest <- live$get_nearest_station()
-print(nearest)
-
-# Get live AQI data for nearest station
-aqi_data <- live$get_live_aqi_data()
-print(aqi_data$metrics)
-
-# Get live AQI for specific coordinates
-aqi_data <- live$get_live_aqi_data(
-  coords = c(19.0760, 72.8777)  # Mumbai coordinates
-)
-
-# Get live AQI for specific station and time
-aqi_data <- live$get_live_aqi_data(
-  station_id = "site_5964",
-  date = "2024-02-25",
-  hour = 10
+# Download per-station daily PM2.5 data
+cpcb_download_station_data(
+  station_id    = "site_5964",
+  year          = 2022,
+  save_location = "station_data_2022.csv"
 )
 ```
 
 ### PM2.5 Satellite Data Analysis
 
 ```r
-# Create PM2.5 client
-pm25 <- PM25Client$new(cache_dir = "pm25_cache")
+library(vayuayan)
 
-# Get PM2.5 statistics for a region (combines all polygons)
-delhi_stats <- pm25$get_pm25_stats(
+# Get mean PM2.5 statistics for a region from WUSTL ACAG NetCDF
+delhi_stats <- pm25_get_stats(
   geojson_file = "delhi_ncr.geojson",
-  year = 2023,
-  month = 11
+  year         = 2022,
+  month        = 11
 )
 print(delhi_stats)
+# Returns: list(mean, std, min, max, count)
 
-# Get PM2.5 statistics grouped by state
-state_stats <- pm25$get_pm25_stats(
+# Get PM2.5 statistics grouped by a column in the GeoJSON
+state_stats <- pm25_get_stats(
   geojson_file = "india_districts.geojson",
-  year = 2023,
-  month = 11,
-  group_by = "state_name"
+  year         = 2022,
+  month        = 11,
+  group_by     = "state_name"
 )
 print(state_stats)
 
-# Get PM2.5 statistics grouped by multiple columns
-district_stats <- pm25$get_pm25_stats(
-  geojson_file = "india_districts.geojson",
-  year = 2023,
-  month = 11,
-  group_by = "state_name,district_name"
+# Download a NetCDF file manually
+pm25_download_netcdf(
+  year      = 2022,
+  month     = 11,
+  cache_dir = "pm25_data"
 )
-print(district_stats)
-
-# List cached NetCDF files
-pm25$list_cached_files()
-
-# Clear cache
-pm25$clear_cache()
 ```
+
+---
 
 ## Data Analysis with tidyverse
 
-The package integrates well with tidyverse workflows:
-
 ```r
 library(vayuayan)
-library(dplyr)
-library(ggplot2)
+library(tidyverse)
 
-# Get all station data
-live <- CPCBLive$new()
-stations_data <- live$get_all_india()
+# Download and reshape city-level data
+cpcb_download_city_data("Delhi", 2022, "delhi_aqi_2022.csv")
 
-# Convert to tidy dataframe
-df <- stations_to_dataframe(stations_data)
+delhi_monthly <- read.csv("delhi_aqi_2022.csv") %>%
+  pivot_longer(cols = -Day, names_to = "Month_Name", values_to = "pm25") %>%
+  mutate(month = match(Month_Name, month.name)) %>%
+  filter(!is.na(pm25)) %>%
+  group_by(month) %>%
+  summarise(mean_pm25 = mean(pm25, na.rm = TRUE), .groups = "drop")
 
-# Analyze live stations by state
-state_summary <- df %>%
-  group_by(state_id) %>%
-  summarise(
-    total_stations = n(),
-    live_stations = sum(live),
-    avg_aqi = mean(avg_aqi, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  arrange(desc(live_stations))
-
-print(state_summary)
-
-# Plot AQI distribution
-df %>%
-  filter(!is.na(avg_aqi)) %>%
-  mutate(aqi_category = get_aqi_categories(avg_aqi)) %>%
-  ggplot(aes(x = avg_aqi, fill = aqi_category)) +
-  geom_histogram(bins = 30) +
+# Plot seasonal trend
+ggplot(delhi_monthly, aes(x = month, y = mean_pm25)) +
+  geom_line(linewidth = 1, color = "#d77027") +
+  geom_point(size = 2.5, color = "#d77027") +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
   labs(
-    title = "Distribution of AQI Values",
-    x = "AQI",
-    y = "Count",
-    fill = "Category"
+    title = "Delhi 2022: Monthly Mean PM2.5",
+    y     = expression(paste("PM2.5 (", mu, "g/m"^3, ")")),
+    x     = NULL
   ) +
   theme_minimal()
 ```
 
-## Mapping Air Quality Stations
+---
+
+## Mapping Station Locations
 
 ```r
 library(vayuayan)
 library(sf)
 library(ggplot2)
 
-# Get station data with coordinates
-live <- CPCBLive$new()
-stations_data <- live$get_all_india()
-df <- stations_to_dataframe(stations_data)
+# Get stations and geocode them
+stations    <- cpcb_get_station_list("Delhi")
+stations_sf <- cpcb_add_coords(stations) %>%
+  filter(!is.na(lat)) %>%
+  sf::st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
-# Filter live stations with valid coordinates
-live_stations <- df %>%
-  filter(live == TRUE, !is.na(longitude), !is.na(latitude)) %>%
-  mutate(aqi_category = get_aqi_categories(avg_aqi))
-
-# Convert to sf object
-stations_sf <- st_as_sf(
-  live_stations,
-  coords = c("longitude", "latitude"),
-  crs = 4326
-)
-
-# Plot stations on map
+# Plot
 ggplot(stations_sf) +
-  geom_sf(aes(color = aqi_category), size = 2, alpha = 0.6) +
-  scale_color_manual(
-    values = c(
-      "Good" = "green",
-      "Satisfactory" = "lightgreen",
-      "Moderate" = "yellow",
-      "Poor" = "orange",
-      "Very Poor" = "red",
-      "Severe" = "darkred"
-    )
-  ) +
+  geom_sf(size = 3, color = "royalblue4", alpha = 0.8) +
   labs(
-    title = "Live Air Quality Monitoring Stations in India",
-    color = "AQI Category"
+    title = "CPCB Monitoring Stations — Delhi",
+    caption = "Source: CPCB CAAQMS"
   ) +
   theme_minimal()
 ```
 
+---
+
 ## API Reference
 
-### CPCBHistorical
+### CPCB Functions
 
-- `new()` - Initialize historical data client
-- `get_state_list()` - Get available states
-- `get_city_list(state)` - Get cities in a state
-- `get_station_list(city)` - Get stations in a city
-- `download_city_data(city, year, save_location)` - Download city-level data
-- `download_station_data(station_id, year, save_location)` - Download station-level data
+| Function | Description |
+|----------|-------------|
+| `cpcb_get_state_list()` | Get all available states |
+| `cpcb_get_city_list(state)` | Get cities in a state |
+| `cpcb_get_station_list(city)` | Get stations in a city as a data frame |
+| `cpcb_get_complete_list()` | Get all states, cities, and stations |
+| `cpcb_add_coords(station_df)` | Geocode stations via OpenStreetMap Nominatim |
+| `cpcb_download_city_data(city, year, save_location)` | Download city-level daily PM2.5 |
+| `cpcb_download_station_data(station_id, year, save_location)` | Download per-station daily PM2.5 |
 
-### CPCBLive
+### PM2.5 Satellite Functions
 
-- `new()` - Initialize live monitoring client
-- `get_system_location()` - Get IP-based location
-- `get_all_india()` - Get all stations in India
-- `get_nearest_station(coords = NULL)` - Find nearest station
-- `get_live_aqi_data(station_id = NULL, coords = NULL, date = NULL, hour = NULL)` - Get live AQI data
+| Function | Description |
+|----------|-------------|
+| `pm25_get_stats(geojson_file, year, month, cache_dir, group_by)` | Extract mean PM2.5 stats for a region |
+| `pm25_download_netcdf(year, month, cache_dir)` | Download WUSTL ACAG NetCDF file |
 
-### PM25Client
+### Utility Functions
 
-- `new(cache_dir = "pm25_data")` - Initialize PM2.5 client
-- `download_netcdf_if_needed(year, month = NULL, force_download = FALSE)` - Download NetCDF data
-- `get_pm25_stats(geojson_file, year, month = NULL, group_by = NULL)` - Compute PM2.5 statistics
-- `list_cached_files()` - List cached NetCDF files
-- `clear_cache()` - Clear all cached files
+| Function | Description |
+|----------|-------------|
+| `get_aqi_category(value)` | Get AQI category label for a single value |
+| `get_aqi_categories(values)` | Vectorised AQI category labels |
+| `clean_station_name(name)` | Sanitise station name for use as filename |
+| `haversine_distance(lat1, lon1, lat2, lon2)` | Distance between two coordinates (km) |
+| `stations_to_dataframe(data)` | Convert raw station list to tidy data frame |
+
+
+---
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a pull request.
 
+---
+
 ## Disclaimer
 
-This package is not officially affiliated with any government agency or air quality monitoring network. It's a third-party tool for accessing publicly available environmental data. Users are responsible for verifying data accuracy and following proper attribution guidelines.
+This package is not officially affiliated with any government agency or air
+quality monitoring network. It is a third-party tool for accessing publicly
+available environmental data. Users are responsible for verifying data accuracy
+and following proper attribution guidelines.
+
+---
 
 ## Citation
 
 If you use this package in your research, please cite:
 
 ```
-Choudhary, S., & Prajapat, M. K. (2025). vayuayan: Air Quality Data Analysis for India. 
-R package version 0.1.3. https://github.com/saketlab/vayuayan-r
+Choudhary, S., & Prajapat, M. K. (2025). vayuayan: Air Quality Data Analysis
+for India. R package version 0.1.3. https://github.com/saketkc/vayuayanR
 ```
