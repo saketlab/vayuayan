@@ -53,10 +53,6 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
-# Test files
-*.geojson
-*.nc
-*.tif
 
 # Ignore downloaded data files
 # Cached outputs that shouldn't be versioned
@@ -66,4 +62,15 @@ vignettes/delhi_aqi_2023.csv
 vignettes/delhi_stations_with_coords.csv
 vignettes/fig*.png
 
+# Ignore all CPCB data downloads regardless of city name
+*_aqi_*.csv
+*_stations_with_coords.csv
+station_data_*/
 
+# Ignore all generated figures (Delhi or Mumbai)
+fig*.png
+
+# Ignore spatial data files in any subdirectory
+**/*.geojson
+**/*.nc
+**/*.tif
