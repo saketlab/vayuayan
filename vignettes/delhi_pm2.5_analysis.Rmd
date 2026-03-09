@@ -76,8 +76,7 @@ Daily city-level and per-station PM2.5 readings are fetched from the Central
 Pollution Control Board (CPCB) data repository using `cpcb_download_city_data()`
 and `cpcb_download_station_data()`. Delhi has 40 operational Continuous Ambient
 Air Quality Monitoring Stations (CAAQMS) managed by DPCC, CPCB, IMD, and IITM.
-Station coordinates are obtained via `cpcb_add_coords()`, which geocodes station
-names using OpenStreetMap's Nominatim API.
+Station coordinates are obtained via cpcb_add_coords(), which queries the CPCB live feed directly, the same source used by the Python vayuayan package. Nominatim is used as a fallback only for stations temporarily absent from the live feed.
 
 ## Spatial Units
 
@@ -117,7 +116,8 @@ pacman::p_load(
   sf,            # vector spatial data
   tidyterra,     # ggplot2 + terra integration (geom_spatraster)
   exactextractr, # area-weighted raster extraction to polygons
-  ncdf4          # reading NetCDF files directly
+ncdf4,         # reading NetCDF files directly
+khroma         # diverging colour palettes
 )
 ```
 
@@ -257,14 +257,14 @@ ggplot(delhi_final, aes(x = month)) +
   geom_line(aes(y = ground_pm25, color = "CPCB Ground"), linewidth = 1) +
   geom_line(
     aes(y = sat_pm25, color = "WUSTL Satellite"),
-    linewidth = 1, linetype = "dashed"
+    linewidth = 0.85, linetype = "dashed"
   ) +
-  geom_point(aes(y = ground_pm25, color = "CPCB Ground"), size = 2.5) +
-  geom_point(aes(y = sat_pm25,    color = "WUSTL Satellite"), size = 2.5) +
+  geom_point(aes(y = ground_pm25, color = "CPCB Ground"), size = 2) +
+  geom_point(aes(y = sat_pm25,    color = "WUSTL Satellite"), size = 2) +
   # WHO reference lines
   geom_hline(yintercept = 5,  linetype = "dotted", color = "darkgreen", linewidth = 0.6) +
   geom_hline(yintercept = 15, linetype = "dotted", color = "orange",    linewidth = 0.6) +
-  annotate("text", x = 1, y = 18, label = "WHO 24hr limit (15 µg/m³)",  size = 3, color = "orange",    hjust = 0) +
+  annotate("text", x = 1, y = 18, label = "WHO 24hr limit (15 µg/m³)",  size = 3, color = "tan4",    hjust = 0) +
   annotate("text", x = 1, y = 8,  label = "WHO annual limit (5 µg/m³)", size = 3, color = "darkgreen", hjust = 0) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
   scale_color_manual(values = c(
@@ -276,10 +276,16 @@ ggplot(delhi_final, aes(x = month)) +
     y       = expression(paste("PM2.5 Concentration (", mu, "g/m"^3, ")")),
     x       = NULL,
     color   = NULL,
-    caption = "Source: WUSTL ACAG V5GL04 + CPCB CAAQMS | Dotted lines = WHO guidelines"
+    caption = "Source: WUSTL ACAG V5GL04 + CPCB CAAQMS"
   ) +
-  theme_minimal(base_size = 13) +
-  theme(legend.position = "bottom")
+  theme_minimal(base_size = 11) +
+  theme(
+    text = element_text(family = "Arial"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(linetype = "dashed", color = "grey85"),
+      legend.position = "top") #+
+    #ggview::canvas(width=9, height = 6, dpi=300)
 
 ggsave("fig1_seasonal_trend.png", width = 9, height = 6, dpi = 300)
 ```
@@ -313,11 +319,7 @@ delhi_raster_mask <- terra::mask(r_nov, terra::vect(delhi_shape))
 # reference overlay on all spatial maps instead of district boundaries.
 delhi_city_boundary <- sf::st_union(delhi_shape)
 
-# Clean ward names — source data has \r\n artifacts in some rows
-delhi_wards <- delhi_wards %>%
-  mutate(wardname = stringr::str_squish(
-    stringr::str_remove_all(wardname, "\r\n")
-  ))
+
 ```
 
 ```{r heatmap, fig.height=7, fig.cap="Spatial PM2.5 distribution across Delhi NCT, November 2022. Black outline = Delhi city boundary. Peripheral wards show elevated PM2.5 relative to central Delhi — a pattern completely invisible from city-level averages."}
@@ -327,22 +329,34 @@ ggplot() +
   geom_sf(
     data      = delhi_city_boundary,
     fill      = NA,
-    color     = "black",
-    linewidth = 0.8
+    color     = "royalblue4",
+    linewidth = 0.4
   ) +
   scale_fill_whitebox_c(
     palette = "muted",
     name    = expression(paste("PM2.5 (", mu, "g/m"^3, ")"))
   ) +
   labs(
-    title    = "Spatial Distribution of PM2.5 in Delhi",
+    title    = "Spatial Distribution of PM2.5, Delhi",
     subtitle = "Satellite estimate: November 2022 | Black outline = Delhi NCT boundary",
     caption  = "Source: WUSTL ACAG V5GL04 | Resolution: ~1km"
   ) +
   xlab(NULL) + ylab(NULL) +
-  theme_minimal(base_size = 13)
+  theme_minimal(base_size = 11) +
+    theme(
+    text = element_text(family = "Arial"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "top") +
+     guides(
+    fill = guide_colorbar(
+      barwidth = unit(10, "lines"),
+      barheight = unit(0.6, "lines")
+    )
+  ) #+
+    #ggview::canvas(width=8, height = 6, dpi=300)
 
-ggsave("fig2_heatmap_nov2022.png", width = 9, height = 7, dpi = 300)
+ggsave("fig2_heatmap_nov2022.png", width = 8, height = 6, dpi = 300)
 ```
 
 > **Key finding:** Pollution is not uniform. Peripheral wards show elevated
@@ -359,8 +373,8 @@ The visual question: do stations cover the most polluted wards?
 ### Load and Geocode Station Locations
 
 ```{r station-coords}
-# Geocode all Delhi CPCB stations via OpenStreetMap Nominatim
-# Cached to CSV — geocoding takes ~40 seconds, cache makes re-runs instant
+# Fetch coordinates for all Delhi CPCB stations from CPCB API
+# Cached to CSV, re-runs use cache instead of hitting the API again
 if (file.exists("delhi_stations_with_coords.csv")) {
   delhi_station_list <- read.csv("delhi_stations_with_coords.csv")
 } else {
@@ -369,30 +383,9 @@ if (file.exists("delhi_stations_with_coords.csv")) {
   write.csv(delhi_station_list, "delhi_stations_with_coords.csv", row.names = FALSE)
 }
 
-# Manual coordinate patches for stations Nominatim failed to resolve correctly
-# Coordinates verified manually against CPCB station records
-manual_patches <- data.frame(
-  label   = c(
-    "NSUT Jaffarpur, Delhi - DPCC",
-    "Cantonment Area, Delhi - DPCC",
-    "NSIT Dwarka, Delhi - CPCB",
-    "CRRI Mathura Road, Delhi - IMD",
-    "IHBAS, Dilshad Garden, Delhi - CPCB"
-  ),
-  lat_fix = c(28.591, 28.597, 28.609, 28.551, 28.681),
-  lon_fix = c(76.906, 77.126, 77.033, 77.274, 77.302)
-)
-
 delhi_full_sf <- delhi_station_list %>%
-  left_join(manual_patches, by = "label") %>%
-  mutate(
-    lat = dplyr::coalesce(lat, lat_fix),
-    lon = dplyr::coalesce(lon, lon_fix)
-  ) %>%
   filter(!is.na(lat)) %>%
   sf::st_as_sf(coords = c("lon", "lat"), crs = 4326)
-
-cat(nrow(delhi_full_sf), "stations loaded\n")
 ```
 
 ### Choropleth: Ward-Level PM2.5 + Station Locations
@@ -400,6 +393,11 @@ cat(nrow(delhi_full_sf), "stations loaded\n")
 ```{r choropleth-data}
 # Load the 273 MCD wards
 delhi_wards <- sf::st_read("/NAS/darakshann/DELHI.geojson", quiet = TRUE)
+# Clean ward names, source data has \r\n artifacts in some rows
+delhi_wards <- delhi_wards %>%
+  mutate(wardname = stringr::str_squish(
+    stringr::str_remove_all(wardname, "\r\n")
+  ))
 
 # Area-weighted mean satellite PM2.5 per ward
 # exact_extract is more accurate than simple centroid extraction for polygons
@@ -416,16 +414,16 @@ ggplot() +
     color = "white", linewidth = 0.15
   ) +
   # Outer city boundary for orientation
-  geom_sf(
-    data      = delhi_city_boundary,
-    fill      = NA,
-    color     = "black",
-    linewidth = 0.7
-  ) +
+ #geom_sf(
+ #  data      = delhi_city_boundary,
+ #  fill      = NA,
+ # color     = "royalblue4",
+ #  linewidth = 0.3
+ #) +
   # CPCB station locations
   geom_sf(
     data = delhi_full_sf, color = "black",
-    fill = "royalblue4", size = 2.5, shape = 21, alpha = 0.85
+    fill = "steelblue4", size = 2.5, shape = 21, alpha = 0.85
   ) +
   scale_fill_distiller(
     palette   = "YlOrRd",
@@ -435,12 +433,23 @@ ggplot() +
   ) +
   labs(
     title    = "Delhi PM2.5 Monitoring Network",
-    subtitle = "Ward shading = satellite average PM2.5 | Blue dots = CPCB stations | Black = Delhi NCT boundary",
+    subtitle = "Ward shading = satellite average PM2.5 | Blue dots = CPCB stations",
     caption  = "November 2022 | Source: WUSTL ACAG V5GL04 + CPCB CAAQMS"
   ) +
   xlab(NULL) + ylab(NULL) +
-  theme_minimal(base_size = 13)
-
+theme_minimal(base_size = 11) +
+    theme(
+    text = element_text(family = "Arial"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "top") +
+     guides(
+    fill = guide_colorbar(
+      barwidth = unit(10, "lines"),
+      barheight = unit(0.6, "lines")
+    )
+  ) #+
+    #ggview::canvas(width=8, height = 6, dpi=300)
 ggsave("fig3_choropleth_stations.png", width = 9, height = 7, dpi = 300)
 ```
 
@@ -594,49 +603,58 @@ ggplot() +
   geom_segment(
     data = connection_lines,
     aes(x = x_from, y = y_from, xend = x_to, yend = y_to),
-    color     = "grey30",
-    linewidth = 0.3,
-    alpha     = 0.5,
+    color     = "grey8",
+    linewidth = 0.4,
+    alpha     = 0.6,
     linetype  = "dashed"
   ) +
-  # Outer city boundary for orientation
-  geom_sf(
-    data      = delhi_city_boundary,
-    fill      = NA,
-    color     = "black",
-    linewidth = 0.7
-  ) +
+  ## Outer city boundary for orientation
+  #geom_sf(
+  #  data      = delhi_city_boundary,
+  #  fill      = NA,
+  #  color     = "black",
+  #  linewidth = 0.7
+  #) +
   # CPCB station locations
   geom_sf(
     data  = station_ground_sf,
-    color = "black", fill = "yellow",
-    size  = 3, shape = 21
+    color = "black", fill = "tan2",
+    size  = 2.5, shape = 21, alpha=0.7
   ) +
-  scale_fill_gradient2(
-    low      = "#2166ac",
-    mid      = "#f7f7f7",
-    high     = "#d6604d",
-    # Centre on median delta — reveals relative variation across wards
-    # (centering on 0 makes everything blue since all deltas are negative)
-    midpoint = median(delhi_wards$delta, na.rm = TRUE),
-    na.value = "grey80",
-    name     = expression(paste(Delta ~ PM[2.5] ~ (mu * g/m^3)))
-  ) +
+  scale_fill_gradientn(
+  colours  = khroma::colour("roma")(100),
+  values   = scales::rescale(c(
+    min(delhi_wards$delta, na.rm = TRUE),
+    median(delhi_wards$delta, na.rm = TRUE),
+    max(delhi_wards$delta, na.rm = TRUE)
+  )),
+  na.value = "grey80",
+  name     = expression(paste(Delta ~ PM[2.5] ~ (mu * g/m^3)))
+) +
   labs(
     title    = "Delhi: Satellite vs Nearest Ground Station PM2.5 by Ward",
-    subtitle = "Dashed lines connect each ward centroid to its nearest CPCB station\nColour shows relative disagreement | Yellow = CPCB stations | Black = Delhi NCT boundary",
+    subtitle = "Dashed lines connect each ward centroid to its nearest CPCB station\nColour shows relative difference | Yellow = CPCB stations",
     caption  = "Delta = satellite PM2.5 at ward centroid − nearest CPCB station reading\nNovember 2022 | Source: WUSTL ACAG V5GL04 + CPCB CAAQMS"
   ) +
   xlab(NULL) + ylab(NULL) +
   coord_sf() +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title      = element_text(face = "bold"),
-    plot.subtitle   = element_text(size = 9.5, color = "grey40"),
-    legend.position = "right"
-  )
+    theme_minimal(base_size = 11) +
+    theme(
+    text = element_text(family = "Arial"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "top",
+     plot.title      = element_text(face = "bold"),
+    plot.subtitle   = element_text(size = 9.5, color = "grey8")) +
+     guides(
+    fill = guide_colorbar(
+      barwidth = unit(10, "lines"),
+      barheight = unit(0.6, "lines")
+    )
+  ) #+
+    #ggview::canvas(width=9.5, height = 7.5, dpi=300)
 
-ggsave("fig4_monitoring_gap_map.png", width = 9, height = 8, dpi = 300)
+ggsave("fig4_monitoring_gap_map.png", width = 9, height = 7.5, dpi = 300)
 ```
 
 ### Priority Map: Where Should New Stations Go?
@@ -647,13 +665,6 @@ ggplot() +
   geom_sf(
     data = delhi_wards, aes(fill = priority),
     color = "white", linewidth = 0.15
-  ) +
-  # Outer city boundary for orientation
-  geom_sf(
-    data      = delhi_city_boundary,
-    fill      = NA,
-    color     = "black",
-    linewidth = 0.7
   ) +
   # CPCB station locations
   geom_sf(
@@ -756,7 +767,7 @@ ggplot(
   guides(color = guide_colorbar(barwidth = unit(12, "lines"), 
                                  barheight = unit(0.5, "lines"),
                                  title.position = "top")) +
-  theme_minimal(base_size = 13) +
+  theme_minimal(base_size = 11) +
   theme(legend.position = "top", 
         panel.grid.minor = element_blank())
 ```
@@ -804,11 +815,7 @@ new CAAQMS stations should be prioritised.
 - All delta values are negative — ground stations consistently read higher than
   satellite due to point-source siting bias. The analysis focuses on *relative*
   disagreement across wards rather than absolute values
-- Station coordinates from `cpcb_add_coords()` are Nominatim-geocoded and
-  approximate (±200–500m for some stations)
-- Two pairs of co-located stations (Lodhi Road IMD/IITM, Pusa DPCC/IMD) share
-  identical geocoded coordinates, which may slightly bias nearest-station
-  assignments for adjacent wards
+- Station coordinates from cpcb_add_coords() are sourced directly from the CPCB live feed, with Nominatim as fallback for stations temporarily offline
 - V5GL04 (2022) is used in place of V6GL02 (2023) due to server data
   availability — the methodology is identical for any year once V6GL02 is
   downloaded
