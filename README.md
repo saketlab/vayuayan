@@ -192,13 +192,6 @@ ggplot(stations_sf) +
 
 ---
 
-## Vignettes
-
-- [Delhi PM2.5 Analysis (2022)](https://saket-choudhary.me/vayuayanR/articles/delhi_pm2.5_analysis.html) — Satellite vs ground comparison, spatial heatmaps, and monitoring gap analysis for Delhi
-- Mumbai PM2.5 Analysis (2022) — Coming soon
-
----
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a pull request.
