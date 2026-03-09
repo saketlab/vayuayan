@@ -79,10 +79,10 @@ navbar:
       menu:
       - text: Introduction to vayuayan
         href: articles/introduction.html
-      - text: Delhi PM2.5 analysis (2023)
-        href: articles/delta_calculation_map.html
-      - text: Delhi choropleth map
-        href: articles/delhi_choropleth_map.html
+      - text: Delhi PM2.5 Analysis (2022)
+        href: articles/delhi_pm2.5_analysis.html
+      - text: Mumbai PM2.5 Analysis (2022)
+        href: articles/mumbai_pm2.5_analysis.html
 
     news:
       text: Changelog
