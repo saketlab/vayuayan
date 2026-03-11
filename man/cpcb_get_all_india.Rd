@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_live.r
 \name{cpcb_get_all_india}
 \alias{cpcb_get_all_india}
-\title{Get All India Monitoring Stations}
+\title{Get all India monitoring stations}
 \usage{
 cpcb_get_all_india()
 }

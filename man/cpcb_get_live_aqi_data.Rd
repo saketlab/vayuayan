@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_live.r
 \name{cpcb_get_live_aqi_data}
 \alias{cpcb_get_live_aqi_data}
-\title{Get Live AQI Data}
+\title{Get live AQI data}
 \usage{
 cpcb_get_live_aqi_data(
   station_id = NULL,

@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_live.r
 \name{cpcb_get_nearest_station}
 \alias{cpcb_get_nearest_station}
-\title{Find Nearest Monitoring Station}
+\title{Find nearest monitoring station}
 \usage{
 cpcb_get_nearest_station(coords = NULL)
 }
@@ -13,5 +13,7 @@ cpcb_get_nearest_station(coords = NULL)
 List with station_id, station_name, and distance_km
 }
 \description{
-Find nearest monitoring station to given coordinates or IP location.
+Find nearest CPCB monitoring station to given coordinates. If no
+coordinates provided, uses IP-based geolocation automatically.
+Returns station ID, name, and distance in kilometres.
 }

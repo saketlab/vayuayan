@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_historical.r
 \name{cpcb_get_complete_list}
 \alias{cpcb_get_complete_list}
-\title{Fetch Complete Station and City List from CPCB}
+\title{Fetch complete station and city list from CPCB}
 \usage{
 cpcb_get_complete_list()
 }

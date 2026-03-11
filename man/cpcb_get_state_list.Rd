@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_historical.r
 \name{cpcb_get_state_list}
 \alias{cpcb_get_state_list}
-\title{Get List of States with AQI Data}
+\title{Get list of states with AQI data}
 \usage{
 cpcb_get_state_list()
 }

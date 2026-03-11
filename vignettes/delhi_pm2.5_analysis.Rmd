@@ -106,7 +106,9 @@ monthly means for fair temporal comparison.
 
 ```{r packages}
 # pacman handles installation + loading in one step
-if (!require("pacman")) install.packages("pacman")
+if (!require("pacman", quietly = TRUE)) {
+  install.packages("pacman", repos = "https://cloud.r-project.org")
+}
 
 pacman::p_load(
   vayuayan,      # CPCB data download + geocoding
@@ -618,7 +620,7 @@ ggplot() +
   # CPCB station locations
   geom_sf(
     data  = station_ground_sf,
-    color = "black", fill = "tan2",
+    color = "black", fill = "yellow",
     size  = 2.5, shape = 21, alpha=0.7
   ) +
   scale_fill_gradientn(
@@ -703,8 +705,7 @@ sensor should show greater ground-satellite disagreement. This scatter plot
 tests that relationship directly using a LOESS fit to capture any non-linear
 pattern.
 
-```{r scatter, fig.height=5, fig.cap="Relationship between sensor distance and ground-satellite disagreement across 273 Delhi wards. LOESS fit captures non-linear trend. An upward slope confirms that wards further from sensors show larger disagreement — supporting the case for expanding the monitoring network."}
-# Pearson correlation between distance and absolute delta
+```{r scatter, fig.height=5, fig.cap="Relationship between sensor distance and ground-satellite disagreement across 273 Delhi wards. LOESS fit captures non-linear trend. Rug marks show distribution of values along each axis."}
 cor_val <- cor(
   delhi_wards$nearest_winter_km,
   abs(delhi_wards$delta),
@@ -716,10 +717,12 @@ ggplot(
   data = sf::st_drop_geometry(delhi_wards),
   aes(x = nearest_winter_km, y = abs(delta))
 ) +
-  geom_point(aes(color = nearest_winter_km), size = 3, alpha = 0.8) +
-  # LOESS fit — captures non-linear relationship better than linear
-  geom_smooth(method = "loess", se = TRUE, color = "grey30", linewidth = 0.8) +
-  # Annotate with Pearson r
+  geom_rug(alpha = 0.3, color = "grey40") +
+  geom_point(aes(color = nearest_winter_km), size = 3, alpha = 0.7) +
+  geom_smooth(
+    method = "loess", se = TRUE,
+    color = "firebrick", fill = "pink", alpha = 0.2
+  ) +
   annotate(
     "text",
     x     = max(delhi_wards$nearest_winter_km, na.rm = TRUE) * 0.55,
@@ -728,8 +731,9 @@ ggplot(
     size  = 4.5, color = "grey20"
   ) +
   scale_color_distiller(
-    palette = "RdYlGn", direction = -1,
-    name    = "Distance to\nnearest sensor (km)"
+    palette   = "YlOrRd",
+    direction = 1,
+    name      = "Distance (km)"
   ) +
   labs(
     title    = "Sensor Distance Predicts Ground-Satellite Disagreement",
@@ -738,38 +742,21 @@ ggplot(
     y        = expression(paste("|Delta| PM"[2.5] ~ (mu * g/m^3))),
     caption  = "November 2022 | Source: WUSTL ACAG V5GL04 + CPCB CAAQMS"
   ) +
-  theme_minimal(base_size = 13) +
+  theme_minimal(base_size = 11) +
   theme(
-    plot.title      = element_text(face = "bold"),
-    plot.subtitle   = element_text(size = 9.5, color = "grey40"),
-    legend.position = "top"
+    text               = element_text(family = "Arial"),
+    legend.position    = "top",
+    panel.grid.minor   = element_blank(),
+    plot.title         = element_text(face = "bold"),
+    plot.subtitle      = element_text(size = 9.5, color = "grey40")
   ) +
-guides(color = guide_colorbar(barwidth  = unit(15, "lines"), 
-                               barheight = unit(0.7, "lines")))
+  guides(color = guide_colorbar(
+    barwidth       = unit(12, "lines"),
+    barheight      = unit(0.5, "lines"),
+    title.position = "top"
+  ))
 
 ggsave("fig6_distance_vs_disagreement.png", width = 9, height = 5, dpi = 300)
-
-#or
-ggplot(
-  data = sf::st_drop_geometry(delhi_wards),
-  aes(x = nearest_winter_km, y = abs(delta))
-) +
-  # Marginal rugs show density distribution
-  geom_rug(alpha = 0.3, color = "grey40") +
-  geom_point(aes(color = nearest_winter_km), size = 3, alpha = 0.7) +
-  geom_smooth(method = "loess", se = TRUE, color = "firebrick", fill = "pink", alpha = 0.2) +
-  scale_color_distiller(
-    palette = "YlOrRd", # Yellow to Red is more intuitive for "distance/warning"
-    direction = 1,
-    name = "Distance (km)"
-  ) +
-  # Fix the Guide here
-  guides(color = guide_colorbar(barwidth = unit(12, "lines"), 
-                                 barheight = unit(0.5, "lines"),
-                                 title.position = "top")) +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "top", 
-        panel.grid.minor = element_blank())
 ```
 
 ---
@@ -812,13 +799,22 @@ new CAAQMS stations should be prioritised.
 
 ## Limitations
 
-- All delta values are negative — ground stations consistently read higher than
-  satellite due to point-source siting bias. The analysis focuses on *relative*
-  disagreement across wards rather than absolute values
-- Station coordinates from cpcb_add_coords() are sourced directly from the CPCB live feed, with Nominatim as fallback for stations temporarily offline
-- V5GL04 (2022) is used in place of V6GL02 (2023) due to server data
-  availability — the methodology is identical for any year once V6GL02 is
-  downloaded
+- **Negative delta values**: Ground stations consistently read higher than
+satellite estimates due to point-source siting bias — stations are often placed
+near pollution sources, while satellite pixels represent area-averaged
+measurements. The analysis focuses on *relative* disagreement across wards
+rather than absolute values.
+
+- **Station coordinates**: Coordinates are sourced directly from the CPCB live
+feed via `cpcb_add_coords()`, with Nominatim geocoding as fallback for stations
+temporarily absent from the live feed. All 46 Delhi stations have valid
+coordinates.
+
+- **Satellite data version**: V5GL04 covers 1998–2022. The methodology is identical for any year once the newer version is available.
+
+- **Ward boundary limitations**: The 273 MCD ward boundaries used here reflect
+administrative divisions rather than pollution-homogeneous zones. Large wards
+may mask intra-ward spatial variation in PM2.5.
 
 ---
 

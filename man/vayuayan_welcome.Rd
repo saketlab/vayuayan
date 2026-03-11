@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.r
 \name{vayuayan_welcome}
 \alias{vayuayan_welcome}
-\title{Print Vayuayan Welcome Message}
+\title{Print vayuayan welcome message}
 \usage{
 vayuayan_welcome()
 }

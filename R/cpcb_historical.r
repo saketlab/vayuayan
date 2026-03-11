@@ -119,7 +119,7 @@ cpcb_get_station_list <- function(city) {
 #' Add lat/lon coordinates to a station data frame by querying the CPCB
 #' live coordinates API (\code{iit_rss_feed_with_coordinates}). This is the
 #' same source used by the Python vayuayan package and returns authoritative
-#' coordinates directly from CPCB — no geocoding, no rate limiting, no NAs
+#' coordinates directly from CPCB - no geocoding, no rate limiting, no NAs
 #' for oddly-named stations.
 #'
 #' Falls back to Nominatim geocoding for any stations not found in the CPCB
@@ -130,7 +130,7 @@ cpcb_get_station_list <- function(city) {
 #' @export
 cpcb_add_coords <- function(stations) {
 
-    # ── Step 1: fetch all-India station coordinates from CPCB API ──────────────
+    # -- Step 1: fetch all-India station coordinates from CPCB API --------------
     coords_url <- paste0(.cpcb_base_url, "/caaqms/iit_rss_feed_with_coordinates")
 
     message("Fetching station coordinates from CPCB API...")
@@ -147,7 +147,7 @@ cpcb_add_coords <- function(stations) {
 
         data <- httr::content(response, as = "parsed", type = "application/json")
 
-        # Flatten nested country → state → city → station structure
+        # Flatten nested country -> state -> city -> station structure
         do.call(rbind, lapply(data$country, function(state) {
             do.call(rbind, lapply(state$citiesInState, function(city) {
                 do.call(rbind, lapply(city$stationsInCity, function(station) {
@@ -166,7 +166,7 @@ cpcb_add_coords <- function(stations) {
         NULL
     })
 
-    # ── Step 2: join API coordinates to station list by site ID ────────────────
+    # -- Step 2: join API coordinates to station list by site ID ----------------
     if (!is.null(api_coords)) {
         stations <- merge(
             stations, api_coords,
@@ -180,19 +180,19 @@ cpcb_add_coords <- function(stations) {
         stations$lon <- NA_real_
     }
 
-    # ── Step 3: Nominatim fallback for any remaining NAs ───────────────────────
+    # -- Step 3: Nominatim fallback for any remaining NAs -----------------------
     # Stations absent from the live feed (e.g. temporarily offline) are
     # geocoded via OpenStreetMap as a best-effort fallback
     missing_idx <- which(is.na(stations$lat))
 
     if (length(missing_idx) > 0) {
         message(length(missing_idx),
-                " stations not found in API — trying Nominatim fallback...")
+                " stations not found in API - trying Nominatim fallback...")
 
         for (i in missing_idx) {
             label <- stations$label[i]
 
-            # Strip agency suffix for cleaner query: "Bandra, Mumbai - MPCB" → "Bandra, Mumbai"
+            # Strip agency suffix for cleaner query: "Bandra, Mumbai - MPCB" -> "Bandra, Mumbai"
             query <- gsub("\\s*-\\s*(DPCC|CPCB|IMD|IITM|MPCB|BMC|APPCB|TSPCB|KSPCB).*$",
                           "", label)
 

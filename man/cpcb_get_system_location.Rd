@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_live.r
 \name{cpcb_get_system_location}
 \alias{cpcb_get_system_location}
-\title{Get System Location via IP Geolocation}
+\title{Get system location via IP geolocation}
 \usage{
 cpcb_get_system_location()
 }
@@ -10,5 +10,6 @@ cpcb_get_system_location()
 Numeric vector c(lat, lon)
 }
 \description{
-Get system location using IP-based lookup.
+Get approximate system location using IP-based geolocation. Returns
+city-level coordinates based on the machine's public IP address.
 }

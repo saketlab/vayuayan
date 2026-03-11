@@ -2,7 +2,7 @@
 % Please edit documentation in R/pm25_client.r
 \name{pm25_list_cached_files}
 \alias{pm25_list_cached_files}
-\title{List Cached PM2.5 NetCDF Files}
+\title{List cached PM2.5 NetCDF files}
 \usage{
 pm25_list_cached_files(cache_dir = "pm25_data")
 }

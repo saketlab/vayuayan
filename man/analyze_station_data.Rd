@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.r
 \name{analyze_station_data}
 \alias{analyze_station_data}
-\title{Analyze Station Data}
+\title{Analyze station data}
 \usage{
 analyze_station_data(data)
 }

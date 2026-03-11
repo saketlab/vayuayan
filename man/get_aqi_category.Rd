@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.r
 \name{get_aqi_category}
 \alias{get_aqi_category}
-\title{Get AQI Category}
+\title{Get AQI category}
 \usage{
 get_aqi_category(aqi_value)
 }

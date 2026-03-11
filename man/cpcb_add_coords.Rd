@@ -2,19 +2,23 @@
 % Please edit documentation in R/cpcb_historical.r
 \name{cpcb_add_coords}
 \alias{cpcb_add_coords}
-\title{Add Coordinates to Station List}
+\title{Add coordinates to station list}
 \usage{
 cpcb_add_coords(stations)
 }
 \arguments{
-\item{stations}{Data frame from cpcb_get_station_list()}
+\item{stations}{Data frame from \code{cpcb_get_station_list()}}
 }
 \value{
-Same data frame with lat and lon columns added
+Same data frame with \code{lat} and \code{lon} columns added
 }
 \description{
-Add lat/lon coordinates to a station list via OpenStreetMap geocoding.
-Handles co-located stations (same name, different agencies) by using
-differentiated coordinates, and expands known abbreviations for better
-geocoding accuracy.
+Add lat/lon coordinates to a station data frame by querying the CPCB
+live coordinates API (\code{iit_rss_feed_with_coordinates}). This is the
+same source used by the Python vayuayan package and returns authoritative
+coordinates directly from CPCB - no geocoding, no rate limiting, no NAs
+for oddly-named stations.
+
+Falls back to Nominatim geocoding for any stations not found in the CPCB
+response (e.g. offline stations absent from the live feed).
 }

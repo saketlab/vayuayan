@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_historical.r
 \name{cpcb_get_city_list}
 \alias{cpcb_get_city_list}
-\title{Get List of Cities in a State}
+\title{Get list of cities in a state}
 \usage{
 cpcb_get_city_list(state)
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.r
 \name{haversine_distance}
 \alias{haversine_distance}
-\title{Calculate Haversine Distance}
+\title{Calculate haversine distance}
 \usage{
 haversine_distance(lat1, lon1, lat2, lon2)
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.r
 \name{stations_to_dataframe}
 \alias{stations_to_dataframe}
-\title{Convert Station Data to DataFrame}
+\title{Convert station data to data frame}
 \usage{
 stations_to_dataframe(data)
 }

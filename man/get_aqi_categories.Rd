@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.r
 \name{get_aqi_categories}
 \alias{get_aqi_categories}
-\title{Vectorized AQI Category}
+\title{Vectorized AQI category}
 \usage{
 get_aqi_categories(aqi_values)
 }

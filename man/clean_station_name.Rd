@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.r
 \name{clean_station_name}
 \alias{clean_station_name}
-\title{Clean Station Name}
+\title{Clean station name}
 \usage{
 clean_station_name(station_name)
 }

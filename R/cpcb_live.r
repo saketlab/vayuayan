@@ -143,7 +143,8 @@
 #' Get system location via IP geolocation
 #'
 #' @description
-#' Get system location using IP-based lookup.
+#' Get approximate system location using IP-based geolocation. Returns
+#' city-level coordinates based on the machine's public IP address.
 #'
 #' @return Numeric vector c(lat, lon)
 #' @export
@@ -190,7 +191,9 @@ cpcb_get_all_india <- function() {
 #' Find nearest monitoring station
 #'
 #' @description
-#' Find nearest monitoring station to given coordinates or IP location.
+#' Find nearest CPCB monitoring station to given coordinates. If no
+#' coordinates provided, uses IP-based geolocation automatically.
+#' Returns station ID, name, and distance in kilometres.
 #'
 #' @param coords Optional numeric vector c(lat, lon). If NULL, uses IP location.
 #' @return List with station_id, station_name, and distance_km

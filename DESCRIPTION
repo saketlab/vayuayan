@@ -31,7 +31,15 @@ Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
-    ggplot2
+    tidyverse,
+    exactextractr,
+    khroma,
+    ncdf4,
+    scales,
+    pacman,
+    tidyterra,
+    lwgeom,
+    stringr
 VignetteBuilder: knitr
-URL: https://saketkc.github.io/vayuayanR/, https://github.com/saketkc/vayuayanR
+URL: https://saket-choudhary.me/vayuayanR/, https://github.com/saketkc/vayuayanR
 BugReports: https://github.com/saketkc/vayuayanR/issues

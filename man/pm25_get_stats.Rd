@@ -2,7 +2,7 @@
 % Please edit documentation in R/pm25_client.r
 \name{pm25_get_stats}
 \alias{pm25_get_stats}
-\title{Get PM2.5 Statistics for a Region}
+\title{Get PM2.5 statistics for a region}
 \usage{
 pm25_get_stats(
   geojson_file,

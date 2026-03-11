@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_historical.r
 \name{cpcb_get_file_path}
 \alias{cpcb_get_file_path}
-\title{Get File Path for CPCB Data Download}
+\title{Get file path for CPCB data download}
 \usage{
 cpcb_get_file_path(
   station_id = "",

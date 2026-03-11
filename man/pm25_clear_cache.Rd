@@ -2,7 +2,7 @@
 % Please edit documentation in R/pm25_client.r
 \name{pm25_clear_cache}
 \alias{pm25_clear_cache}
-\title{Clear PM2.5 Cache}
+\title{Clear PM2.5 cache}
 \usage{
 pm25_clear_cache(cache_dir = "pm25_data")
 }

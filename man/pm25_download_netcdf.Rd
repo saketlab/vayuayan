@@ -2,7 +2,7 @@
 % Please edit documentation in R/pm25_client.r
 \name{pm25_download_netcdf}
 \alias{pm25_download_netcdf}
-\title{Download PM2.5 NetCDF File}
+\title{Download PM2.5 NetCDF file}
 \usage{
 pm25_download_netcdf(
   year,

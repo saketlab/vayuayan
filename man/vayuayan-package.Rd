@@ -13,7 +13,7 @@ Fetch and analyze air quality data from multiple sources including CPCB (Central
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://saketkc.github.io/vayuayanR/}
+  \item \url{https://saket-choudhary.me/vayuayanR/}
   \item \url{https://github.com/saketkc/vayuayanR}
   \item Report bugs at \url{https://github.com/saketkc/vayuayanR/issues}
 }

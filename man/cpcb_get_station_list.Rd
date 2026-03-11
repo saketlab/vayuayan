@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_historical.r
 \name{cpcb_get_station_list}
 \alias{cpcb_get_station_list}
-\title{Get Station List for a City}
+\title{Get station list for a city}
 \usage{
 cpcb_get_station_list(city)
 }

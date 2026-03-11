@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_historical.r
 \name{cpcb_download_station_data}
 \alias{cpcb_download_station_data}
-\title{Download Station-Level AQI Data}
+\title{Download station-level AQI data}
 \usage{
 cpcb_download_station_data(station_id, year, save_location)
 }

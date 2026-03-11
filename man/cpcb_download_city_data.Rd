@@ -2,7 +2,7 @@
 % Please edit documentation in R/cpcb_historical.r
 \name{cpcb_download_city_data}
 \alias{cpcb_download_city_data}
-\title{Download City-Level AQI Data}
+\title{Download city-level AQI data}
 \usage{
 cpcb_download_city_data(city, year, save_location)
 }
