@@ -394,35 +394,28 @@ delhi_full_sf <- delhi_station_list %>%
 
 ```{r choropleth-data}
 # Load the 273 MCD wards
-delhi_wards <- sf::st_read("/NAS/darakshann/DELHI.geojson", quiet = TRUE)
-# Clean ward names, source data has \r\n artifacts in some rows
-delhi_wards <- delhi_wards %>%
-  mutate(wardname = stringr::str_squish(
-    stringr::str_remove_all(wardname, "\r\n")
-  ))
+# Load 11 Delhi districts
+delhi_wards <- sf::st_read("/NAS/darakshann/geojson/delhi_bharat_viz.geojson", quiet = TRUE) %>%
+  sf::st_make_valid()
 
-# Area-weighted mean satellite PM2.5 per ward
-# exact_extract is more accurate than simple centroid extraction for polygons
+# Area-weighted mean satellite PM2.5 per district
 delhi_wards$sat_pm25 <- exactextractr::exact_extract(
   r_nov, delhi_wards, 'mean', progress = FALSE
 )
 ```
 
+
 ```{r choropleth, fig.height=7, fig.cap="Ward-level satellite PM2.5 with CPCB station locations. Black outline = Delhi NCT boundary. Stations cluster in central Delhi. Several peripheral wards — some with elevated PM2.5 — are poorly served by the current network."}
 ggplot() +
-  # Wards filled by satellite PM2.5
   geom_sf(
     data = delhi_wards, aes(fill = sat_pm25),
-    color = "white", linewidth = 0.15
+    color = "white", linewidth = 0.3
   ) +
-  # Outer city boundary for orientation
- #geom_sf(
- #  data      = delhi_city_boundary,
- #  fill      = NA,
- # color     = "royalblue4",
- #  linewidth = 0.3
- #) +
-  # CPCB station locations
+  geom_sf_text(
+    data = delhi_wards,
+    aes(label = district_name),
+    size = 2.5, color = "grey20"
+  ) +
   geom_sf(
     data = delhi_full_sf, color = "black",
     fill = "steelblue4", size = 2.5, shape = 21, alpha = 0.85
@@ -435,23 +428,22 @@ ggplot() +
   ) +
   labs(
     title    = "Delhi PM2.5 Monitoring Network",
-    subtitle = "Ward shading = satellite average PM2.5 | Blue dots = CPCB stations",
+    subtitle = "District shading = satellite average PM2.5 | Blue dots = CPCB stations",
     caption  = "November 2022 | Source: WUSTL ACAG V5GL04 + CPCB CAAQMS"
   ) +
   xlab(NULL) + ylab(NULL) +
-theme_minimal(base_size = 11) +
-    theme(
-    text = element_text(family = "Arial"),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    legend.position = "top") +
-     guides(
-    fill = guide_colorbar(
-      barwidth = unit(10, "lines"),
-      barheight = unit(0.6, "lines")
-    )
-  ) #+
-    #ggview::canvas(width=8, height = 6, dpi=300)
+  theme_minimal(base_size = 11) +
+  theme(
+    text               = element_text(family = "Arial"),
+    panel.grid.major   = element_blank(),
+    panel.grid.minor   = element_blank(),
+    legend.position    = "top"
+  ) +
+  guides(fill = guide_colorbar(
+    barwidth  = unit(10, "lines"),
+    barheight = unit(0.6, "lines")
+  ))
+
 ggsave("fig3_choropleth_stations.png", width = 9, height = 7, dpi = 300)
 ```
 

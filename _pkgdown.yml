@@ -83,6 +83,8 @@ navbar:
         href: articles/delhi_pm2.5_analysis.html
       - text: Mumbai PM2.5 Analysis (2022)
         href: articles/mumbai_pm2.5_analysis.html
+      - text: PM2.5 Comparison Across Metros (2022)
+        href: articles/metro_wide_pm2.5_analysis_comparative_2022.html
 
     news:
       text: Changelog
