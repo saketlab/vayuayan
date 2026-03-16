@@ -1,7 +1,7 @@
 Package: vayuayan
 Type: Package
 Title: Comprehensive Air Quality Data Analysis for India
-Version: 0.0.1
+Version: 0.1.3
 Authors@R: c(
     person("Saket", "Choudhary", email = "saketc@iitb.ac.in", role = c("aut", "cre")),
     person("Mahesh Kumar", "Prajapat", email = "22b0433@iitb.ac.in", role = "aut")
@@ -39,7 +39,9 @@ Suggests:
     pacman,
     tidyterra,
     lwgeom,
-    stringr
+    stringr,
+    geodata,
+    ggrepel
 VignetteBuilder: knitr
 URL: https://saket-choudhary.me/vayuayanR/, https://github.com/saketkc/vayuayanR
 BugReports: https://github.com/saketkc/vayuayanR/issues
