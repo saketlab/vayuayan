@@ -41,7 +41,8 @@ Suggests:
     lwgeom,
     stringr,
     geodata,
-    ggrepel
+    ggrepel,
+    kableExtra
 VignetteBuilder: knitr
 URL: https://saket-choudhary.me/vayuayanR/, https://github.com/saketkc/vayuayanR
 BugReports: https://github.com/saketkc/vayuayanR/issues

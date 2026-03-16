@@ -35,7 +35,7 @@ Bengaluru — span the Indo-Gangetic Plain, the western and eastern coasts, the
 Deccan plateau, and the Bay of Bengal. Each city has a distinct pollution
 profile shaped by topography, industry, traffic, and climate.
 
-This vignette uses the `vayuayanR` package to ask a single question across all
+This vignette uses the `vayuayan` package to ask a single question across all
 five cities:
 
 > **How does PM2.5 pollution vary across India's major metros — seasonally,
@@ -45,6 +45,14 @@ We use two independent data sources throughout:
 
 - **WUSTL ACAG V5GL04** — satellite-derived PM2.5 at ~1 km resolution
 - **CPCB CAAQMS** — ground-level monitoring station readings
+
+The analysis follows a deliberate narrative arc:
+
+1. **When** does pollution peak in each city? *(seasonal trends)*
+2. **How variable** is pollution day-to-day within each city? *(SD ribbons)*
+3. **How much** does each city pollute annually? *(cross-city ranking)*
+4. **Where** within each city is pollution worst? *(spatial heatmaps)*
+5. **Are cities well monitored** relative to their pollution burden? *(station coverage)*
 
 ---
 
@@ -99,19 +107,21 @@ pacman::p_load(
   scales,
   patchwork,
   ggrepel,
-  geodata
+  geodata,
+  kableExtra  # formatted tables
 )
 ```
 
-
 ```{r folder-setup}
-# Create output folders if they don't exist
-dirs <- c("data/metro", "figures/metro")
-for (d in dirs) dir.create(d, recursive = TRUE, showWarnings = FALSE)
+# Absolute path — works both interactively and when knitting
+vignettes_dir <- "/NAS/darakshann/vayuayanR/vignettes"
 
-# Convenience path helpers — all data and figures go into subfolders
-data_path <- function(f) file.path("data/metro", f)
-fig_path  <- function(f) file.path("figures/metro", f)
+dirs <- c("data/metro", "figures/metro")
+for (d in dirs) dir.create(file.path(vignettes_dir, d),
+                            recursive = TRUE, showWarnings = FALSE)
+
+data_path <- function(f) file.path(vignettes_dir, "data/metro", f)
+fig_path  <- function(f) file.path(vignettes_dir, "figures/metro", f)
 ```
 
 ## City Configuration
@@ -140,6 +150,19 @@ extra_colors <- c(
 )
 all_colors   <- c(city_colors, extra_colors)
 extra_cities <- names(extra_colors)
+
+city_download_names <- list(
+  Delhi = "Delhi", Mumbai = "Mumbai", Kolkata = "Kolkata",
+  Chennai = "Chennai", Bengaluru = "Bengaluru"
+)
+
+shape_files <- list(
+  Delhi     = "/NAS/darakshann/geojson/delhi_gadm.geojson",
+  Mumbai    = "/NAS/darakshann/geojson/mumbai_v4.geojson",
+  Kolkata   = "/NAS/darakshann/geojson/kolkata.geojson",
+  Chennai   = "/NAS/darakshann/geojson/chennai.geojson",
+  Bengaluru = "/NAS/darakshann/geojson/bengaluru.geojson"
+)
 ```
 
 ## Helper Functions
@@ -193,27 +216,17 @@ load_v5gl04_rast <- function(year, month, shape) {
 
 # Results
 
-## The Season: How Does PM2.5 Vary Through the Year?
-
-The first question is whether all five cities follow the same seasonal rhythm.
-Geography and climate should produce very different patterns — but do the data
-confirm this?
+## 1. When Does Pollution Peak? Seasonal Trends
 
 ### Ground Data: City-Level Monthly Means
 
 ```{r ground-seasonal}
-# City-level CSV paths — all stored in data/metro/
 city_files <- list(
   Delhi     = data_path("delhi_aqi_2022.csv"),
   Mumbai    = data_path("mumbai_aqi_2022.csv"),
   Kolkata   = data_path("kolkata_aqi_2022.csv"),
   Chennai   = data_path("chennai_aqi_2022.csv"),
   Bengaluru = data_path("bengaluru_aqi_2022.csv")
-)
-
-city_download_names <- list(
-  Delhi = "Delhi", Mumbai = "Mumbai", Kolkata = "Kolkata",
-  Chennai = "Chennai", Bengaluru = "Bengaluru"
 )
 
 for (city in city_names) {
@@ -226,7 +239,6 @@ for (city in city_names) {
   }
 }
 
-# Read and reshape — auto-detect first column (Day or Date depending on city)
 ground_monthly <- map_dfr(city_names, function(city) {
   df      <- read.csv(city_files[[city]])
   day_col <- names(df)[1]
@@ -239,25 +251,11 @@ ground_monthly <- map_dfr(city_names, function(city) {
     summarise(ground_pm25 = mean(pm25, na.rm = TRUE), .groups = "drop") %>%
     mutate(city = city)
 })
-
-print(
-  ground_monthly %>%
-    pivot_wider(names_from = city, values_from = ground_pm25) %>%
-    arrange(month)
-)
 ```
 
 ### Satellite Data: Monthly Spatial Means
 
 ```{r satellite-seasonal}
-shape_files <- list(
-  Delhi     = "/NAS/darakshann/geojson/delhi_gadm.geojson",
-  Mumbai    = "/NAS/darakshann/geojson/mumbai_v4.geojson",
-  Kolkata   = "/NAS/darakshann/geojson/kolkata.geojson",
-  Chennai   = "/NAS/darakshann/geojson/chennai.geojson",
-  Bengaluru = "/NAS/darakshann/geojson/bengaluru.geojson"
-)
-
 city_shapes <- map(city_names, function(city) {
   sf::st_read(shape_files[[city]], quiet = TRUE) %>%
     sf::st_make_valid() %>%
@@ -276,29 +274,27 @@ sat_monthly <- map_dfr(city_names, function(city) {
            sat_pm25 = read_v5gl04_fast(nc_file, shape))
   })
 })
-```
 
-### Seasonal Line Chart — All Cities
-
-```{r seasonal-chart, fig.width=9, fig.height=6, fig.cap="Monthly mean PM2.5 across five Indian metros, 2022. Solid lines = CPCB ground data, dashed lines = WUSTL satellite estimates. WHO 24-hour guideline (15 µg/m³) shown as reference. Delhi operates in a fundamentally different pollution regime from all other cities."}
 seasonal_combined <- ground_monthly %>%
   left_join(sat_monthly, by = c("city", "month"))
+```
 
-who_24hr <- 15
+### Seasonal Line Chart
 
+```{r seasonal-chart, fig.width=9, fig.height=6, fig.cap="Monthly mean PM2.5 across five Indian metros, 2022. Solid lines = CPCB ground data, dashed lines = WUSTL satellite estimates. Delhi operates in a fundamentally different pollution regime — its winter peak is 3–5× higher than all other cities."}
 ggplot(seasonal_combined, aes(x = month, color = city)) +
   geom_line(aes(y = ground_pm25), linewidth = 0.9) +
   geom_point(aes(y = ground_pm25), size = 2) +
   geom_line(aes(y = sat_pm25), linewidth = 0.7, linetype = "dashed", alpha = 0.7) +
-  geom_hline(yintercept = who_24hr, linetype = "dotted",
+  geom_hline(yintercept = 15, linetype = "dotted",
              color = "grey40", linewidth = 0.5) +
-  annotate("text", x = 11.5, y = who_24hr + 8,
+  annotate("text", x = 11.5, y = 23,
            label = "WHO 24hr (15)", size = 3, color = "grey40", hjust = 1) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
   scale_color_manual(values = city_colors, name = NULL) +
   labs(
     title    = "India's Metros: PM2.5 Seasonal Cycle (2022)",
-    subtitle = "Solid = CPCB ground | Dashed = WUSTL satellite | Dotted = WHO 24hr guideline",
+    subtitle = "Solid = CPCB ground | Dashed = WUSTL satellite | Dotted = WHO 24hr guideline (15 µg/m³)",
     y        = expression(paste("PM2.5 (", mu, "g/m"^3, ")")),
     x        = NULL,
     caption  = "Source: WUSTL ACAG V5GL04 + CPCB CAAQMS"
@@ -316,126 +312,112 @@ ggplot(seasonal_combined, aes(x = month, color = city)) +
 ggsave(fig_path("fig1_metro_seasonal_comparison.png"), width = 10, height = 7, dpi = 300)
 ```
 
-> **Key finding:** Delhi operates in a fundamentally different pollution regime.
-> Its winter peak exceeds all other cities by 3–5×. Mumbai, Chennai, and
-> Bengaluru show broadly similar levels. Kolkata occupies a middle position,
-> reflecting its location on the Indo-Gangetic Plain. All coastal cities show a
-> sharper monsoon dip due to rainfall washout.
+> **Key finding:** Delhi and Kolkata — both on the Indo-Gangetic Plain — show
+> the most pronounced winter peaks. Coastal cities (Mumbai, Chennai) benefit
+> from sea breezes year-round. All cities dip during the monsoon but only
+> Bengaluru and Chennai approach near-safe levels in the wettest months.
 
 ---
 
-## The Worst Month: Where Is Pollution Highest Within Each City?
+### 1b. How Variable Is Pollution Day-to-Day?
 
-November is the peak pollution month for most Indian cities. The spatial
-distribution within each city tells a different story depending on geography
-and urban structure.
+The seasonal line chart shows monthly *means* — but means hide the day-to-day
+swings that residents actually experience. A city with a high mean and wide
+variability is more unpredictable and harder to plan around than one with a
+steady moderate level. The ribbon below shows ±1 standard deviation around
+each monthly mean, computed from daily readings.
 
-```{r heatmaps, fig.width=12, fig.height=8, fig.cap="November 2022 satellite PM2.5 across five metros. Colour scale capped at 2nd–95th percentile across all cities to prevent Delhi extremes from collapsing the scale for other cities."}
+```{r seasonal-ribbon, fig.width=10, fig.height=10, fig.cap="Day-to-day variability in monthly PM2.5 across five metros, 2022. Line = monthly mean. Ribbon = ±1 SD across daily readings. Free Y-axis per city — Delhi's winter ribbon is enormous, reflecting extreme pollution events layered on top of an already high baseline."}
+# Compute monthly mean + SD — reuses city_files already loaded above
+ground_monthly_sd <- map_dfr(city_names, function(city) {
+  df      <- read.csv(city_files[[city]])
+  day_col <- names(df)[1]
+  df %>%
+    pivot_longer(cols     = -all_of(day_col),
+                 names_to  = "Month_Name",
+                 values_to = "pm25") %>%
+    mutate(month = match(Month_Name, month.name)) %>%
+    filter(!is.na(pm25), !is.na(month)) %>%
+    group_by(month) %>%
+    summarise(
+      ground_pm25 = mean(pm25, na.rm = TRUE),
+      ground_sd   = sd(pm25,   na.rm = TRUE),
+      .groups     = "drop"
+    ) %>%
+    mutate(city = city)
+}) %>%
+  # Order facets by pollution level — most polluted first
+  mutate(city = factor(city,
+                       levels = c("Delhi", "Kolkata", "Mumbai",
+                                  "Chennai", "Bengaluru")))
 
-# Load November rasters for all cities
-nov_rasters <- map(city_names, function(city) {
-  shape <- sf::st_read(shape_files[[city]], quiet = TRUE) %>%
-    sf::st_make_valid()
-  r <- load_v5gl04_rast(2022, 11, shape)
-  terra::mask(r, terra::vect(suppressWarnings(sf::st_union(shape))))
-})
-names(nov_rasters) <- city_names
-
-# Cap scale at 2nd–95th percentile across all cities
-# Prevents Delhi extremes from collapsing colour scale for other cities
-all_vals  <- unlist(lapply(nov_rasters, function(r) terra::values(r, na.rm = TRUE)))
-scale_min <- floor(quantile(all_vals, 0.02, na.rm = TRUE))
-scale_max <- ceiling(quantile(all_vals, 0.95, na.rm = TRUE))
-
-heatmap_plots <- map(city_names, function(city) {
-  shape    <- sf::st_read(shape_files[[city]], quiet = TRUE) %>% sf::st_make_valid()
-  boundary <- suppressWarnings(sf::st_union(shape))
-
-  ggplot() +
-    geom_spatraster(data = nov_rasters[[city]]) +
-    geom_sf(data = boundary, fill = NA, color = "grey20", linewidth = 0.4) +
-    scale_fill_distiller(
-      palette   = "YlOrRd",
-      direction = 1,
-      limits    = c(scale_min, scale_max),
-      oob       = scales::squish,
-      na.value  = NA,
-      name      = expression(paste("PM"[2.5] ~ (mu * g/m^3)))
-    ) +
-    labs(title = city) +
-    xlab(NULL) + ylab(NULL) +
-    theme_minimal(base_size = 10) +
-    theme(
-      text            = element_text(family = "Arial"),
-      panel.grid      = element_blank(),
-      legend.position = "none",
-      plot.title      = element_text(face = "bold", hjust = 0.5, size = 11)
-    )
-})
-
-wrap_plots(heatmap_plots, ncol = 3, guides = "collect") +
-  plot_annotation(
-    title    = "November 2022 PM2.5 Across India's Five Metros",
-    subtitle = "Colour scale capped at 2nd–95th percentile across all cities | Source: WUSTL ACAG V5GL04",
-    theme    = theme(
-      plot.title    = element_text(face = "bold", size = 13),
-      plot.subtitle = element_text(size = 10, color = "grey40")
-    )
-  ) &
+ggplot(ground_monthly_sd,
+       aes(x = month, color = city, fill = city)) +
+  geom_ribbon(
+    aes(ymin = ground_pm25 - ground_sd,
+        ymax = ground_pm25 + ground_sd),
+    alpha = 0.15, color = NA
+  ) +
+  geom_line(aes(y = ground_pm25), linewidth = 0.9) +
+  geom_point(aes(y = ground_pm25), size = 2) +
+  geom_hline(yintercept = 15, linetype = "dotted",
+             color = "grey40", linewidth = 0.5) +
+  annotate("text", x = 1, y = 18,
+           label = "WHO 24hr (15 µg/m³)",
+           size = 2.8, color = "grey40", hjust = 0) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  scale_color_manual(values = city_colors, guide = "none") +
+  scale_fill_manual(values  = city_colors, guide = "none") +
+  facet_wrap(~ city, ncol = 2, scales = "free_y") +
+  labs(
+    title    = "Day-to-Day Variability in Monthly PM2.5 — Five Metros (2022)",
+    subtitle = "Line = monthly mean | Ribbon = ±1 SD across daily readings | Free Y-axis per city",
+    y        = expression(paste("PM2.5 (", mu, "g/m"^3, ")")),
+    x        = NULL,
+    caption  = "Source: CPCB CAAQMS | 2022"
+  ) +
+  theme_minimal(base_size = 11) +
   theme(
-    legend.position   = "bottom",
-    legend.key.width  = unit(15, "lines"),
-    legend.key.height = unit(0.6, "lines")
+    text               = element_text(family = "Arial"),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank(),
+    strip.text         = element_text(face = "bold", size = 11),
+    legend.position    = "none",
+    plot.title         = element_text(face = "bold"),
+    plot.subtitle      = element_text(size = 9.5, color = "grey40")
   )
 
-ggsave(fig_path("fig2_metro_heatmaps_nov2022.png"), width = 15, height = 9, dpi = 300)
+ggsave(fig_path("fig1b_metro_seasonal_variability.png"),
+       width = 10, height = 10, dpi = 300)
 ```
 
-> **Key finding:** On a shared scale, Delhi's northern areas dominate.
-> Within each city, spatial gradients are clear — industrial zones and
-> traffic corridors show consistently elevated PM2.5 regardless of city.
+> **Key finding:** Delhi's winter ribbon is dramatically wider than any other
+> city — not just the mean but the day-to-day swings are extreme. A Delhi
+> resident experiences more pollution variability in a single winter month
+> than a Bengaluru resident experiences across the entire year.
 
 ---
 
-## The Network: Are Cities Well Monitored?
+## 2. How Much Does Each City Pollute? Cross-City Ranking
 
-More stations does not always mean better coverage — it depends on city size
-and where stations are placed. This section compares station density and
-distribution across 12 Indian cities.
+Before looking at spatial patterns, we establish how cities compare in absolute
+terms. This gives the frame of reference needed to interpret the heatmaps
+that follow.
 
-```{r station-network}
-# Station counts for core 5 cities
-station_data <- map_dfr(city_names, function(city) {
-  stations <- cpcb_get_station_list(city_download_names[[city]])
-  tibble(city = city, n_stations = nrow(stations))
-})
-
-# City areas in km²
-city_areas <- map_dfr(city_names, function(city) {
-  shape <- sf::st_read(shape_files[[city]], quiet = TRUE) %>%
-    sf::st_make_valid() %>%
-    sf::st_union() %>%
-    sf::st_transform(3857)
-  tibble(city = city, area_km2 = as.numeric(sf::st_area(shape)) / 1e6)
-})
-
-# Annual mean satellite PM2.5
+```{r annual-summary}
 annual_sat <- sat_monthly %>%
   group_by(city) %>%
   summarise(annual_sat_pm25 = mean(sat_pm25, na.rm = TRUE), .groups = "drop")
 
-# Annual mean ground PM2.5
 annual_ground <- ground_monthly %>%
   group_by(city) %>%
   summarise(annual_ground_pm25 = mean(ground_pm25, na.rm = TRUE), .groups = "drop")
 
-# Winter mean (Oct, Nov, Dec, Jan)
 winter_ground <- ground_monthly %>%
   filter(month %in% c(1, 10, 11, 12)) %>%
   group_by(city) %>%
   summarise(winter_ground_pm25 = mean(ground_pm25, na.rm = TRUE), .groups = "drop")
 
-# WHO exceedance days
 who_exceedance <- map_dfr(city_names, function(city) {
   df      <- read.csv(city_files[[city]])
   day_col <- names(df)[1]
@@ -450,7 +432,19 @@ who_exceedance <- map_dfr(city_names, function(city) {
     )
 })
 
-# Combine all metrics for core 5 cities
+city_areas <- map_dfr(city_names, function(city) {
+  shape <- sf::st_read(shape_files[[city]], quiet = TRUE) %>%
+    sf::st_make_valid() %>%
+    sf::st_union() %>%
+    sf::st_transform(3857)
+  tibble(city = city, area_km2 = as.numeric(sf::st_area(shape)) / 1e6)
+})
+
+station_data <- map_dfr(city_names, function(city) {
+  stations <- cpcb_get_station_list(city_download_names[[city]])
+  tibble(city = city, n_stations = nrow(stations))
+})
+
 city_summary <- station_data %>%
   left_join(city_areas,     by = "city") %>%
   left_join(annual_sat,     by = "city") %>%
@@ -461,12 +455,216 @@ city_summary <- station_data %>%
     stations_per_100km2 = round(n_stations / area_km2 * 100, 2),
     who_exceed_pct      = round(who_exceed_days / total_days * 100, 1)
   )
-
-print(city_summary)
 ```
 
+```{r rankings-bar, fig.width=9, fig.height=5, fig.cap="Annual mean PM2.5 ranked across five Indian metros, 2022. All cities exceed the WHO 24-hour guideline of 15 µg/m³. Delhi's annual mean is multiple times the WHO limit."}
+rankings <- city_summary %>%
+  arrange(desc(annual_ground_pm25)) %>%
+  mutate(
+    annual_ground_pm25 = round(annual_ground_pm25, 1),
+    annual_sat_pm25    = round(annual_sat_pm25, 1)
+  )
+
+# Both ground and satellite side by side
+rankings_long <- rankings %>%
+  select(city, annual_ground_pm25, annual_sat_pm25) %>%
+  pivot_longer(cols = c(annual_ground_pm25, annual_sat_pm25),
+               names_to = "source", values_to = "pm25") %>%
+  mutate(source = recode(source,
+    "annual_ground_pm25" = "CPCB Ground",
+    "annual_sat_pm25"    = "WUSTL Satellite"
+  ))
+
+ggplot(rankings_long,
+       aes(x = reorder(city, pm25), y = pm25,
+           fill = city, alpha = source)) +
+  geom_col(position = position_dodge(width = 0.6), width = 0.55) +
+  geom_hline(yintercept = 15, linetype = "dotted",
+             color = "grey40", linewidth = 0.4) +
+  annotate("text", x = 0.6, y = 18,
+           label = "WHO 24hr (15 µg/m³)", size = 3,
+           color = "grey40", hjust = 0) +
+  coord_flip(clip = "off") +
+  scale_fill_manual(values = city_colors, guide = "none") +
+  scale_alpha_manual(values = c("CPCB Ground" = 0.95, "WUSTL Satellite" = 0.5),
+                     name = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title    = "Annual Mean PM2.5 — Five Indian Metros (2022)",
+    subtitle = "Dark = CPCB ground | Light = WUSTL satellite | Dotted = WHO 24hr guideline",
+    x        = NULL,
+    y        = expression(paste("Annual mean PM2.5 (", mu, "g/m"^3, ")")),
+    caption  = "Source: CPCB CAAQMS + WUSTL ACAG V5GL04 | 2022"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    text               = element_text(family = "Arial"),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank(),
+    plot.title         = element_text(face = "bold"),
+    plot.subtitle      = element_text(size = 10, color = "grey40"),
+    legend.position    = "top"
+  )
+
+ggsave(fig_path("fig2_metro_annual_ranking.png"), width = 10, height = 5, dpi = 300)
+```
+
+> **Key finding:** Delhi's annual mean is multiple times that of Mumbai,
+> Chennai and Bengaluru. Both data sources agree on the city ranking — giving
+> confidence in the ordering even though absolute values differ. All five cities
+> exceed WHO guidelines every single year.
+
+---
+
+## 3. Where Is Pollution Worst? Spatial Heatmaps
+
+Now that we know *how much* each city pollutes, we look at *where* within each
+city the pollution is concentrated. Cities are grouped by geography — the
+Indo-Gangetic Plain cities (Delhi, Kolkata, Kanpur) share a common pollution
+driver: the IGP trap. The coastal and southern cities (Mumbai, Chennai,
+Bengaluru) form a contrasting group. Each city uses its **own independent
+colour scale** to reveal internal spatial structure clearly.
+
+```{r heatmap-data}
+# Add Kanpur to shape files for IGP group
+igp_shape_files <- list(
+  Delhi   = "/NAS/darakshann/geojson/delhi_gadm.geojson",
+  Kolkata = "/NAS/darakshann/geojson/kolkata.geojson",
+  Kanpur  = NULL  # from GADM
+)
+
+coastal_shape_files <- list(
+  Mumbai    = "/NAS/darakshann/geojson/mumbai_v4.geojson",
+  Chennai   = "/NAS/darakshann/geojson/chennai.geojson",
+  Bengaluru = "/NAS/darakshann/geojson/bengaluru.geojson"
+)
+
+# Kanpur shape from GADM
+if (!exists("india_sf")) {
+  india_dist <- geodata::gadm("IND", level = 2, path = data_path(""))
+  india_sf   <- sf::st_as_sf(india_dist)
+}
+kanpur_shape <- india_sf %>%
+  filter(NAME_2 == "Kanpur Nagar") %>%
+  sf::st_make_valid() %>%
+  sf::st_union()
+
+# Build all 6 shapes
+heatmap_shapes <- list(
+  Delhi     = sf::st_read(igp_shape_files$Delhi,         quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
+  Kolkata   = sf::st_read(igp_shape_files$Kolkata,       quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
+  Kanpur    = kanpur_shape,
+  Mumbai    = sf::st_read(coastal_shape_files$Mumbai,    quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
+  Chennai   = sf::st_read(coastal_shape_files$Chennai,   quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
+  Bengaluru = sf::st_read(coastal_shape_files$Bengaluru, quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union()
+)
+
+# Load and mask November rasters for all 6 cities
+heatmap_cities <- names(heatmap_shapes)
+nov_rasters <- map(heatmap_cities, function(city) {
+  r <- load_v5gl04_rast(2022, 11, heatmap_shapes[[city]])
+  terra::mask(r, terra::vect(heatmap_shapes[[city]]))
+})
+names(nov_rasters) <- heatmap_cities
+```
+
+```{r heatmap-fn}
+# Helper to build one heatmap panel
+make_heatmap <- function(city, label_color = "grey20") {
+  r        <- nov_rasters[[city]]
+  boundary <- heatmap_shapes[[city]]
+  vals      <- terra::values(r, na.rm = TRUE)
+  city_min  <- floor(quantile(vals, 0.02))
+  city_max  <- ceiling(quantile(vals, 0.98))
+  city_mean <- round(mean(vals), 1)
+
+  ggplot() +
+    geom_spatraster(data = r) +
+    geom_sf(data = boundary, fill = NA,
+            color = label_color, linewidth = 0.5) +
+    scale_fill_distiller(
+      palette   = "YlOrRd",
+      direction = 1,
+      limits    = c(city_min, city_max),
+      oob       = scales::squish,
+      na.value  = NA,
+      name      = expression(paste(mu, "g/m"^3))
+    ) +
+    labs(
+      title    = city,
+      subtitle = paste0("Nov mean: ", city_mean, " µg/m³")
+    ) +
+    xlab(NULL) + ylab(NULL) +
+    theme_minimal(base_size = 10) +
+    theme(
+      text              = element_text(family = "Arial"),
+      panel.grid        = element_blank(),
+      legend.position   = "right",
+      legend.key.width  = unit(0.4, "lines"),
+      legend.key.height = unit(3,   "lines"),
+      legend.text       = element_text(size = 7),
+      plot.title        = element_text(face = "bold", hjust = 0.5, size = 11),
+      plot.subtitle     = element_text(hjust = 0.5,  size = 9, color = "grey40")
+    )
+}
+```
+
+```{r heatmaps-igp, fig.width=12, fig.height=5, fig.cap="November 2022 PM2.5 — Indo-Gangetic Plain cities (Delhi, Kolkata, Kanpur). All three sit in the IGP pollution trap. Each city uses its own colour scale. For absolute values see Figure 2."}
+igp_plots <- map(c("Delhi", "Kolkata", "Kanpur"), make_heatmap)
+
+wrap_plots(igp_plots, ncol = 3) +
+  plot_annotation(
+    title    = "IGP Cities: Delhi · Kolkata · Kanpur",
+    subtitle = "Indo-Gangetic Plain — November 2022 | Per-city colour scale | Source: WUSTL ACAG V5GL04",
+    caption  = "Scales NOT comparable across panels — see Figure 2 for cross-city absolute comparison",
+    theme    = theme(
+      plot.title    = element_text(face = "bold", size = 13),
+      plot.subtitle = element_text(size = 10, color = "grey40"),
+      plot.caption  = element_text(size = 9,  color = "firebrick", face = "italic")
+    )
+  )
+
+ggsave(fig_path("fig3a_heatmaps_igp.png"), width = 13, height = 6, dpi = 300)
+```
+
+> **IGP finding:** All three cities show elevated northern/western zones where
+> pollution accumulates against the terrain. Kanpur, despite lower absolute
+> values than Delhi, shows strong spatial gradients driven by its industrial
+> belt along the Ganga.
+
+```{r heatmaps-coastal, fig.width=12, fig.height=5, fig.cap="November 2022 PM2.5 — Coastal and southern cities (Mumbai, Chennai, Bengaluru). Sea breezes and elevation give these cities structurally lower pollution, but spatial gradients reveal industrial and traffic hotspots."}
+coastal_plots <- map(c("Mumbai", "Chennai", "Bengaluru"), make_heatmap)
+
+wrap_plots(coastal_plots, ncol = 3) +
+  plot_annotation(
+    title    = "Coastal & Southern Cities: Mumbai · Chennai · Bengaluru",
+    subtitle = "November 2022 | Per-city colour scale | Source: WUSTL ACAG V5GL04",
+    caption  = "Scales NOT comparable across panels — see Figure 2 for cross-city absolute comparison",
+    theme    = theme(
+      plot.title    = element_text(face = "bold", size = 13),
+      plot.subtitle = element_text(size = 10, color = "grey40"),
+      plot.caption  = element_text(size = 9,  color = "firebrick", face = "italic")
+    )
+  )
+
+ggsave(fig_path("fig3b_heatmaps_coastal.png"), width = 13, height = 6, dpi = 300)
+```
+
+> **Coastal finding:** Mumbai's peninsular shape creates a clear east-west
+> gradient — the eastern industrial suburbs (Thane, Navi Mumbai corridor) show
+> consistently higher PM2.5 than the western seafront. Chennai and Bengaluru
+> show more diffuse patterns reflecting their less concentrated industrial
+> geography.
+
+---
+
+## 4. Are Cities Well Monitored? Station Coverage
+
+A city can have many stations and still be poorly monitored if they are all
+clustered in one zone. This section asks: across 12 Indian cities, does
+monitoring investment match pollution burden?
+
 ```{r extra-cities}
-# Download CSVs for 7 extra cities — stored in data/metro/
 extra_city_files <- list(
   Surat     = data_path("surat_aqi_2022.csv"),
   Kanpur    = data_path("kanpur_aqi_2022.csv"),
@@ -487,7 +685,6 @@ for (city in extra_cities) {
   }
 }
 
-# Annual ground PM2.5 for extra cities
 extra_ground <- map_dfr(extra_cities, function(city) {
   df      <- read.csv(extra_city_files[[city]])
   day_col <- names(df)[1]
@@ -501,9 +698,6 @@ extra_ground <- map_dfr(extra_cities, function(city) {
 })
 
 # GADM district name mapping
-# Note: Kanpur Dehat confirmed 0 stations — Kanpur Nagar only
-# Note: GADM spells Ahmedabad as "Ahmadabad"
-# Note: Hyderabad area corrected below to include Ranga Reddy
 extra_city_gadm <- list(
   Surat     = "Surat",
   Kanpur    = "Kanpur Nagar",
@@ -514,13 +708,11 @@ extra_city_gadm <- list(
   Hyderabad = "Hyderabad"
 )
 
-# Load GADM India district boundaries if not already in environment
 if (!exists("india_sf")) {
   india_dist <- geodata::gadm("IND", level = 2, path = data_path(""))
   india_sf   <- sf::st_as_sf(india_dist)
 }
 
-# City areas from GADM
 extra_areas <- map_dfr(extra_cities, function(city) {
   gadm_name <- extra_city_gadm[[city]]
   shape <- india_sf %>%
@@ -531,49 +723,109 @@ extra_areas <- map_dfr(extra_cities, function(city) {
   tibble(city = city, area_km2 = as.numeric(sf::st_area(shape)) / 1e6)
 })
 
-# Hyderabad: Hyderabad district alone is only ~197 km² (old boundaries)
-# Combine with Ranga Reddy to capture the full GHMC metropolitan area
+# Hyderabad: combine with Ranga Reddy for full GHMC metro area
 hyderabad_area <- india_sf %>%
-  filter(NAME_1 == "Telangana", NAME_2 %in% c("Hyderabad", "Ranga Reddy")) %>%
-  sf::st_make_valid() %>% sf::st_union() %>%
-  sf::st_transform(3857) %>% sf::st_area() %>%
+  filter(NAME_1 == "Telangana",
+         NAME_2 %in% c("Hyderabad", "Ranga Reddy")) %>%
+  sf::st_make_valid() %>%
+  sf::st_union() %>%
+  sf::st_transform(3857) %>%
+  sf::st_area() %>%
   as.numeric() / 1e6
 
 extra_areas <- extra_areas %>%
   mutate(area_km2 = if_else(city == "Hyderabad", hyderabad_area, area_km2))
 
-# Station counts
 extra_stations <- map_dfr(extra_cities, function(city) {
   tibble(city = city, n_stations = nrow(cpcb_get_station_list(city)))
 })
 
-# Combine extra city summary
 extra_summary <- extra_stations %>%
   left_join(extra_areas,  by = "city") %>%
   left_join(extra_ground, by = "city") %>%
   mutate(stations_per_100km2 = round(n_stations / area_km2 * 100, 2))
 
-# Combine all 12 cities
 all_city_summary <- bind_rows(
   city_summary %>% select(city, n_stations, area_km2,
                            annual_ground_pm25, stations_per_100km2),
   extra_summary
 )
 
-# Save combined summary to data/metro/
 write.csv(all_city_summary, data_path("all_city_summary.csv"), row.names = FALSE)
-print(all_city_summary)
 ```
 
-### Station Density vs Annual PM2.5 — 12 Cities
+```{r summary-table}
+# Table ranked by annual PM2.5 — most polluted first
+tbl_data <- all_city_summary %>%
+  arrange(desc(annual_ground_pm25)) %>%
+  mutate(
+    area_km2            = round(area_km2, 0),
+    annual_ground_pm25  = round(annual_ground_pm25, 1),
+    stations_per_100km2 = round(stations_per_100km2, 3)
+  ) %>%
+  select(
+    City                   = city,
+    `Stations`             = n_stations,
+    `Area (km²)`           = area_km2,
+    `Annual PM2.5 (µg/m³)` = annual_ground_pm25,
+    `Stations per 100 km²` = stations_per_100km2
+  )
 
-```{r density-scatter, fig.width=9, fig.height=6, fig.cap="Station density vs annual mean PM2.5 across 12 Indian cities, 2022. Y axis on log scale. Cities with high PM2.5 and low station density are the most under-monitored relative to their pollution burden."}
+tbl_data %>%
+  knitr::kable(
+    caption = "Table 1: CPCB monitoring station density across 12 Indian cities (2022). Cities ranked by annual mean PM2.5. Red values in the last column indicate near-zero station density (<0.05 per 100 km²) — the most under-monitored cities relative to their geographic extent.",
+    align   = c("l", "r", "r", "r", "r"),
+    format  = "html"
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width        = FALSE,
+    position          = "center"
+  ) %>%
+  kableExtra::column_spec(
+    5,
+    bold  = TRUE,
+    color = ifelse(tbl_data$`Stations per 100 km²` < 0.05, "red", "black")
+  )
+```
+
+```{r density-scatter, fig.width=9, fig.height=6, fig.cap="Station density vs annual mean PM2.5 across 12 Indian cities, 2022. Cities in the top-left (high PM2.5, low station density) are the most under-monitored relative to their pollution burden. Y-axis on log scale."}
+# Classify cities into quadrants for visual guidance
+median_pm25    <- median(all_city_summary$annual_ground_pm25, na.rm = TRUE)
+median_density <- median(all_city_summary$stations_per_100km2, na.rm = TRUE)
+
+all_city_summary <- all_city_summary %>%
+  mutate(
+    quadrant = case_when(
+      annual_ground_pm25 >= median_pm25 &
+        stations_per_100km2 <  median_density ~ "High pollution\nLow coverage",
+      annual_ground_pm25 >= median_pm25 &
+        stations_per_100km2 >= median_density ~ "High pollution\nGood coverage",
+      annual_ground_pm25 <  median_pm25 &
+        stations_per_100km2 <  median_density ~ "Low pollution\nLow coverage",
+      TRUE                                    ~ "Low pollution\nGood coverage"
+    )
+  )
+
 ggplot(all_city_summary,
        aes(x = stations_per_100km2, y = annual_ground_pm25, color = city)) +
+  # Quadrant shading
+  annotate("rect",
+           xmin = -Inf, xmax = median_density,
+           ymin = median_pm25, ymax = Inf,
+           fill = "#d6604d", alpha = 0.06) +
+  annotate("text",
+           x = median_density * 0.1, y = max(all_city_summary$annual_ground_pm25) * 0.95,
+           label = "Under-monitored\n(high PM2.5, low density)",
+           size = 3, color = "#d6604d", hjust = 0, fontface = "italic") +
+  geom_vline(xintercept = median_density, linetype = "dashed",
+             color = "grey60", linewidth = 0.4) +
+  geom_hline(yintercept = median_pm25, linetype = "dashed",
+             color = "grey60", linewidth = 0.4) +
   geom_point(size = 5, alpha = 0.85) +
   ggrepel::geom_text_repel(
     aes(label = city),
-    size          = 4,
+    size          = 3.5,
     fontface      = "bold",
     box.padding   = 0.6,
     point.padding = 0.4,
@@ -584,87 +836,41 @@ ggplot(all_city_summary,
   scale_x_continuous(labels = scales::number_format(accuracy = 0.01)) +
   scale_y_log10() +
   labs(
-    title    = "Station Density vs Annual Mean PM2.5 — 12 Indian Cities",
-    subtitle = "Higher PM2.5 with lower station density = under-monitored | Y axis log scale",
+    title    = "Monitoring Coverage vs Pollution Burden — 12 Indian Cities (2022)",
+    subtitle = "Top-left = under-monitored | Dashed lines = median values | Y axis log scale",
     x        = "CPCB stations per 100 km²",
     y        = expression(paste("Annual mean PM2.5 (", mu, "g/m"^3, ")")),
     caption  = "Source: CPCB CAAQMS + WUSTL ACAG V5GL04 | 2022"
   ) +
-  theme_minimal(base_size = 13) +
+  theme_minimal(base_size = 12) +
   theme(
     text             = element_text(family = "Arial"),
     panel.grid.minor = element_blank(),
-    plot.title       = element_text(face = "bold", size = 14),
-    plot.subtitle    = element_text(size = 11, color = "grey40"),
-    plot.caption     = element_text(size = 10, color = "grey50")
+    plot.title       = element_text(face = "bold", size = 13),
+    plot.subtitle    = element_text(size = 10, color = "grey40"),
+    plot.caption     = element_text(size = 9, color = "grey50")
   )
 
-ggsave(fig_path("fig3_metro_station_density.png"), width = 10, height = 7, dpi = 300)
+ggsave(fig_path("fig4_metro_station_density.png"), width = 11, height = 7, dpi = 300)
 ```
 
----
-
-## City Rankings — Core Five Cities
-
-```{r rankings-table}
-rankings <- city_summary %>%
-  select(city, annual_ground_pm25, winter_ground_pm25,
-         annual_sat_pm25, n_stations, stations_per_100km2, who_exceed_pct) %>%
-  arrange(desc(annual_ground_pm25)) %>%
-  mutate(
-    rank                = row_number(),
-    annual_ground_pm25  = round(annual_ground_pm25, 1),
-    winter_ground_pm25  = round(winter_ground_pm25, 1),
-    annual_sat_pm25     = round(annual_sat_pm25, 1),
-    stations_per_100km2 = round(stations_per_100km2, 2)
-  )
-
-write.csv(rankings, data_path("city_rankings.csv"), row.names = FALSE)
-print(rankings)
-```
-
-```{r rankings-bar, fig.width=8, fig.height=5, fig.cap="Annual mean PM2.5 ranked across five Indian metros, 2022. All cities exceed the WHO 24-hour guideline of 15 µg/m³."}
-ggplot(rankings, aes(x = reorder(city, annual_ground_pm25),
-                     y = annual_ground_pm25, fill = city)) +
-  geom_col(width = 0.6, alpha = 0.9) +
-  geom_hline(yintercept = 15, linetype = "dotted",
-             color = "grey40", linewidth = 0.3) +
-  annotate("text", x = 0.6, y = 18,
-           label = "WHO 24hr (15)", size = 3, color = "grey40", hjust = 0) +
-  geom_text(aes(label = paste0(annual_ground_pm25, " µg/m³")),
-            hjust = -0.15, size = 3.5, color = "grey20") +
-  coord_flip(clip = "off") +
-  scale_fill_manual(values = city_colors, guide = "none") +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.2))) +
-  labs(
-    title    = "Annual Mean PM2.5 — Five Indian Metros (2022)",
-    subtitle = "CPCB ground station data | Dotted = WHO 24hr guideline (15 µg/m³)",
-    x        = NULL,
-    y        = expression(paste("Annual mean PM2.5 (", mu, "g/m"^3, ")")),
-    caption  = "Source: CPCB CAAQMS | 2022"
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    text               = element_text(family = "Arial"),
-    panel.grid.minor   = element_blank(),
-    panel.grid.major.y = element_blank(),
-    panel.grid.major.x = element_line(linetype = "dotted",
-                                       color = "grey80", linewidth = 0.3),
-    plot.title         = element_text(face = "bold"),
-    plot.subtitle      = element_text(size = 10, color = "grey40")
-  )
-
-ggsave(fig_path("fig4_metro_annual_ranking.png"), width = 10, height = 5, dpi = 300)
-```
-
-> **Key finding:** All five cities exceed the WHO 24-hour PM2.5 guideline on
-> the majority of days. Delhi exceeds it by the widest margin — its annual mean
-> is multiple times the WHO limit. Bengaluru and Chennai perform relatively
-> better, but still exceed safe levels for most of the year.
+> **Key finding:** Several highly polluted cities fall in the under-monitored
+> quadrant — high PM2.5 but low station density. This is the most concerning
+> combination: cities that need monitoring the most are the least well covered.
 
 ---
 
 # Discussion
+
+## Day-to-Day Variability
+
+The SD ribbon plots reveal that Delhi's pollution is not just high on average —
+it is wildly unpredictable. The winter ribbon width for Delhi dwarfs that of
+every other city, meaning residents face extreme swings in air quality from day
+to day. This unpredictability has real health consequences: people cannot
+reliably plan outdoor exposure even when they know winter is generally bad.
+Coastal cities show narrow ribbons year-round — their pollution is lower and
+more predictable.
 
 ## Geography Drives the Seasonal Story
 
@@ -679,51 +885,65 @@ year-round.
 ## Monsoon as the Great Equaliser
 
 All five cities show a dip during the southwest monsoon (June–September), but
-the magnitude differs dramatically. Delhi's monsoon PM2.5 is still above the
-WHO annual limit. Chennai and Bengaluru approach near-safe levels in the wettest
+the magnitude differs dramatically. Delhi's monsoon PM2.5 remains above the WHO
+annual limit. Chennai and Bengaluru approach near-safe levels in the wettest
 months, reflecting both lower baseline emissions and more efficient
 rainfall-driven washout.
+
+## Spatial Heterogeneity Within Cities
+
+The per-city heatmaps reveal that pollution is not uniform even within a single
+city. The IGP cities (Delhi, Kolkata, Kanpur) show strong northern and western
+gradients where pollutants accumulate against terrain features. Coastal cities
+show different patterns — Mumbai's east-west gradient driven by its industrial
+eastern suburbs, while Chennai and Bengaluru show more diffuse distributions
+reflecting their less concentrated industrial geography. In all cases,
+city-level averages understate the exposure of residents in the most affected
+neighbourhoods.
 
 ## Monitoring Coverage
 
 The station density analysis reveals that monitoring investment does not always
-match pollution burden. Delhi, despite being the most polluted city, has the
-highest absolute station count — but its vast geographic extent means coverage
-per km² varies considerably. The 12-city scatter highlights that many large,
-polluted cities remain significantly under-monitored relative to their pollution
-burden.
+match pollution burden. The 12-city scatter highlights that many large, polluted
+cities remain significantly under-monitored relative to their pollution burden —
+the cities that most need measurement are often the least well served.
 
 ---
 
 # Limitations
 
+- **SD ribbons**: The ±1 SD ribbon assumes roughly symmetric distributions.
+  PM2.5 is typically right-skewed — the ribbon's lower bound can dip below
+  plausible values on clean days. Interpret the ribbon as an indicator of
+  spread, not a strict confidence interval.
+
 - **Satellite data version**: V5GL04 covers 1998–2022. The methodology is
   identical for any year once V6GL02 is available.
+
+- **Independent heatmap scales**: Per-city colour scales reveal intra-city
+  spatial structure but cannot be used to compare absolute pollution levels
+  across cities. Use Figure 2 for cross-city absolute comparison. Cities are
+  grouped geographically — IGP (Delhi, Kolkata, Kanpur) and coastal/southern
+  (Mumbai, Chennai, Bengaluru) — to aid interpretation.
 
 - **City boundary files**: Results are sensitive to how city boundaries are
   defined. Administrative boundaries may not correspond to the functional urban
   area where pollution is generated and measured.
 
 - **Station count only**: This analysis counts stations but does not assess
-  their spatial distribution within each city. A city could have many stations
-  clustered in one area with large unmonitored zones elsewhere.
+  their spatial distribution within each city.
 
 - **2022 only**: A single year may not represent the long-term pollution
-  climatology of each city. Year-to-year variability, particularly in monsoon
-  intensity, can shift annual means significantly.
+  climatology. Year-to-year variability, particularly in monsoon intensity,
+  can shift annual means significantly.
 
-- **Ground data aggregation**: City-level CPCB data represents a mean across
-  all active stations. Cities with fewer stations (Kolkata: 7, Chennai: 9) may
-  have less representative averages than Delhi (46 stations).
+- **Kolkata boundary**: Combines four GADM districts (Kolkata, North 24
+  Parganas, South 24 Parganas, Haora) to ensure all 7 CPCB stations fall
+  within the boundary.
 
-- **Kolkata boundary**: The Kolkata boundary combines four GADM districts
-  (Kolkata, North 24 Parganas, South 24 Parganas, Haora) to ensure all 7 CPCB
-  stations fall within the boundary.
-
-- **Hyderabad boundary**: The Hyderabad area combines Hyderabad and Ranga Reddy
-  GADM districts to capture the full metropolitan extent (~8,500 km²). The
-  Hyderabad district alone (~197 km²) reflects older administrative boundaries
-  that predate the GHMC expansion.
+- **Hyderabad boundary**: Combines Hyderabad and Ranga Reddy GADM districts
+  (~8,500 km²). The Hyderabad district alone (~197 km²) reflects older
+  administrative boundaries that predate the GHMC expansion.
 
 ---
 
