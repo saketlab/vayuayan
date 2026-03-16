@@ -17,7 +17,6 @@ src/*.so
 
 # devtools / pkgdown
 docs/
-inst/doc/
 
 # ── Vignette output folders ───────────────────────────────────────────────────
 # Downloaded data CSVs — large, reproducible, not source code
@@ -51,3 +50,5 @@ vignettes/data/metro/gadm/
 .DS_Store
 Thumbs.db
 .vscode/
+/doc/
+/Meta/

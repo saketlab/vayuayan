@@ -20,3 +20,5 @@
 ^CONTRIBUTING\.md$
 ^\.claude$
 ^CLAUDE\.md$
+^doc$
+^Meta$
