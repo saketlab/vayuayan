@@ -35,11 +35,24 @@ jobs:
           extra-packages: any::pkgdown, local::., any::kableExtra
           needs: website
 
-      - name: Copy pre-built vignette HTMLs
-        run: mkdir -p docs/articles && cp inst/doc/*.html docs/articles/ 2>/dev/null || true
-
-      - name: Build site
-        run: Rscript -e 'options(rmarkdown.html_vignette.check_title=FALSE); pkgdown::clean_site(force=TRUE); pkgdown::build_site_github_pages(new_process=FALSE, install=FALSE)'
+      - name: Build site without rebuilding vignettes
+        run: |
+          Rscript -e '
+            options(rmarkdown.html_vignette.check_title = FALSE)
+            pkg <- pkgdown::as_pkgdown(".")
+            pkgdown::clean_site(pkg, force = TRUE)
+            pkgdown::build_home(pkg)
+            pkgdown::build_reference(pkg)
+            pkgdown::build_news(pkg)
+            # Build articles from pre-built inst/doc HTMLs only
+            pkgdown::build_articles_index(pkg)
+            file.copy(
+              list.files("inst/doc", pattern = "\\.html$", full.names = TRUE),
+              "docs/articles/",
+              overwrite = TRUE
+            )
+            pkgdown::build_redirects(pkg)
+          '
 
       - name: Deploy to GitHub pages
         if: github.event_name != 'pull_request'
