@@ -1,6 +1,6 @@
 ---
 title: "Mumbai PM2.5 Analysis (2022)"
-author: "Saket Choudhary and Darakhshan Nehal"
+author: "Darakhshan Nehal"
 output:
   rmarkdown::html_vignette:
     toc: true
