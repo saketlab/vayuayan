@@ -39,7 +39,7 @@ jobs:
         run: mkdir -p docs/articles && cp inst/doc/*.html docs/articles/ 2>/dev/null || true
 
       - name: Build site
-        run: Rscript -e 'options(rmarkdown.html_vignette.check_title=FALSE); pkgdown::build_site_github_pages(new_process=FALSE, install=FALSE)'
+        run: Rscript -e 'options(rmarkdown.html_vignette.check_title=FALSE); pkgdown::clean_site(force=TRUE); pkgdown::build_site_github_pages(new_process=FALSE, install=FALSE)'
 
       - name: Deploy to GitHub pages
         if: github.event_name != 'pull_request'
