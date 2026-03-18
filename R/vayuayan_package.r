@@ -21,6 +21,6 @@ NULL
 
 .onAttach <- function(libname, pkgname) {
   packageStartupMessage("vayuayan: Air quality data analysis for India")
-  packageStartupMessage("Version 0.1.3")
+  packageStartupMessage("Version 0.2.0")
   packageStartupMessage("Use vayuayan_welcome() for quick start guide")
 }
