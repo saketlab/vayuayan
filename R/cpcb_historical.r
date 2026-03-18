@@ -19,6 +19,11 @@
 #' Fetch the complete list of all India stations and cities from CPCB.
 #'
 #' @return List containing station and city data
+#' @examples
+#' \dontrun{
+#' all_data <- cpcb_get_complete_list()
+#' names(all_data)
+#' }
 #' @export
 cpcb_get_complete_list <- function() {
     endpoint <- paste0(.cpcb_base_url, "/dataRepository/all_india_stationlist")
@@ -48,6 +53,11 @@ cpcb_get_complete_list <- function() {
 #' Get list of states available for AQI data from CPCB.
 #'
 #' @return Character vector of state names
+#' @examples
+#' \dontrun{
+#' states <- cpcb_get_state_list()
+#' head(states)
+#' }
 #' @export
 cpcb_get_state_list <- function() {
     tryCatch(
@@ -68,8 +78,13 @@ cpcb_get_state_list <- function() {
 #' @description
 #' Get list of cities in a given state from CPCB.
 #'
-#' @param state State name
+#' @param state Character. State name (e.g. \code{"Maharashtra"}, \code{"Delhi"}).
 #' @return Character vector of city names
+#' @examples
+#' \dontrun{
+#' cities <- cpcb_get_city_list("Maharashtra")
+#' head(cities)
+#' }
 #' @export
 cpcb_get_city_list <- function(state) {
     tryCatch(
@@ -93,8 +108,13 @@ cpcb_get_city_list <- function(state) {
 #' @description
 #' Get station list available in given city from CPCB.
 #'
-#' @param city City name
-#' @return Data frame of station information
+#' @param city Character. City name (e.g. \code{"Delhi"}, \code{"Mumbai"}).
+#' @return Data frame with columns \code{value} (station ID) and \code{label} (station name)
+#' @examples
+#' \dontrun{
+#' stations <- cpcb_get_station_list("Delhi")
+#' head(stations)
+#' }
 #' @export
 cpcb_get_station_list <- function(city) {
     tryCatch(
@@ -119,7 +139,7 @@ cpcb_get_station_list <- function(city) {
 #' Add lat/lon coordinates to a station data frame by querying the CPCB
 #' live coordinates API (\code{iit_rss_feed_with_coordinates}). This is the
 #' same source used by the Python vayuayan package and returns authoritative
-#' coordinates directly from CPCB - no geocoding, no rate limiting, no NAs
+#' coordinates directly from CPCB -- no geocoding, no rate limiting, no NAs
 #' for oddly-named stations.
 #'
 #' Falls back to Nominatim geocoding for any stations not found in the CPCB
@@ -127,10 +147,16 @@ cpcb_get_station_list <- function(city) {
 #'
 #' @param stations Data frame from \code{cpcb_get_station_list()}
 #' @return Same data frame with \code{lat} and \code{lon} columns added
+#' @examples
+#' \dontrun{
+#' stations <- cpcb_get_station_list("Mumbai")
+#' stations_with_coords <- cpcb_add_coords(stations)
+#' head(stations_with_coords)
+#' }
 #' @export
 cpcb_add_coords <- function(stations) {
 
-    # -- Step 1: fetch all-India station coordinates from CPCB API --------------
+    # ── Step 1: fetch all-India station coordinates from CPCB API ──────────────
     coords_url <- paste0(.cpcb_base_url, "/caaqms/iit_rss_feed_with_coordinates")
 
     message("Fetching station coordinates from CPCB API...")
@@ -166,7 +192,7 @@ cpcb_add_coords <- function(stations) {
         NULL
     })
 
-    # -- Step 2: join API coordinates to station list by site ID ----------------
+    # ── Step 2: join API coordinates to station list by site ID ────────────────
     if (!is.null(api_coords)) {
         stations <- merge(
             stations, api_coords,
@@ -180,14 +206,14 @@ cpcb_add_coords <- function(stations) {
         stations$lon <- NA_real_
     }
 
-    # -- Step 3: Nominatim fallback for any remaining NAs -----------------------
+    # ── Step 3: Nominatim fallback for any remaining NAs ───────────────────────
     # Stations absent from the live feed (e.g. temporarily offline) are
     # geocoded via OpenStreetMap as a best-effort fallback
     missing_idx <- which(is.na(stations$lat))
 
     if (length(missing_idx) > 0) {
         message(length(missing_idx),
-                " stations not found in API - trying Nominatim fallback...")
+                " stations not found in API -- trying Nominatim fallback...")
 
         for (i in missing_idx) {
             label <- stations$label[i]
@@ -231,16 +257,23 @@ cpcb_add_coords <- function(stations) {
 #' Get file path for CPCB data download
 #'
 #' @description
-#' Get file path for downloading data from CPCB.
+#' Get file path for downloading data from CPCB. Used internally by
+#' \code{cpcb_download_city_data()} and \code{cpcb_download_station_data()}.
 #'
-#' @param station_id Station ID
-#' @param station_name Station name
-#' @param state State name
-#' @param city City name
-#' @param year Year for data
-#' @param frequency Data frequency ('hourly' or 'daily')
-#' @param data_type Type of data ('cityLevel' or 'stationLevel')
-#' @return List of file path information
+#' @param station_id Character. Station ID (e.g. \code{"site_103"}).
+#' @param station_name Character. Station name.
+#' @param state Character. State name.
+#' @param city Character. City name.
+#' @param year Integer or character. Year for data (e.g. \code{2022}).
+#' @param frequency Character. Data frequency: \code{"daily"} or \code{"hourly"}.
+#' @param data_type Character. Type of data: \code{"cityLevel"} or \code{"stationLevel"}.
+#' @return List of file path information with \code{filePath} and \code{year} elements
+#' @examples
+#' \dontrun{
+#' paths <- cpcb_get_file_path(city = "Delhi", frequency = "daily",
+#'                              data_type = "cityLevel")
+#' str(paths[[1]])
+#' }
 #' @export
 cpcb_get_file_path <- function(
         station_id = "",
@@ -297,12 +330,23 @@ cpcb_get_file_path <- function(
 #' Download city-level AQI data
 #'
 #' @description
-#' Download past year AQI data for a city from CPCB.
+#' Download daily PM2.5 AQI data for a city from the CPCB data repository
+#' for a given year. Data is saved as a CSV file with one row per day and
+#' one column per month.
 #'
-#' @param city City name
-#' @param year Year for data
-#' @param save_location Path to save downloaded data
-#' @return Data frame preview of downloaded data
+#' @param city Character. City name (e.g. \code{"Delhi"}, \code{"Mumbai"}).
+#' @param year Integer. Year for data (e.g. \code{2022}).
+#' @param save_location Character. Full file path to save the downloaded CSV.
+#' @return Data frame preview (first 6 rows) of the downloaded data, invisibly.
+#'   The full data is saved to \code{save_location}.
+#' @examples
+#' \dontrun{
+#' cpcb_download_city_data(
+#'   city          = "Delhi",
+#'   year          = 2022,
+#'   save_location = tempfile(fileext = ".csv")
+#' )
+#' }
 #' @export
 cpcb_download_city_data <- function(city, year, save_location) {
     data_files <- cpcb_get_file_path(
@@ -341,12 +385,24 @@ cpcb_download_city_data <- function(city, year, save_location) {
 #' Download station-level AQI data
 #'
 #' @description
-#' Download past year AQI data for a station from CPCB.
+#' Download daily PM2.5 AQI data for a single CPCB monitoring station for
+#' a given year. Data is saved as a CSV file with one row per day and one
+#' column per month.
 #'
-#' @param station_id Station ID
-#' @param year Year for data
-#' @param save_location Path to save downloaded data
-#' @return Data frame preview of downloaded data
+#' @param station_id Character. Station ID from \code{cpcb_get_station_list()}
+#'   (e.g. \code{"site_103"}).
+#' @param year Integer. Year for data (e.g. \code{2022}).
+#' @param save_location Character. Full file path to save the downloaded CSV.
+#' @return Data frame preview (first 6 rows) of the downloaded data, invisibly.
+#'   The full data is saved to \code{save_location}.
+#' @examples
+#' \dontrun{
+#' cpcb_download_station_data(
+#'   station_id    = "site_103",
+#'   year          = 2022,
+#'   save_location = tempfile(fileext = ".csv")
+#' )
+#' }
 #' @export
 cpcb_download_station_data <- function(station_id, year, save_location) {
     complete_list <- cpcb_get_complete_list()
