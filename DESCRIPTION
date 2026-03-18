@@ -45,5 +45,5 @@ Suggests:
     ggrepel,
     kableExtra
 VignetteBuilder: knitr
-URL: https://saket-choudhary.me/vayuayanR/, https://github.com/saketkc/vayuayanR
+URL: https://saket-choudhary.me/vayuayanR/, https://github.com/saketkc/vayuayanR, https://saketkc.github.io/vayuayanR
 BugReports: https://github.com/saketkc/vayuayanR/issues
