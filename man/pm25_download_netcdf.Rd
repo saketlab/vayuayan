@@ -12,17 +12,30 @@ pm25_download_netcdf(
 )
 }
 \arguments{
-\item{year}{Year for data}
+\item{year}{Integer. Year for data (e.g. \code{2023}).}
 
-\item{month}{Optional month (1-12). If NULL, downloads annual data.}
+\item{month}{Optional integer (1--12). If NULL, downloads the annual file.}
 
-\item{cache_dir}{Directory to cache NetCDF files (default: "pm25_data")}
+\item{cache_dir}{Character. Directory to cache NetCDF files.
+Default: \code{"pm25_data"}.}
 
-\item{force_download}{Force re-download even if file exists}
+\item{force_download}{Logical. Force re-download even if file exists.
+Default: \code{FALSE}.}
 }
 \value{
-Path to the downloaded NetCDF file
+Character. Path to the downloaded (or cached) NetCDF file.
 }
 \description{
-Download NetCDF file from AWS if not cached locally.
+Download a WUSTL ACAG V6GL02 NetCDF file from AWS S3 and cache it locally.
+If the file is already cached and complete (>1 MB), the cached version
+is returned without re-downloading.
+}
+\examples{
+\dontrun{
+# Download monthly data
+nc_path <- pm25_download_netcdf(year = 2023, month = 11)
+
+# Download annual data
+nc_path <- pm25_download_netcdf(year = 2023)
+}
 }

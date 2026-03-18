@@ -16,9 +16,16 @@ Same data frame with \code{lat} and \code{lon} columns added
 Add lat/lon coordinates to a station data frame by querying the CPCB
 live coordinates API (\code{iit_rss_feed_with_coordinates}). This is the
 same source used by the Python vayuayan package and returns authoritative
-coordinates directly from CPCB - no geocoding, no rate limiting, no NAs
+coordinates directly from CPCB -- no geocoding, no rate limiting, no NAs
 for oddly-named stations.
 
 Falls back to Nominatim geocoding for any stations not found in the CPCB
 response (e.g. offline stations absent from the live feed).
+}
+\examples{
+\dontrun{
+stations <- cpcb_get_station_list("Mumbai")
+stations_with_coords <- cpcb_add_coords(stations)
+head(stations_with_coords)
+}
 }

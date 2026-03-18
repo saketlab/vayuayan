@@ -7,8 +7,17 @@
 pm25_clear_cache(cache_dir = "pm25_data")
 }
 \arguments{
-\item{cache_dir}{Directory containing cached files (default: "pm25_data")}
+\item{cache_dir}{Character. Directory containing cached files.
+Default: \code{"pm25_data"}.}
+}
+\value{
+Invisibly returns NULL.
 }
 \description{
-Clear all cached NetCDF files.
+Delete all cached NetCDF files from the cache directory to free disk space.
+}
+\examples{
+\dontrun{
+pm25_clear_cache()
+}
 }

@@ -12,13 +12,17 @@ cpcb_get_live_aqi_data(
 )
 }
 \arguments{
-\item{station_id}{Optional station ID}
+\item{station_id}{Optional character. Station ID. If NULL, nearest station
+is found automatically using \code{coords} or IP geolocation.}
 
-\item{coords}{Optional numeric vector c(lat, lon)}
+\item{coords}{Optional numeric vector \code{c(lat, lon)}. Used to find
+nearest station if \code{station_id} is not provided.}
 
-\item{date}{Optional date in 'YYYY-MM-DD' format}
+\item{date}{Optional character. Date in \code{"YYYY-MM-DD"} format.
+Defaults to today.}
 
-\item{hour}{Optional hour (0-23)}
+\item{hour}{Optional integer (0--23). Hour of the day. Defaults to
+the most recent full hour.}
 }
 \value{
 List with processed live AQI data
@@ -26,4 +30,17 @@ List with processed live AQI data
 \description{
 Get live AQI data with flexible parameters. Automatically resolves
 station from coordinates or IP location if not provided.
+}
+\examples{
+\dontrun{
+# Get live AQI at current location and time
+aqi <- cpcb_get_live_aqi_data()
+
+# Get live AQI for a specific station and time
+aqi <- cpcb_get_live_aqi_data(
+  station_id = "site_103",
+  date       = "2024-01-15",
+  hour       = 10
+)
+}
 }

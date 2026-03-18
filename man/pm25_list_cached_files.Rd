@@ -7,11 +7,17 @@
 pm25_list_cached_files(cache_dir = "pm25_data")
 }
 \arguments{
-\item{cache_dir}{Directory containing cached files (default: "pm25_data")}
+\item{cache_dir}{Character. Directory containing cached files.
+Default: \code{"pm25_data"}.}
 }
 \value{
-Character vector of cached file paths
+Character vector of cached file paths.
 }
 \description{
-List all cached NetCDF files in the cache directory.
+List all cached NetCDF files in the cache directory with file sizes.
+}
+\examples{
+\dontrun{
+files <- pm25_list_cached_files()
+}
 }

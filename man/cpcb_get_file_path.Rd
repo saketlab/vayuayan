@@ -15,23 +15,31 @@ cpcb_get_file_path(
 )
 }
 \arguments{
-\item{station_id}{Station ID}
+\item{station_id}{Character. Station ID (e.g. \code{"site_103"}).}
 
-\item{station_name}{Station name}
+\item{station_name}{Character. Station name.}
 
-\item{state}{State name}
+\item{state}{Character. State name.}
 
-\item{city}{City name}
+\item{city}{Character. City name.}
 
-\item{year}{Year for data}
+\item{year}{Integer or character. Year for data (e.g. \code{2022}).}
 
-\item{frequency}{Data frequency ('hourly' or 'daily')}
+\item{frequency}{Character. Data frequency: \code{"daily"} or \code{"hourly"}.}
 
-\item{data_type}{Type of data ('cityLevel' or 'stationLevel')}
+\item{data_type}{Character. Type of data: \code{"cityLevel"} or \code{"stationLevel"}.}
 }
 \value{
-List of file path information
+List of file path information with \code{filePath} and \code{year} elements
 }
 \description{
-Get file path for downloading data from CPCB.
+Get file path for downloading data from CPCB. Used internally by
+\code{cpcb_download_city_data()} and \code{cpcb_download_station_data()}.
+}
+\examples{
+\dontrun{
+paths <- cpcb_get_file_path(city = "Delhi", frequency = "daily",
+                             data_type = "cityLevel")
+str(paths[[1]])
+}
 }

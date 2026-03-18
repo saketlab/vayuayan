@@ -7,11 +7,17 @@
 cpcb_get_city_list(state)
 }
 \arguments{
-\item{state}{State name}
+\item{state}{Character. State name (e.g. \code{"Maharashtra"}, \code{"Delhi"}).}
 }
 \value{
 Character vector of city names
 }
 \description{
 Get list of cities in a given state from CPCB.
+}
+\examples{
+\dontrun{
+cities <- cpcb_get_city_list("Maharashtra")
+head(cities)
+}
 }

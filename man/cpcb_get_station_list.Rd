@@ -7,11 +7,17 @@
 cpcb_get_station_list(city)
 }
 \arguments{
-\item{city}{City name}
+\item{city}{Character. City name (e.g. \code{"Delhi"}, \code{"Mumbai"}).}
 }
 \value{
-Data frame of station information
+Data frame with columns \code{value} (station ID) and \code{label} (station name)
 }
 \description{
 Get station list available in given city from CPCB.
+}
+\examples{
+\dontrun{
+stations <- cpcb_get_station_list("Delhi")
+head(stations)
+}
 }

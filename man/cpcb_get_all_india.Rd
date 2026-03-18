@@ -12,3 +12,10 @@ List of station data
 \description{
 Get all air quality monitoring stations in India from CPCB live dashboard.
 }
+\examples{
+\dontrun{
+stations <- cpcb_get_all_india()
+df <- stations_to_dataframe(stations)
+head(df)
+}
+}

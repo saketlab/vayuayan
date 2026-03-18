@@ -7,15 +7,28 @@
 cpcb_download_station_data(station_id, year, save_location)
 }
 \arguments{
-\item{station_id}{Station ID}
+\item{station_id}{Character. Station ID from \code{cpcb_get_station_list()}
+(e.g. \code{"site_103"}).}
 
-\item{year}{Year for data}
+\item{year}{Integer. Year for data (e.g. \code{2022}).}
 
-\item{save_location}{Path to save downloaded data}
+\item{save_location}{Character. Full file path to save the downloaded CSV.}
 }
 \value{
-Data frame preview of downloaded data
+Data frame preview (first 6 rows) of the downloaded data, invisibly.
+The full data is saved to \code{save_location}.
 }
 \description{
-Download past year AQI data for a station from CPCB.
+Download daily PM2.5 AQI data for a single CPCB monitoring station for
+a given year. Data is saved as a CSV file with one row per day and one
+column per month.
+}
+\examples{
+\dontrun{
+cpcb_download_station_data(
+  station_id    = "site_103",
+  year          = 2022,
+  save_location = tempfile(fileext = ".csv")
+)
+}
 }

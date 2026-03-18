@@ -27,5 +27,10 @@ Authors:
   \item Mahesh Kumar Prajapat \email{22b0433@iitb.ac.in}
 }
 
+Other contributors:
+\itemize{
+  \item Darakhshan Nehal [contributor]
+}
+
 }
 \keyword{internal}

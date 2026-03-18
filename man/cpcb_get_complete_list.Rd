@@ -12,3 +12,9 @@ List containing station and city data
 \description{
 Fetch the complete list of all India stations and cities from CPCB.
 }
+\examples{
+\dontrun{
+all_data <- cpcb_get_complete_list()
+names(all_data)
+}
+}

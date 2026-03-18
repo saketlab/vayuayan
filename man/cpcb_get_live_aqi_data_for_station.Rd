@@ -7,13 +7,21 @@
 cpcb_get_live_aqi_data_for_station(station_id, date_time)
 }
 \arguments{
-\item{station_id}{Station ID}
+\item{station_id}{Character. Station ID (e.g. \code{"site_103"}).}
 
-\item{date_time}{Date and time in 'YYYY-MM-DDTHH:00:00Z' format}
+\item{date_time}{Character. Date and time in \code{"YYYY-MM-DDTHH:00:00Z"} format.}
 }
 \value{
-List with live AQI data
+List with live AQI data including pollutant readings
 }
 \description{
 Get live AQI data for a specific station at a specific time.
+}
+\examples{
+\dontrun{
+aqi <- cpcb_get_live_aqi_data_for_station(
+  station_id = "site_103",
+  date_time  = "2024-01-15T10:00:00Z"
+)
+}
 }

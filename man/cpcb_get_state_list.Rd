@@ -12,3 +12,9 @@ Character vector of state names
 \description{
 Get list of states available for AQI data from CPCB.
 }
+\examples{
+\dontrun{
+states <- cpcb_get_state_list()
+head(states)
+}
+}

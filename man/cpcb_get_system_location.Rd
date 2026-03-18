@@ -13,3 +13,9 @@ Numeric vector c(lat, lon)
 Get approximate system location using IP-based geolocation. Returns
 city-level coordinates based on the machine's public IP address.
 }
+\examples{
+\dontrun{
+loc <- cpcb_get_system_location()
+cat("Latitude:", loc["lat"], "Longitude:", loc["lon"])
+}
+}
