@@ -213,5 +213,5 @@ If you use this package in your research, please cite:
 
 ```
 Choudhary, S., & Prajapat, M. K. (2025). vayuayan: Air Quality Data Analysis
-for India. R package version 0.1.3. https://github.com/saketkc/vayuayanR
+for India. R package version 0.2.0. https://github.com/saketkc/vayuayanR
 ```
