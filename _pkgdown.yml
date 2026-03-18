@@ -52,6 +52,25 @@ template:
       }
       </script>
 
+      <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        var codeBlocks = document.querySelectorAll('div.sourceCode');
+        codeBlocks.forEach(function(block) {
+          var btn = document.createElement('button');
+          btn.innerText = 'Show code';
+          btn.className = 'btn btn-sm btn-outline-secondary mb-1';
+          btn.style.fontSize = '0.75rem';
+          var visible = false;
+          block.style.display = 'none';
+          btn.onclick = function() {
+            visible = !visible;
+            block.style.display = visible ? 'block' : 'none';
+            btn.innerText = visible ? 'Hide code' : 'Show code';
+          };
+          block.parentNode.insertBefore(btn, block);
+        });
+      });
+      </script>
 home:
   title: "vayuayanR - Air Quality Data Analysis for India"
   description: >
