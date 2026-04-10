@@ -14,7 +14,7 @@
 #' @importFrom readxl read_excel
 #' @importFrom lubridate now year month day hour
 #' @importFrom stats sd
-#' @importFrom utils download.file head
+#' @importFrom utils download.file head URLencode
 NULL
 
 NULL

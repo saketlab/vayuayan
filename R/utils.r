@@ -227,7 +227,8 @@ vayuayan_welcome <- function() {
   cli::cli_ul(c(
     "cpcb_get_state_list(), cpcb_get_city_list() - Historical AQI data from CPCB",
     "cpcb_get_live_aqi_data(), cpcb_get_nearest_station() - Real-time AQI monitoring",
-    "pm25_get_stats(), pm25_download_netcdf() - Satellite PM2.5 data processing"
+    "pm25_get_stats(), pm25_download_netcdf() - Satellite PM2.5 data processing",
+    "oaq_session(), oaq_get_stations_latest() - OAQ open air quality platform"
   ))
   cli::cli_text(" ")
   cli::cli_h2("Quick start:")
