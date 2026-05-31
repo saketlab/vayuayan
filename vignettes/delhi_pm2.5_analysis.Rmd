@@ -1,6 +1,5 @@
 ---
 title: "Delhi PM2.5 Analysis (2022)"
-author: "Darakhshan Nehal"
 output:
   rmarkdown::html_vignette:
     toc: true
@@ -30,7 +29,7 @@ options(exactextractr.progress = FALSE)
 # Introduction
 
 Particulate matter smaller than 2.5 micrometres (PM2.5) is among the most
-dangerous air pollutants — fine enough to penetrate deep into lung tissue and
+dangerous air pollutants, fine enough to penetrate deep into lung tissue and
 enter the bloodstream, causing cardiovascular and respiratory disease. Delhi
 consistently ranks among the most polluted megacities in the world, with winter
 months (October–January) seeing PM2.5 concentrations that routinely exceed WHO
@@ -41,25 +40,25 @@ data sources to analyse Delhi's air quality in 2022, and uses them together to
 answer a key policy question:
 
 > **Are the 46 CPCB ground monitoring stations distributed well enough to
-> capture Delhi's true spatial extent of pollution — or are there under-monitored
+> capture Delhi's true spatial extent of pollution, or are there under-monitored
 > regions where PM2.5 is being systematically missed?**
 
 We build toward this answer in four steps:
 
-1. **Seasonal trend** — do satellite and ground data agree on Delhi's pollution cycle?
-2. **Spatial heatmap** — where in Delhi is pollution highest?
-3. **Station network** — where are the 46 sensors located relative to pollution?
-4. **Monitoring gap analysis** — which of the 290 wards are furthest from any
-   sensor, and does that distance predict ground-satellite disagreement?
+1. **Seasonal trend**: whether satellite and ground data agree on Delhi's pollution cycle.
+2. **Spatial heatmap**: where in Delhi pollution is highest.
+3. **Station network**: where the 46 sensors sit relative to that pollution.
+4. **Monitoring gap analysis**: which of the 290 wards are furthest from any
+   sensor, and whether that distance predicts ground-satellite disagreement.
 
 ---
 
-# Data & Methods
+# Data & methods
 
-## Satellite Data
+## Satellite data
 
 Monthly PM2.5 estimates come from the Washington University in St. Louis
-Atmospheric Composition Analysis Group (WUSTL ACAG) **V5GL04** product — a
+Atmospheric Composition Analysis Group (WUSTL ACAG) **V5GL04** product, a
 globally gridded dataset at ~0.01° (~1 km) resolution, derived from satellite
 aerosol optical depth retrievals, chemical transport modelling, and ground-level
 calibration (van Donkelaar et al., 2021). Files are in NetCDF format.
@@ -68,7 +67,7 @@ calibration (van Donkelaar et al., 2021). Files are in NetCDF format.
 > which is pending download on the departmental server. This vignette uses
 > 2022 throughout.
 
-## Ground Data
+## Ground data
 
 Daily city-level and per-station PM2.5 readings are fetched from the Central
 Pollution Control Board (CPCB) data repository using `cpcb_download_city_data()`
@@ -78,15 +77,14 @@ Station coordinates are obtained via `cpcb_add_coords()`, which queries the CPCB
 live feed directly. Nominatim is used as a fallback only for stations temporarily
 absent from the live feed.
 
-## Spatial Units
+## Spatial units
 
 Ward boundaries are from the **BharatViz** Delhi ward dataset
-(`delhi_bharat_viz_wards.geojson`) — 290 wards with full Delhi coverage
-including the New Delhi Municipal Council (NDMC) area, sourced from
-`bharatviz.saketlab.org`. This single boundary file is used for all spatial
-analyses in this vignette.
+(`geo.bharatviz.org/geojsons/cities/delhi.geojson`), 290 wards with full
+Delhi coverage including the New Delhi Municipal Council (NDMC) area. This
+single boundary file is used for all spatial analyses in this vignette.
 
-## Comparison Caveat
+## Comparison caveat
 
 These two data sources measure PM2.5 differently:
 
@@ -95,36 +93,28 @@ These two data sources measure PM2.5 differently:
   pollution sources
 
 Ground readings are therefore consistently higher than satellite estimates.
-This is not an error — it reflects the fundamental difference between
-point-source and area-averaged measurement. Ground data is aggregated to
-monthly means for fair temporal comparison.
+This reflects the difference between point-source and area-averaged measurement
+rather than any error. Ground data is aggregated to monthly means for fair
+temporal comparison.
 
 ---
 
 # Setup
 
 ```{r packages}
-if (!require("pacman", quietly = TRUE)) {
-  install.packages("pacman", repos = "https://cloud.r-project.org")
-}
-
-pacman::p_load(
-  vayuayan, # CPCB data download + geocoding
-  tidyverse, # data wrangling + ggplot2
-  purrr, # map_dfr for iterating over months
-  terra, # raster operations
-  sf, # vector spatial data
-  tidyterra, # ggplot2 + terra integration (geom_spatraster)
-  exactextractr, # area-weighted raster extraction to polygons
-  ncdf4, # reading NetCDF files directly
-  khroma, # diverging colour palettes
-  stringr # string cleaning
-)
+library(vayuayan)
+library(tidyverse)
+library(terra)
+library(sf)
+library(tidyterra)
+library(exactextractr)
+library(ncdf4)
+library(khroma)
+library(here)
 ```
 
 ```{r folder-setup}
-# Absolute path — works both interactively and when knitting
-vignettes_dir <- "/NAS/darakshann/vayuayanR/vignettes"
+vignettes_dir <- here::here("vignettes")
 
 dirs <- c("data/delhi", "figures/delhi", "station_data")
 for (d in dirs) {
@@ -138,65 +128,24 @@ fig_path <- function(f) file.path(vignettes_dir, "figures/delhi", f)
 station_path <- function(f) file.path(vignettes_dir, "station_data", f)
 ```
 
-## Helper Functions
+## Helper functions
 
-The V5GL04 NetCDF files store data in `[lon, lat]` order — the reverse of what
-`terra` expects (`[lat, lon]`). Loading the entire 121 MB global array just to
-extract Delhi is extremely slow. These two helpers read only the pixels covering
-Delhi's bounding box, making extraction near-instant.
+Satellite reads use the package helpers `pm25_read_netcdf_bbox()` (mean over a
+region) and `pm25_load_netcdf_bbox()` (cropped raster), which read only the
+pixels covering the region's bounding box. `nc_dir` points to the directory of
+monthly V5GL04 files.
 
-```{r helper-functions}
-read_v5gl04_fast <- function(nc_path, shape) {
-  bbox <- sf::st_bbox(shape)
-  nc <- ncdf4::nc_open(nc_path)
-  lons <- ncdf4::ncvar_get(nc, "lon")
-  lats <- ncdf4::ncvar_get(nc, "lat")
-  lon_idx <- which(lons >= bbox["xmin"] & lons <= bbox["xmax"])
-  lat_idx <- which(lats >= bbox["ymin"] & lats <= bbox["ymax"])
-  data <- ncdf4::ncvar_get(
-    nc, "GWRPM25",
-    start = c(min(lon_idx), min(lat_idx)),
-    count = c(length(lon_idx), length(lat_idx))
-  )
-  ncdf4::nc_close(nc)
-  mean(data, na.rm = TRUE)
-}
-
-load_v5gl04_rast <- function(year, month, shape) {
-  nc_path <- sprintf(
-    "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly/V5GL04.HybridPM25.Global.%04d%02d-%04d%02d.nc",
-    year, month, year, month
-  )
-  bbox <- sf::st_bbox(shape)
-  nc <- ncdf4::nc_open(nc_path)
-  lons <- ncdf4::ncvar_get(nc, "lon")
-  lats <- ncdf4::ncvar_get(nc, "lat")
-  lon_idx <- which(lons >= bbox["xmin"] & lons <= bbox["xmax"])
-  lat_idx <- which(lats >= bbox["ymin"] & lats <= bbox["ymax"])
-  data <- ncdf4::ncvar_get(
-    nc, "GWRPM25",
-    start = c(min(lon_idx), min(lat_idx)),
-    count = c(length(lon_idx), length(lat_idx))
-  )
-  ncdf4::nc_close(nc)
-  r <- terra::rast(
-    nrows = length(lat_idx), ncols = length(lon_idx),
-    xmin = min(lons[lon_idx]), xmax = max(lons[lon_idx]),
-    ymin = min(lats[lat_idx]), ymax = max(lats[lat_idx]),
-    crs = "EPSG:4326"
-  )
-  terra::values(r) <- t(data)[nrow(t(data)):1, ]
-  r
-}
+```{r nc-dir}
+nc_dir <- "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly"
 ```
 
 ---
 
 # Results
 
-## 1. Seasonal Trend: Do Satellite and Ground Data Agree?
+## Seasonal trend
 
-### Ground Data: City-Level Monthly PM2.5
+### Ground data: city-level monthly PM2.5
 
 ```{r ground-data}
 if (!file.exists(data_path("delhi_aqi_2022.csv"))) {
@@ -219,28 +168,24 @@ delhi_ground <- delhi_wide %>%
 print(delhi_ground)
 ```
 
-### Satellite Data: Monthly Spatial Mean over Delhi
+### Satellite data: monthly spatial mean over Delhi
 
 ```{r satellite-data}
-# Load BharatViz ward boundary — single boundary used throughout this vignette
 delhi_shape <- sf::st_read(
-  "/NAS/darakshann/geojson/delhi_bharat_viz_wards.geojson",
+  "https://geo.bharatviz.org/geojsons/cities/delhi.geojson",
   quiet = TRUE
 ) %>% sf::st_make_valid()
 
 delhi_sat_df <- map_dfr(1:12, function(m) {
-  nc_file <- sprintf(
-    "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly/V5GL04.HybridPM25.Global.2022%02d-2022%02d.nc",
-    m, m
-  )
-  tibble(month = m, sat_pm25 = read_v5gl04_fast(nc_file, delhi_shape))
+  nc_file <- pm25_v5gl04_path(2022, m, base_dir = nc_dir)
+  tibble(month = m, sat_pm25 = pm25_read_netcdf_bbox(nc_file, delhi_shape))
 })
 
 delhi_final <- inner_join(delhi_ground, delhi_sat_df, by = "month")
 print(delhi_final)
 ```
 
-### Seasonal Line Chart
+### Seasonal line chart
 
 ```{r line-chart, fig.cap="Delhi 2022: Monthly PM2.5 from satellite and ground sources. Both sources agree on the seasonal pattern — peak in winter, trough in monsoon. Ground readings are consistently higher due to the point-to-area measurement difference."}
 ggplot(delhi_final, aes(x = month)) +
@@ -284,7 +229,7 @@ ggplot(delhi_final, aes(x = month)) +
 ggsave(fig_path("fig1_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
 ```
 
-> **Key finding:** Both sources agree on the seasonal pattern — PM2.5 peaks
+> **Key finding:** Both sources agree on the seasonal pattern, PM2.5 peaks
 > sharply in October–January and drops during the monsoon. Delhi exceeds WHO
 > limits every single month. Ground readings run ~2× higher than satellite,
 > consistent with the point-to-area measurement difference.
@@ -294,10 +239,10 @@ ggsave(fig_path("fig1_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
 
 ---
 
-## 2. Where Is Pollution Highest? Spatial Heatmap
+## Spatial heatmap
 
 ```{r heatmap-data}
-r_nov <- load_v5gl04_rast(2022, 11, delhi_shape)
+r_nov <- pm25_load_netcdf_bbox(pm25_v5gl04_path(2022, 11, base_dir = nc_dir), delhi_shape)
 delhi_raster_mask <- terra::mask(r_nov, terra::vect(delhi_shape))
 delhi_city_boundary <- sf::st_union(delhi_shape)
 ```
@@ -338,14 +283,14 @@ ggsave(fig_path("fig2_heatmap_nov2022.png"), width = 8, height = 6, dpi = 300)
 ```
 
 > **Key finding:** Pollution is not uniform. Peripheral areas show elevated
-> PM2.5 relative to central Delhi — yet these are exactly the areas with fewer
+> PM2.5 relative to central Delhi, yet these are exactly the areas with fewer
 > monitoring stations, as the next section shows.
 
 ---
 
-## 3. Where Are the Sensors? Station Network Choropleth
+## Station network choropleth
 
-### Load and Geocode Station Locations
+### Load and geocode station locations
 
 ```{r station-coords}
 if (file.exists(data_path("delhi_stations_with_coords.csv"))) {
@@ -365,11 +310,9 @@ delhi_full_sf <- delhi_station_list %>%
 cat(nrow(delhi_full_sf), "stations loaded\n")
 ```
 
-### Choropleth: Ward-Level PM2.5 + Station Locations
+### Choropleth: ward-level PM2.5 + station locations
 
 ```{r choropleth-data}
-# delhi_shape already loaded above — 290 BharatViz wards, full Delhi coverage
-# Compute area-weighted mean satellite PM2.5 per ward
 delhi_wards <- delhi_shape
 delhi_wards$sat_pm25 <- exactextractr::exact_extract(
   r_nov, delhi_wards, "mean",
@@ -421,7 +364,7 @@ ggsave(fig_path("fig3_choropleth_stations.png"), width = 9, height = 7, dpi = 30
 
 ---
 
-## 4. Monitoring Gap Analysis
+## Monitoring gap analysis
 
 We now answer the central question: **which wards are under-monitored, and
 does sensor distance predict ground-satellite disagreement?**
@@ -436,7 +379,7 @@ For each of the **290 BharatViz wards** we:
 4. Compute **delta = satellite − nearest ground station**
 5. Draw a line connecting centroid → nearest station
 
-### Per-Station Winter Ground Data
+### Per-station winter ground data
 
 ```{r winter-ground}
 station_raw <- lapply(seq_along(delhi_station_list$value), function(i) {
@@ -484,7 +427,7 @@ station_ground_sf <- station_ground %>%
 cat(nrow(station_ground_sf), "stations with valid winter PM2.5\n")
 ```
 
-### Compute Delta at Each Ward Centroid
+### Compute delta at each ward centroid
 
 ```{r compute-delta}
 ward_centroids <- sf::st_centroid(delhi_wards)
@@ -516,7 +459,7 @@ cat("\nPriority breakdown:\n")
 print(table(delhi_wards$priority))
 ```
 
-### The Monitoring Gap Map
+### The monitoring gap map
 
 ```{r gap-map, fig.height=8, fig.cap="Monitoring gap map. Each ward is coloured by ground-satellite disagreement. Dashed lines connect each ward centroid to its nearest CPCB station. Yellow dots = CPCB stations."}
 centroid_coords <- sf::st_coordinates(ward_centroids)
@@ -580,7 +523,7 @@ ggplot() +
 ggsave(fig_path("fig4_monitoring_gap_map.png"), width = 9, height = 7.5, dpi = 300)
 ```
 
-### Priority Map: Where Should New Stations Go?
+### Priority map
 
 ```{r priority-map, fig.height=7, fig.cap="Priority wards for new CPCB stations. Red = high pollution AND poor sensor coverage (>2 km from nearest station). Orange = poor coverage only. Green = well monitored."}
 ggplot() +
@@ -619,7 +562,7 @@ ggplot() +
 ggsave(fig_path("fig5_priority_map.png"), width = 9, height = 7, dpi = 300)
 ```
 
-### Does Sensor Distance Predict Disagreement?
+### Sensor distance vs disagreement
 
 ```{r scatter, fig.height=5, fig.cap="Relationship between sensor distance and ground-satellite disagreement across 290 Delhi wards. LOESS fit with 95% CI captures any non-linear trend."}
 cor_val <- cor(
@@ -679,32 +622,32 @@ ggsave(fig_path("fig6_distance_vs_disagreement.png"), width = 9, height = 5, dpi
 
 # Discussion
 
-## Seasonal Pattern
+## Seasonal pattern
 
 Both satellite and ground data confirm Delhi's well-documented pollution cycle.
 PM2.5 peaks sharply in October–January driven by crop residue burning in
 neighbouring states (Punjab, Haryana), temperature inversions, and reduced wind
 speeds. The monsoon brings a sharp drop. Critically, Delhi exceeds WHO annual
-guidelines every single month — even the relatively "clean" monsoon months
+guidelines every single month, even the relatively "clean" monsoon months
 record values far above safe limits.
 
 Ground readings run consistently higher than satellite estimates. This is
-expected — CPCB stations are often sited near pollution sources to capture
+expected, CPCB stations are often sited near pollution sources to capture
 worst-case exposure, whereas satellite represents a spatial mean over entire
 1 km pixels.
 
-## Spatial Heterogeneity
+## Spatial heterogeneity
 
 The November heatmap and ward choropleth reveal that pollution is far from
 uniform across Delhi's 290 wards. Peripheral wards show elevated PM2.5 that
 is completely invisible from city-level aggregate statistics.
 
-## Monitoring Gap
+## Monitoring gap
 
 The gap analysis answers the central policy question. Across 290 wards, those
 furthest from their nearest CPCB station tend to show the largest disagreement
-between satellite estimates and ground readings. The LOESS fit — statistically
-meaningful with 290 data points — reveals the non-linear structure of this
+between satellite estimates and ground readings. The LOESS fit, statistically
+meaningful with 290 data points, reveals the non-linear structure of this
 relationship. The priority map identifies specific wards where a new station
 would have the greatest impact: those with both above-median satellite PM2.5
 and poor sensor coverage (>2 km from nearest station).
@@ -726,11 +669,11 @@ and poor sensor coverage (>2 km from nearest station).
 
 - **Ward boundary**: The BharatViz ward dataset (290 wards) provides full
   Delhi coverage including NDMC and cantonment areas, sourced from
-  `bharatviz.saketlab.org`.
+  `geo.bharatviz.org`.
 
 ---
 
-# Session Information
+# Session information
 
 ```{r session-info}
 sessionInfo()

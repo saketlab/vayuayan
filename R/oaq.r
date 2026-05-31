@@ -269,3 +269,66 @@ oaq_get_annual <- function(session, provider, sensor_id, year) {
     session
   )
 }
+
+#' Fetch monthly station data for a provider across one or more months
+#'
+#' Pulls the station list for \code{provider}, optionally restricts it to one
+#' or more cities, then fetches monthly aggregates for every station across the
+#' requested months. Returns a single tidy data frame with station metadata
+#' (id, name, lat, lon) joined to each daily record. Stations that return no
+#' data for a month are skipped.
+#'
+#' @param session List returned by \code{\link{oaq_session}}.
+#' @param provider Character provider id (e.g. \code{"cpcb"}, \code{"airnet"}).
+#' @param year Integer year (e.g. \code{2026}).
+#' @param months Character vector of zero-padded months (e.g.
+#'   \code{c("03", "04")}). Defaults to all twelve months.
+#' @param city Optional character vector of city names to keep (matched against
+#'   the station list's \code{city} column). \code{NULL} keeps every city.
+#' @return A data frame of daily records with \code{station_id}, \code{date},
+#'   the pollutant columns returned by the API, and \code{lat}/\code{lon}/
+#'   \code{name} from the station list.
+#' @examples
+#' \dontrun{
+#' session <- oaq_session()
+#' blr <- oaq_fetch_monthly_stations(
+#'   session, "airnet",
+#'   year = 2026, months = c("03", "04"), city = "Bengaluru"
+#' )
+#' }
+#' @export
+oaq_fetch_monthly_stations <- function(session, provider, year,
+                                       months = sprintf("%02d", 1:12),
+                                       city = NULL) {
+  live <- oaq_get_stations_latest(session, provider)
+  meta <- live$stations
+  if (!is.null(city)) {
+    meta <- meta[meta$city %in% city, , drop = FALSE]
+  }
+  meta$lat <- as.numeric(meta$lat)
+  meta$lon <- as.numeric(meta$lon)
+
+  records <- list()
+  for (sid in meta$id) {
+    for (m in months) {
+      res <- tryCatch(
+        oaq_get_monthly(session, provider, sid, year, m),
+        error = function(e) NULL
+      )
+      if (is.null(res$data) || nrow(res$data) == 0) next
+      df <- res$data
+      df$station_id <- sid
+      records[[length(records) + 1]] <- df
+    }
+  }
+  if (length(records) == 0) {
+    return(meta[0, ])
+  }
+
+  out <- do.call(rbind, records)
+  meta_cols <- meta[, intersect(
+    c("id", "name", "lat", "lon", "city"), names(meta)
+  ), drop = FALSE]
+  names(meta_cols)[names(meta_cols) == "id"] <- "station_id"
+  merge(out, meta_cols, by = "station_id", all.x = TRUE)
+}

@@ -25,6 +25,7 @@ Useful links:
 
 Authors:
 \itemize{
+  \item Saket Choudhary \email{saketc@iitb.ac.in}
   \item Mahesh Kumar Prajapat \email{22b0433@iitb.ac.in}
 }
 

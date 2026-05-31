@@ -1,6 +1,5 @@
 ---
 title: "Mumbai PM2.5 Analysis (2022)"
-author: "Darakhshan Nehal"
 output:
   rmarkdown::html_vignette:
     toc: true
@@ -26,16 +25,16 @@ knitr::opts_chunk$set(
 library(vayuayan)
 options(exactextractr.progress = FALSE)
 
-# Use GEOS instead of S2 — required for mumbai_v4.geojson which has
-# minor self-intersecting polygon edges that S2 rejects
+# Use GEOS instead of S2 — the Mumbai ward GeoJSON has minor
+# self-intersecting polygon edges that S2 rejects
 sf::sf_use_s2(FALSE)
 ```
 
 # Introduction
 
 Mumbai is India's financial capital and most densely populated city, home to
-over 20 million residents. Despite its coastal location — which provides
-relatively better natural ventilation than landlocked Delhi — Mumbai's PM2.5
+over 20 million residents. Despite its coastal location, which provides
+relatively better natural ventilation than landlocked Delhi, Mumbai's PM2.5
 levels regularly exceed WHO safe limits, driven by vehicular emissions,
 industrial activity, construction dust, and seasonal sea-salt aerosols.
 
@@ -44,25 +43,25 @@ data sources to analyse Mumbai's air quality in 2022, and uses them together to
 answer a key policy question:
 
 > **Are the 30 CPCB ground monitoring stations distributed well enough to
-> capture Mumbai's true spatial extent of pollution — or are there
+> capture Mumbai's true spatial extent of pollution, or are there
 > under-monitored localities where PM2.5 is being systematically missed?**
 
 We build toward this answer in four steps:
 
-1. **Seasonal trend** — do satellite and ground data agree on Mumbai's pollution cycle?
-2. **Spatial heatmap** — where in Mumbai is pollution highest?
-3. **Station network** — where are the 30 sensors located relative to pollution?
-4. **Monitoring gap analysis** — which localities are furthest from any sensor,
-   and does that distance predict ground-satellite disagreement?
+1. **Seasonal trend**: whether satellite and ground data agree on Mumbai's pollution cycle.
+2. **Spatial heatmap**: where in Mumbai pollution is highest.
+3. **Station network**: where the 30 sensors sit relative to that pollution.
+4. **Monitoring gap analysis**: which localities are furthest from any sensor,
+   and whether that distance predicts ground-satellite disagreement.
 
 ---
 
-# Data & Methods
+# Data & methods
 
-## Satellite Data
+## Satellite data
 
 Monthly PM2.5 estimates come from the Washington University in St. Louis
-Atmospheric Composition Analysis Group (WUSTL ACAG) **V5GL04** product — a
+Atmospheric Composition Analysis Group (WUSTL ACAG) **V5GL04** product, a
 globally gridded dataset at ~0.01° (~1 km) resolution, derived from satellite
 aerosol optical depth retrievals, chemical transport modelling, and ground-level
 calibration (van Donkelaar et al., 2021). Files are in NetCDF format.
@@ -71,7 +70,7 @@ calibration (van Donkelaar et al., 2021). Files are in NetCDF format.
 > which is pending download on the departmental server. This vignette uses
 > 2022 throughout.
 
-## Ground Data
+## Ground data
 
 Daily city-level and per-station PM2.5 readings are fetched from the Central
 Pollution Control Board (CPCB) data repository using `cpcb_download_city_data()`
@@ -80,8 +79,8 @@ managed by MPCB, IITM, and BMC. Station coordinates are obtained via
 `cpcb_add_coords()`, which queries the CPCB live feed directly. Nominatim is
 used as a fallback only for stations temporarily absent from the live feed.
 
-> **Note on missing data:** 12 of 30 registered Mumbai stations — operated by
-> MPCB and BMC — have no downloadable historical data in the CPCB repository
+> **Note on missing data:** 12 of 30 registered Mumbai stations, operated by
+> MPCB and BMC, have no downloadable historical data in the CPCB repository
 > for any year, despite being listed in the station registry. These stations
 > are spatially distributed across central, western, and eastern Mumbai. As a
 > result, the delta map uses only 18 stations with available 2022 readings,
@@ -89,14 +88,15 @@ used as a fallback only for stations temporarily absent from the live feed.
 > station (`site_5102`, Vasai West) is excluded as it lies outside Mumbai city
 > limits in Palghar district.
 
-## Spatial Units
+## Spatial units
 
-The GeoJSON boundary file (`mumbai_v4.geojson`) contains **227 localities**
-across Mumbai's **24 administrative wards** (coded A through T). Each locality
-belongs to one ward. All spatial analysis is conducted at locality level; ward
-boundaries are overlaid on maps as reference.
+The GeoJSON boundary file
+(`geo.bharatviz.org/geojsons/cities/greater_mumbai.geojson`) contains
+**227 localities** across Mumbai's **24 administrative wards** (coded A through
+T). Each locality belongs to one ward. All spatial analysis is conducted at
+locality level; ward boundaries are overlaid on maps as reference.
 
-## Comparison Caveat
+## Comparison caveat
 
 These two data sources measure PM2.5 differently:
 
@@ -105,101 +105,53 @@ These two data sources measure PM2.5 differently:
   pollution sources
 
 Ground readings are therefore consistently higher than satellite estimates.
-This is not an error — it reflects the fundamental difference between
-point-source and area-averaged measurement. Ground data is aggregated to
-monthly means for fair temporal comparison.
+This reflects the difference between point-source and area-averaged measurement
+rather than any error. Ground data is aggregated to monthly means for fair
+temporal comparison.
 
 ---
 
 # Setup
 
 ```{r packages}
-if (!require("pacman", quietly = TRUE)) {
-  install.packages("pacman", repos = "https://cloud.r-project.org")
-}
-
-pacman::p_load(
-  vayuayan, # CPCB data download + coordinates
-  tidyverse, # data wrangling + ggplot2
-  purrr, # map_dfr for iterating over months
-  terra, # raster operations
-  sf, # vector spatial data
-  tidyterra, # ggplot2 + terra integration (geom_spatraster)
-  exactextractr, # area-weighted raster extraction to polygons
-  ncdf4, # reading NetCDF files directly
-  khroma, # diverging colour palettes
-  scales # oob = squish for colour scale
-)
+library(vayuayan)
+library(tidyverse)
+library(terra)
+library(sf)
+library(tidyterra)
+library(exactextractr)
+library(ncdf4)
+library(khroma)
+library(scales)
 ```
 
 ```{r folder-setup}
-# Create output folders if they don't exist
 dirs <- c("data/mumbai", "figures/mumbai", "station_data_mumbai")
 for (d in dirs) dir.create(d, recursive = TRUE, showWarnings = FALSE)
 
-# Convenience path helpers — all data and figures go into subfolders
 data_path <- function(f) file.path("data/mumbai", f)
 fig_path <- function(f) file.path("figures/mumbai", f)
 station_path <- function(f) file.path("station_data_mumbai", f)
 ```
 
-## Helper Functions
+## Satellite reads
 
-```{r helper-functions}
-read_v5gl04_fast <- function(nc_path, shape) {
-  bbox <- sf::st_bbox(shape)
-  nc <- ncdf4::nc_open(nc_path)
-  lons <- ncdf4::ncvar_get(nc, "lon")
-  lats <- ncdf4::ncvar_get(nc, "lat")
-  lon_idx <- which(lons >= bbox["xmin"] & lons <= bbox["xmax"])
-  lat_idx <- which(lats >= bbox["ymin"] & lats <= bbox["ymax"])
-  data <- ncdf4::ncvar_get(
-    nc, "GWRPM25",
-    start = c(min(lon_idx), min(lat_idx)),
-    count = c(length(lon_idx), length(lat_idx))
-  )
-  ncdf4::nc_close(nc)
-  mean(data, na.rm = TRUE)
-}
+Satellite values use the package helpers `pm25_read_netcdf_bbox()` and
+`pm25_load_netcdf_bbox()`. `nc_dir` points to the monthly V5GL04 files.
 
-load_v5gl04_rast <- function(year, month, shape) {
-  nc_path <- sprintf(
-    "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly/V5GL04.HybridPM25.Global.%04d%02d-%04d%02d.nc",
-    year, month, year, month
-  )
-  bbox <- sf::st_bbox(shape)
-  nc <- ncdf4::nc_open(nc_path)
-  lons <- ncdf4::ncvar_get(nc, "lon")
-  lats <- ncdf4::ncvar_get(nc, "lat")
-  lon_idx <- which(lons >= bbox["xmin"] & lons <= bbox["xmax"])
-  lat_idx <- which(lats >= bbox["ymin"] & lats <= bbox["ymax"])
-  data <- ncdf4::ncvar_get(
-    nc, "GWRPM25",
-    start = c(min(lon_idx), min(lat_idx)),
-    count = c(length(lon_idx), length(lat_idx))
-  )
-  ncdf4::nc_close(nc)
-  r <- terra::rast(
-    nrows = length(lat_idx), ncols = length(lon_idx),
-    xmin = min(lons[lon_idx]), xmax = max(lons[lon_idx]),
-    ymin = min(lats[lat_idx]), ymax = max(lats[lat_idx]),
-    crs = "EPSG:4326"
-  )
-  terra::values(r) <- t(data)[nrow(t(data)):1, ]
-  r
-}
+```{r nc-dir}
+nc_dir <- "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly"
 ```
 
 ---
 
 # Results
 
-## 1. Seasonal Trend: Do Satellite and Ground Data Agree?
+## Seasonal trend
 
-### Ground Data: City-Level Monthly PM2.5
+### Ground data: city-level monthly PM2.5
 
 ```{r ground-data}
-# Download city-level daily PM2.5 for all of Mumbai, 2022
 # Cached to data/mumbai/ — re-runs skip download
 if (!file.exists(data_path("mumbai_aqi_2022.csv"))) {
   cpcb_download_city_data(
@@ -223,27 +175,24 @@ mumbai_ground <- mumbai_wide %>%
 print(mumbai_ground)
 ```
 
-### Satellite Data: Monthly Spatial Mean over Mumbai
+### Satellite data: monthly spatial mean over Mumbai
 
 ```{r satellite-data}
 mumbai_shape <- sf::st_read(
-  "/NAS/darakshann/geojson/mumbai_v4.geojson",
+  "https://geo.bharatviz.org/geojsons/cities/greater_mumbai.geojson",
   quiet = TRUE
 ) %>% sf::st_make_valid()
 
 mumbai_sat_df <- map_dfr(1:12, function(m) {
-  nc_file <- sprintf(
-    "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly/V5GL04.HybridPM25.Global.2022%02d-2022%02d.nc",
-    m, m
-  )
-  tibble(month = m, sat_pm25 = read_v5gl04_fast(nc_file, mumbai_shape))
+  nc_file <- pm25_v5gl04_path(2022, m, base_dir = nc_dir)
+  tibble(month = m, sat_pm25 = pm25_read_netcdf_bbox(nc_file, mumbai_shape))
 })
 
 mumbai_final <- inner_join(mumbai_ground, mumbai_sat_df, by = "month")
 print(mumbai_final)
 ```
 
-### Seasonal Line Chart
+### Seasonal line chart
 
 ```{r line-chart, fig.cap="Mumbai 2022: Monthly PM2.5 from satellite and ground sources. Both sources agree on the seasonal pattern — peak in winter, trough in monsoon. Ground readings are consistently higher due to the point-to-area measurement difference described in Methods."}
 ggplot(mumbai_final, aes(x = month)) +
@@ -287,7 +236,7 @@ ggplot(mumbai_final, aes(x = month)) +
 ggsave(fig_path("fig1_mumbai_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
 ```
 
-> **Key finding:** Mumbai shows a clear seasonal cycle — PM2.5 peaks in
+> **Key finding:** Mumbai shows a clear seasonal cycle, PM2.5 peaks in
 > October–January and drops sharply during the southwest monsoon (June–September).
 > Unlike Delhi, Mumbai's monsoon months approach near-safe levels due to the
 > cleansing effect of heavy rainfall.
@@ -297,10 +246,10 @@ ggsave(fig_path("fig1_mumbai_seasonal_trend.png"), width = 9, height = 6, dpi = 
 
 ---
 
-## 2. Where Is Pollution Highest? Spatial Heatmap
+## Spatial heatmap
 
 ```{r heatmap-data}
-r_nov <- load_v5gl04_rast(2022, 11, mumbai_shape)
+r_nov <- pm25_load_netcdf_bbox(pm25_v5gl04_path(2022, 11, base_dir = nc_dir), mumbai_shape)
 mumbai_raster_mask <- terra::mask(r_nov, terra::vect(suppressWarnings(sf::st_union(mumbai_shape))))
 mumbai_city_boundary <- suppressWarnings(sf::st_union(mumbai_shape))
 ```
@@ -348,12 +297,11 @@ ggsave(fig_path("fig2_mumbai_heatmap_nov2022.png"), width = 9, height = 8, dpi =
 
 ---
 
-## 3. Where Are the Sensors? Station Network Choropleth
+## Station network choropleth
 
-### Load Station Locations
+### Load station locations
 
 ```{r station-coords}
-# Fetch coordinates for all Mumbai CPCB stations from CPCB API
 # Cached to data/mumbai/ — re-runs use cache
 if (file.exists(data_path("mumbai_stations_with_coords.csv"))) {
   mumbai_station_list <- read.csv(data_path("mumbai_stations_with_coords.csv"))
@@ -374,15 +322,14 @@ mumbai_full_sf <- mumbai_station_list %>%
 cat(nrow(mumbai_full_sf), "stations loaded\n")
 ```
 
-### Choropleth: Locality-Level PM2.5 + Station Locations
+### Choropleth: locality-level PM2.5 + station locations
 
 ```{r choropleth-data}
 mumbai_localities <- sf::st_read(
-  "/NAS/darakshann/geojson/mumbai_v4.geojson",
+  "https://geo.bharatviz.org/geojsons/cities/greater_mumbai.geojson",
   quiet = TRUE
 ) %>% sf::st_make_valid()
 
-# Area-weighted mean satellite PM2.5 per locality
 mumbai_localities$sat_pm25 <- exactextractr::exact_extract(
   r_nov, mumbai_localities, "mean",
   progress = FALSE
@@ -429,14 +376,14 @@ ggsave(fig_path("fig3_mumbai_choropleth_stations.png"), width = 9, height = 8, d
 ```
 
 > **Key finding:** Stations are concentrated in south and central Mumbai.
-> Several northern localities — particularly in wards R and S — have elevated
+> Several northern localities, particularly in wards R and S, have elevated
 > PM2.5 but sparse sensor coverage.
 
 ---
 
-## 4. Monitoring Gap Analysis
+## Monitoring gap analysis
 
-### Per-Station Winter Ground Data
+### Per-station winter ground data
 
 ```{r winter-ground}
 # Download per-station data for winter months: Oct, Nov, Dec, Jan
@@ -485,7 +432,7 @@ cat(nrow(station_ground_sf), "stations with valid winter PM2.5 (2022 data)\n")
 cat("Note: 12 of 30 stations have no downloadable data in the CPCB repository\n")
 ```
 
-### Compute Delta at Each Locality Centroid
+### Compute delta at each locality centroid
 
 ```{r compute-delta}
 locality_centroids <- sf::st_centroid(mumbai_localities)
@@ -520,7 +467,7 @@ cat("\nPriority breakdown:\n")
 print(table(mumbai_localities$priority))
 ```
 
-### The Monitoring Gap Map
+### The monitoring gap map
 
 ```{r gap-map, fig.height=8, fig.cap="Monitoring gap map. Each locality is coloured by ground-satellite disagreement. Dashed lines connect each locality centroid to its nearest CPCB station. Yellow dots = CPCB stations with 2022 data (18 of 30)."}
 centroid_coords <- sf::st_coordinates(locality_centroids)
@@ -584,7 +531,7 @@ ggplot() +
 ggsave(fig_path("fig4_mumbai_monitoring_gap_map.png"), width = 9, height = 8, dpi = 300)
 ```
 
-### Priority Map: Where Should New Stations Go?
+### Priority map
 
 ```{r priority-map, fig.height=8, fig.cap="Priority localities for new CPCB stations in Mumbai. Red = high pollution AND poor sensor coverage (>2 km from nearest station). Priority map uses all 29 stations with valid coordinates."}
 ggplot() +
@@ -627,7 +574,7 @@ ggplot() +
 ggsave(fig_path("fig5_mumbai_priority_map.png"), width = 9, height = 8, dpi = 300)
 ```
 
-### Does Sensor Distance Predict Disagreement?
+### Sensor distance vs disagreement
 
 ```{r scatter, fig.height=5, fig.cap="Relationship between sensor distance and ground-satellite disagreement across 227 Mumbai localities. LOESS fit captures non-linear trend."}
 cor_val <- cor(
@@ -677,7 +624,7 @@ ggsave(fig_path("fig6_mumbai_distance_vs_disagreement.png"), width = 9, height =
 
 # Discussion
 
-## Seasonal Pattern
+## Seasonal pattern
 
 Mumbai's seasonal PM2.5 cycle differs meaningfully from Delhi. The southwest
 monsoon (June–September) brings heavy rainfall that efficiently washes out
@@ -685,18 +632,18 @@ particulates, bringing PM2.5 close to safe levels in some months. The dry winter
 months (October–January) see PM2.5 rise sharply as northeast monsoon winds bring
 dry continental air and temperature inversions trap pollutants near the surface.
 
-## Spatial Heterogeneity
+## Spatial heterogeneity
 
-The heatmap reveals a clear north-south gradient — northern suburbs show higher
+The heatmap reveals a clear north-south gradient, northern suburbs show higher
 satellite PM2.5 than the southern peninsula. This reflects the concentration of
 industrial zones, construction activity, and traffic corridors in the north,
 while the southern peninsula benefits from sea breezes from three sides.
 
-## Monitoring Gap
+## Monitoring gap
 
 The gap analysis identifies localities where the current 30-station network may
-provide an incomplete picture. Localities with long centroid-to-station lines —
-particularly in outer northern wards — are most at risk of having their pollution
+provide an incomplete picture. Localities with long centroid-to-station lines
+particularly in outer northern wards, are most at risk of having their pollution
 underestimated.
 
 ---
@@ -707,8 +654,8 @@ underestimated.
   satellite estimates due to point-source siting bias. The analysis focuses on
   *relative* disagreement across localities rather than absolute values.
 
-- **Missing station data**: 12 of 30 registered Mumbai stations — operated by
-  MPCB and BMC — have no downloadable historical data in the CPCB repository for
+- **Missing station data**: 12 of 30 registered Mumbai stations, operated by
+  MPCB and BMC, have no downloadable historical data in the CPCB repository for
   any year despite being listed in the station registry. These stations are
   spatially distributed across central, western, and eastern Mumbai. As a result,
   the delta map uses only 18 stations with available 2022 readings, while the
@@ -725,7 +672,7 @@ underestimated.
 
 ---
 
-# Session Information
+# Session information
 
 ```{r session-info}
 sessionInfo()

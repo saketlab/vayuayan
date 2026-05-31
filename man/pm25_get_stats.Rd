@@ -6,24 +6,33 @@
 \usage{
 pm25_get_stats(
   geojson_file,
-  year,
+  year = NULL,
   month = NULL,
   cache_dir = "pm25_data",
-  group_by = NULL
+  group_by = NULL,
+  nc_file = NULL
 )
 }
 \arguments{
-\item{geojson_file}{Character. Path to GeoJSON file defining the region.}
+\item{geojson_file}{Character. Path or URL to a GeoJSON file defining the
+region (remote \code{http(s)://} URLs are read directly).}
 
-\item{year}{Integer. Year of the NetCDF data (e.g. \code{2023}).}
+\item{year}{Integer. Year of the NetCDF data (e.g. \code{2023}). Ignored
+when \code{nc_file} is supplied.}
 
-\item{month}{Optional integer (1--12). If NULL, uses annual data.}
+\item{month}{Optional integer (1--12). If NULL, uses annual data. Ignored
+when \code{nc_file} is supplied.}
 
 \item{cache_dir}{Character. Directory to cache NetCDF files.
 Default: \code{"pm25_data"}.}
 
 \item{group_by}{Optional character. Column name(s) in the GeoJSON to
 group polygons by (comma-separated for multiple columns).}
+
+\item{nc_file}{Optional character. Path to a local NetCDF file to use
+directly. When supplied, no download is attempted and \code{year}/
+\code{month} are ignored. Useful for offline data (e.g. WUSTL V5GL04
+files on a local mount).}
 }
 \value{
 List (or data frame if \code{group_by} is specified) with
@@ -37,16 +46,25 @@ GeoJSON (e.g. district name) to return per-group statistics.
 }
 \examples{
 \dontrun{
-# Single region
-stats <- pm25_get_stats("delhi.geojson", year = 2023, month = 11)
+# Single region (remote BharatViz boundary)
+stats <- pm25_get_stats(
+  "https://geo.bharatviz.org/geojsons/cities/delhi.geojson",
+  year = 2023, month = 11
+)
 cat("Mean PM2.5:", round(stats$mean, 1), "ug/m3")
 
 # Grouped by district
 stats_by_district <- pm25_get_stats(
-  "delhi_districts.geojson",
+  "https://geo.bharatviz.org/geojsons/districts/India_LGD_districts.geojson",
   year     = 2023,
   month    = 11,
   group_by = "district_name"
+)
+
+# Use a local (offline) NetCDF file directly
+stats <- pm25_get_stats(
+  "https://geo.bharatviz.org/geojsons/cities/delhi.geojson",
+  nc_file = "V5GL04.HybridPM25.Global.202211-202211.nc"
 )
 }
 }

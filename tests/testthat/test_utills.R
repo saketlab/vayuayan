@@ -155,3 +155,44 @@ test_that("analyze_station_data computes statistics", {
   expect_equal(analysis$stations_with_aqi_data, 2)
   expect_equal(analysis$avg_aqi_overall, 75)
 })
+
+test_that("nearest_stations pairs each source with its closest targets", {
+  from <- data.frame(
+    id = c("a", "b"),
+    lat = c(12.97, 13.05),
+    lon = c(77.59, 77.60)
+  )
+  to <- data.frame(
+    id = c("x", "y", "z"),
+    lat = c(12.97, 13.20, 12.50),
+    lon = c(77.59, 77.60, 77.60)
+  )
+
+  res <- nearest_stations(from, to, k = 2, from_id = "id", to_id = "id")
+
+  expect_equal(nrow(res), 4) # 2 sources x k=2
+  expect_named(res, c("from_id", "to_id", "rank", "dist_km"))
+  # 'a' is co-located with 'x' -> distance ~0, rank 1
+  a1 <- res[res$from_id == "a" & res$rank == 1, ]
+  expect_equal(a1$to_id, "x")
+  expect_lt(a1$dist_km, 1)
+  # distances increase with rank
+  expect_true(all(
+    res$dist_km[res$rank == 2] >= res$dist_km[res$rank == 1]
+  ))
+})
+
+test_that("nearest_stations caps k at the number of targets", {
+  from <- data.frame(id = "a", lat = 12.97, lon = 77.59)
+  to <- data.frame(id = c("x", "y"), lat = c(12.97, 13.0), lon = c(77.59, 77.6))
+  res <- nearest_stations(from, to, k = 5, from_id = "id", to_id = "id")
+  expect_equal(nrow(res), 2)
+})
+
+test_that("pm25_v5gl04_path builds the expected filename", {
+  p <- pm25_v5gl04_path(2022, 11, base_dir = "/data")
+  expect_equal(
+    p,
+    "/data/V5GL04.HybridPM25.Global.202211-202211.nc"
+  )
+})

@@ -155,7 +155,7 @@ cpcb_get_station_list <- function(city) {
 #' }
 #' @export
 cpcb_add_coords <- function(stations) {
-  # ── Step 1: fetch all-India station coordinates from CPCB API ──────────────
+  # Step 1: fetch all-India station coordinates from CPCB API
   coords_url <- paste0(.cpcb_base_url, "/caaqms/iit_rss_feed_with_coordinates")
 
   message("Fetching station coordinates from CPCB API...")
@@ -196,7 +196,7 @@ cpcb_add_coords <- function(stations) {
     }
   )
 
-  # ── Step 2: join API coordinates to station list by site ID ────────────────
+  # Step 2: join API coordinates to station list by site ID
   if (!is.null(api_coords)) {
     stations <- merge(
       stations, api_coords,
@@ -212,7 +212,7 @@ cpcb_add_coords <- function(stations) {
     stations$lon <- NA_real_
   }
 
-  # ── Step 3: Nominatim fallback for any remaining NAs ───────────────────────
+  # Step 3: Nominatim fallback for any remaining NAs.
   # Stations absent from the live feed (e.g. temporarily offline) are
   # geocoded via OpenStreetMap as a best-effort fallback
   missing_idx <- which(is.na(stations$lat))

@@ -242,3 +242,43 @@ vayuayan_welcome <- function() {
     "stats <- pm25_get_stats('region.geojson', 2023, 11)"
   ))
 }
+
+#' Find the nearest stations between two sets of points
+#'
+#' For every row in \code{from} (e.g. low-cost sensors), find the \code{k}
+#' closest rows in \code{to} (e.g. reference stations) by haversine distance.
+#' Useful for pairing sensor networks for calibration or cross-validation.
+#'
+#' @param from Data frame of source points. Must contain \code{lat}/\code{lon}.
+#' @param to Data frame of candidate target points. Must contain
+#'   \code{lat}/\code{lon}.
+#' @param k Integer number of nearest targets to return per source point.
+#' @param from_id,to_id Column names identifying each point, carried into the
+#'   output as \code{from_id}/\code{to_id}.
+#' @return A data frame with one row per (source, nearest target) pair:
+#'   \code{from_id}, \code{to_id}, \code{rank} (1 = closest), and
+#'   \code{dist_km}.
+#' @examples
+#' \dontrun{
+#' nearest_stations(airnet, cpcb, k = 3, from_id = "id", to_id = "id")
+#' }
+#' @export
+nearest_stations <- function(from, to, k = 1,
+                             from_id = "id", to_id = "id") {
+  stopifnot(all(c("lat", "lon") %in% names(from)))
+  stopifnot(all(c("lat", "lon") %in% names(to)))
+  k <- min(k, nrow(to))
+
+  rows <- lapply(seq_len(nrow(from)), function(i) {
+    d <- haversine_distance(from$lat[i], from$lon[i], to$lat, to$lon)
+    idx <- order(d)[seq_len(k)]
+    data.frame(
+      from_id = from[[from_id]][i],
+      to_id = to[[to_id]][idx],
+      rank = seq_len(k),
+      dist_km = d[idx],
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}

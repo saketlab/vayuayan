@@ -15,7 +15,6 @@ Description: Fetch and analyze air quality data from multiple sources including
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Depends: 
     R (>= 4.0.0)
 Imports:
@@ -34,19 +33,19 @@ Suggests:
     knitr,
     rmarkdown,
     tidyverse,
+    purrr,
     exactextractr,
     khroma,
     ncdf4,
     scales,
-    pacman,
     tidyterra,
     lwgeom,
     stringr,
-    geodata,
     here,
     ggrepel,
     kableExtra,
-    cowplot
+    patchwork
 VignetteBuilder: knitr
 URL: https://saket-choudhary.me/vayuayanR/, https://github.com/saketkc/vayuayanR, https://saketkc.github.io/vayuayanR
 BugReports: https://github.com/saketkc/vayuayanR/issues
+Config/roxygen2/version: 8.0.0
