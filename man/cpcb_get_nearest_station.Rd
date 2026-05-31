@@ -21,8 +21,10 @@ Returns station ID, name, and distance in kilometres.
 \dontrun{
 # Auto-detect location
 nearest <- cpcb_get_nearest_station()
-cat("Nearest station:", nearest$station_name,
-    "(", round(nearest$distance_km, 1), "km)")
+cat(
+  "Nearest station:", nearest$station_name,
+  "(", round(nearest$distance_km, 1), "km)"
+)
 
 # Provide coordinates manually (Mumbai)
 nearest <- cpcb_get_nearest_station(coords = c(19.076, 72.877))

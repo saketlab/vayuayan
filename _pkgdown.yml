@@ -136,6 +136,19 @@ reference:
   - cpcb_get_live_aqi_data
   - cpcb_get_live_aqi_data_for_station
 
+- title: "OAQ (Open Air Quality) data"
+  desc: "Fetch live and historical data from the OAQ platform"
+  contents:
+  - oaq_session
+  - oaq_list_providers
+  - oaq_get_hierarchy
+  - oaq_get_stations_latest
+  - oaq_get_city_latest
+  - oaq_get_station_24h
+  - oaq_get_daily
+  - oaq_get_monthly
+  - oaq_get_annual
+
 - title: "Satellite PM2.5 data"
   desc: "Download and analyze WUSTL ACAG satellite PM2.5 estimates"
   contents:

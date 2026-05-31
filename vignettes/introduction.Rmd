@@ -181,11 +181,11 @@ df <- stations_to_dataframe(all_stations)
 state_summary <- df %>%
   group_by(state_id) %>%
   summarise(
-    total_stations  = n(),
-    live_stations   = sum(live),
+    total_stations = n(),
+    live_stations = sum(live),
     offline_stations = sum(!live),
-    avg_aqi         = mean(avg_aqi, na.rm = TRUE),
-    .groups         = "drop"
+    avg_aqi = mean(avg_aqi, na.rm = TRUE),
+    .groups = "drop"
   ) %>%
   arrange(desc(live_stations))
 
@@ -363,7 +363,7 @@ clean_station_name("ITO, Delhi - DPCC")
 ```{r distance, eval=FALSE}
 # Calculate distance between two locations (km)
 mumbai <- c(19.0760, 72.8777)
-delhi  <- c(28.7041, 77.1025)
+delhi <- c(28.7041, 77.1025)
 
 distance <- haversine_distance(
   mumbai[1], mumbai[2],
@@ -378,7 +378,7 @@ cat("Distance from Mumbai to Delhi:", round(distance), "km")
 ```{r comprehensive, eval=FALSE}
 # Comprehensive station analysis
 all_stations <- cpcb_get_all_india()
-analysis     <- analyze_station_data(all_stations)
+analysis <- analyze_station_data(all_stations)
 
 # View analysis results
 str(analysis)
