@@ -38,8 +38,10 @@ Get file path for downloading data from CPCB. Used internally by
 }
 \examples{
 \dontrun{
-paths <- cpcb_get_file_path(city = "Delhi", frequency = "daily",
-                             data_type = "cityLevel")
+paths <- cpcb_get_file_path(
+  city = "Delhi", frequency = "daily",
+  data_type = "cityLevel"
+)
 str(paths[[1]])
 }
 }

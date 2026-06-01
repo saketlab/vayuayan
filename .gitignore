@@ -1,52 +1,44 @@
-# R package standard ignores
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
 *.Rproj
 
-# R build artifacts
 *.o
 *.so
 *.dll
 src/*.o
 src/*.so
 
-# Package check output
 *.Rcheck/
-
-# devtools / pkgdown
 docs/
 
-# ── Vignette output folders ───────────────────────────────────────────────────
-# Downloaded data CSVs — large, reproducible, not source code
+.oaqapi_key
+.Renviron
+
+vignettes/*_cache/
+vignettes/*_files/
+*_cache/
+*_files/
+*.knit.md
+*.utf8.md
+
+vignettes/*.html
+inst/doc/
+OAQ/
+
 vignettes/data/
 vignettes/figures/
-
-# Per-station downloaded CSVs (can be hundreds of files)
 vignettes/station_data/
 vignettes/station_data_mumbai/
-
-# Cached station coordinate CSVs
-vignettes/delhi_stations_with_coords.csv
-vignettes/mumbai_stations_with_coords.csv
-
-# City-level AQI CSVs downloaded at knit time
-vignettes/delhi_aqi_2022.csv
-vignettes/mumbai_aqi_2022.csv
-vignettes/kolkata_aqi_2022.csv
-vignettes/chennai_aqi_2022.csv
-vignettes/bengaluru_aqi_2022.csv
-
-# Any stray PNG/figure outputs in vignettes root
+vignettes/*_stations_with_coords.csv
+vignettes/*_aqi_*.csv
+vignettes/station_data_*.csv
 vignettes/*.png
 
-# ── GADM cache files ──────────────────────────────────────────────────────────
-# geodata::gadm() downloads large .rds files to data/metro/
 vignettes/data/metro/gadm/
 *.rds
 
-# ── OS / editor ignores ───────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 .vscode/

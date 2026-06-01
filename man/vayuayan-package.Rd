@@ -4,19 +4,18 @@
 \name{vayuayan-package}
 \alias{vayuayan}
 \alias{vayuayan-package}
-\title{vayuayan: Comprehensive Air Quality Data Analysis for India}
+\title{vayuayan: Air Quality Data from CPCB, OAQ, and WUSTL Satellite PM2.5}
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-Fetch and analyze air quality data from multiple sources including CPCB (Central Pollution Control Board) India, OAQ (Open Air Quality platform), and WUSTL ACAG satellite PM2.5 data. Provides functions for historical and real-time AQI monitoring, geospatial station location services, and satellite PM2.5 data processing.
+Download and analyze air pollution data from three sources. CPCB (Central Pollution Control Board) CAAQMS stations provide historical and real-time PM2.5, PM10, and AQI readings across 400+ sites in India. OAQ (Open Air Quality) aggregates low-cost sensor networks such as Airnet, also in India. WUSTL ACAG V5GL04 provides satellite-derived PM2.5 at 1 km resolution globally (1998-2022). Includes geospatial station matching, AQI categorization, and NetCDF raster extraction for arbitrary regions.
 }
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://saket-choudhary.me/vayuayanR/}
-  \item \url{https://github.com/saketkc/vayuayanR}
-  \item \url{https://saketkc.github.io/vayuayanR}
-  \item Report bugs at \url{https://github.com/saketkc/vayuayanR/issues}
+  \item \url{https://vayuayanr.saketlab.org/}
+  \item \url{https://github.com/saketlab/vayuayanR}
+  \item Report bugs at \url{https://github.com/saketlab/vayuayanR/issues}
 }
 
 }
@@ -25,6 +24,7 @@ Useful links:
 
 Authors:
 \itemize{
+  \item Saket Choudhary \email{saketc@iitb.ac.in}
   \item Mahesh Kumar Prajapat \email{22b0433@iitb.ac.in}
 }
 

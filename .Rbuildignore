@@ -22,3 +22,11 @@
 ^CLAUDE\.md$
 ^doc$
 ^Meta$
+^\.oaqapi_key$
+^\.Renviron$
+^OAQ$
+vignettes/.*_cache$
+vignettes/.*_files$
+.*\.knit\.md$
+.*\.utf8\.md$
+^vignettes/.*\.html$

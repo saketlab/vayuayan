@@ -1,0 +1,468 @@
+---
+title: "OAQ India Sensor Network Map"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{OAQ India Sensor Network Map}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r knitr-setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 12,
+  fig.height = 9,
+  dpi = 150,
+  out.width = "100%"
+)
+library(vayuayan)
+```
+
+# Introduction
+
+The [OAQ platform](https://oaq.notf.in) aggregates air quality data from
+multiple networks across India. This vignette maps every monitoring station
+currently active on OAQ, split by provider:
+
+| Provider | Network | Coverage |
+|---|---|---|
+| **CPCB** | Central & State Pollution Control Boards | National (cities across all states) |
+| **Airnet** | CSTEP low-cost sensor network | Bengaluru |
+| **Aurassure** | University Clean Air Network | Odisha + Bengaluru |
+
+---
+
+# Setup
+
+```{r packages}
+library(vayuayan)
+library(tidyverse)
+library(sf)
+library(ggrepel)
+library(scales)
+library(here)
+```
+
+```{r paths}
+india_geojson <- "https://geo.bharatviz.org/geojsons/districts/India_LGD_states.geojson"
+vignettes_dir <- here::here("vignettes")
+fig_path <- function(f) file.path(vignettes_dir, "figures/oaq_network", f)
+dir.create(fig_path(""), recursive = TRUE, showWarnings = FALSE)
+```
+
+---
+
+# Fetch station data
+
+```{r fetch-stations, cache=TRUE}
+session <- oaq_session()
+
+fetch_provider <- function(provider) {
+  result <- oaq_get_stations_latest(session, provider)
+  result$stations |>
+    mutate(
+      provider = provider,
+      lat      = as.numeric(lat),
+      lon      = as.numeric(lon),
+      pm25     = as.numeric(pm25)
+    ) |>
+    filter(!is.na(lat), !is.na(lon))
+}
+
+all_stations <- bind_rows(
+  fetch_provider("cpcb"),
+  fetch_provider("airnet"),
+  fetch_provider("aurassure")
+) |>
+  mutate(
+    provider_label = recode(provider,
+      cpcb      = "CPCB",
+      airnet    = "Airnet (CSTEP)",
+      aurassure = "Aurassure"
+    ),
+    has_pm25 = !is.na(pm25)
+  )
+
+cat("Total stations:", nrow(all_stations), "\n")
+print(count(all_stations, provider_label, has_pm25) |> arrange(provider_label))
+```
+
+---
+
+# India state boundaries
+
+```{r india-map}
+india_sf <- sf::st_read(india_geojson, quiet = TRUE) |>
+  sf::st_transform(4326) |>
+  sf::st_simplify(dTolerance = 0.01, preserveTopology = TRUE) |>
+  sf::st_make_valid()
+```
+
+---
+
+# Station network map
+
+```{r network-map, fig.width=13, fig.height=11, fig.cap="All OAQ monitoring stations across India, coloured by provider network. CPCB stations are the government reference network; Airnet and Aurassure are low-cost sensor networks. Filled points have a current PM2.5 reading; hollow points are offline."}
+provider_colours <- c(
+  "CPCB"           = "#2166ac",
+  "Airnet (CSTEP)" = "#d6604d",
+  "Aurassure"      = "#4dac26"
+)
+
+stations_offline <- all_stations |> filter(!has_pm25)
+stations_online <- all_stations |> filter(has_pm25)
+
+ggplot() +
+  geom_sf(data = india_sf, fill = "#f5f5f5", color = "grey60", linewidth = 0.3) +
+  # Offline stations — hollow
+  geom_point(
+    data = stations_offline,
+    aes(x = lon, y = lat, color = provider_label),
+    shape = 1, size = 1.8, alpha = 0.5, stroke = 0.5
+  ) +
+  # Online stations — filled, sized by PM2.5
+  geom_point(
+    data = stations_online,
+    aes(x = lon, y = lat, color = provider_label, size = pm25),
+    shape = 16, alpha = 0.8
+  ) +
+  scale_color_manual(values = provider_colours, name = "Provider") +
+  scale_size_continuous(
+    range  = c(1.5, 6),
+    name   = expression(paste("PM"[2.5] ~ (mu * g / m^3))),
+    guide  = guide_legend(override.aes = list(color = "grey30"))
+  ) +
+  coord_sf(xlim = c(67, 98), ylim = c(6, 38), expand = FALSE) +
+  labs(
+    title = "OAQ Air Quality Monitoring Network — India",
+    subtitle = paste0(
+      "CPCB: ", sum(all_stations$provider == "cpcb"), " stations | ",
+      "Airnet: ", sum(all_stations$provider == "airnet"), " stations | ",
+      "Aurassure: ", sum(all_stations$provider == "aurassure"), " stations\n",
+      "Filled = current PM\u2082.\u2085 reading | Hollow = offline"
+    ),
+    caption = "Source: OAQ platform (oaq.notf.in) | Live station feed",
+    x = NULL, y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid      = element_blank(),
+    legend.position = "right",
+    legend.box      = "vertical",
+    plot.title      = element_text(face = "bold", size = 15),
+    plot.subtitle   = element_text(size = 10, color = "grey40"),
+    axis.text       = element_blank()
+  )
+
+ggsave(fig_path("fig_oaq_india_network.png"), width = 13, height = 11, dpi = 300)
+```
+
+---
+
+# Provider-faceted view
+
+```{r facet-map, fig.width=14, fig.height=5, fig.cap="Same stations faceted by provider. Note Airnet and Aurassure are concentrated in southern India while CPCB spans the full country."}
+ggplot() +
+  geom_sf(data = india_sf, fill = "#f5f5f5", color = "grey70", linewidth = 0.25) +
+  geom_point(
+    data = stations_offline,
+    aes(x = lon, y = lat, color = provider_label),
+    shape = 1, size = 1.5, alpha = 0.5, stroke = 0.4
+  ) +
+  geom_point(
+    data = stations_online,
+    aes(x = lon, y = lat, color = provider_label, size = pm25),
+    shape = 16, alpha = 0.85
+  ) +
+  scale_color_manual(values = provider_colours, name = "Provider", guide = "none") +
+  scale_size_continuous(
+    range = c(1, 5),
+    name  = expression(paste("PM"[2.5] ~ (mu * g / m^3))),
+    guide = guide_legend(override.aes = list(color = "grey30"))
+  ) +
+  coord_sf(xlim = c(67, 98), ylim = c(6, 38), expand = FALSE) +
+  facet_wrap(~provider_label, nrow = 1) +
+  labs(
+    title = "OAQ Provider Networks — Faceted",
+    caption = "Source: OAQ platform (oaq.notf.in)",
+    x = NULL, y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid = element_blank(),
+    strip.text = element_text(
+      face = "bold", size = 11,
+      color = "white"
+    ),
+    strip.background = element_rect(fill = "grey30", color = NA),
+    legend.position = "right",
+    plot.title = element_text(face = "bold"),
+    axis.text = element_blank()
+  )
+
+ggsave(fig_path("fig_oaq_india_faceted.png"), width = 14, height = 5, dpi = 300)
+```
+
+---
+
+# Nearest CPCB neighbours for non-CPCB sensors
+
+For each Airnet and Aurassure station, we find the **3 closest CPCB reference
+stations** by haversine distance. This is useful for pairing low-cost sensors
+with nearby government monitors for calibration or cross-validation.
+
+```{r nearest-cpcb-table}
+cpcb_stations <- all_stations |> filter(provider == "cpcb")
+non_cpcb_stations <- all_stations |> filter(provider != "cpcb")
+
+nearest_cpcb <- nearest_stations(
+  non_cpcb_stations, cpcb_stations,
+  k = 3, from_id = "id", to_id = "id"
+) |>
+  mutate(dist_km = round(dist_km, 2)) |>
+  left_join(
+    non_cpcb_stations |> select(
+      from_id = id, non_cpcb_name = name, non_cpcb_provider = provider_label,
+      non_cpcb_city = city, non_cpcb_lat = lat, non_cpcb_lon = lon
+    ),
+    by = "from_id"
+  ) |>
+  left_join(
+    cpcb_stations |> select(
+      to_id = id, cpcb_name = name, cpcb_city = city,
+      cpcb_lat = lat, cpcb_lon = lon
+    ),
+    by = "to_id"
+  ) |>
+  rename(non_cpcb_id = from_id, cpcb_id = to_id)
+
+cat("Non-CPCB stations:", n_distinct(nearest_cpcb$non_cpcb_id), "\n")
+cat(
+  "Distance range to nearest CPCB:",
+  round(min(nearest_cpcb$dist_km[nearest_cpcb$rank == 1]), 2), "–",
+  round(max(nearest_cpcb$dist_km[nearest_cpcb$rank == 1]), 2), "km\n"
+)
+
+nearest_cpcb |>
+  select(
+    `Non-CPCB station`  = non_cpcb_name,
+    `Provider`          = non_cpcb_provider,
+    `City`              = non_cpcb_city,
+    `Rank`              = rank,
+    `Nearest CPCB`      = cpcb_name,
+    `CPCB city`         = cpcb_city,
+    `Distance (km)`     = dist_km
+  ) |>
+  knitr::kable(digits = 2)
+```
+
+---
+
+# Bengaluru: sensor network and nearest CPCB matches
+
+Airnet (47 stations) and Aurassure (1 station) are concentrated in Bengaluru,
+making it the only city where multiple low-cost networks co-exist with CPCB
+reference monitors. The map uses ward-level boundaries for spatial context.
+
+```{r blr-boundary}
+blr_geojson_url <- "https://geo.bharatviz.org/geojsons/cities/bengaluru.geojson"
+blr_boundary <- tryCatch(
+  {
+    sf::st_read(blr_geojson_url, quiet = TRUE) |> sf::st_transform(4326)
+  },
+  error = function(e) {
+    warning("Could not load Bengaluru GeoJSON: ", e$message)
+    NULL
+  }
+)
+```
+
+```{r blr-stations}
+blr_bbox <- c(xmin = 77.3, xmax = 77.9, ymin = 12.7, ymax = 13.2)
+
+blr_cpcb <- cpcb_stations |>
+  filter(
+    lon >= blr_bbox["xmin"], lon <= blr_bbox["xmax"],
+    lat >= blr_bbox["ymin"], lat <= blr_bbox["ymax"]
+  )
+
+blr_non_cpcb <- non_cpcb_stations |>
+  filter(
+    lon >= blr_bbox["xmin"], lon <= blr_bbox["xmax"],
+    lat >= blr_bbox["ymin"], lat <= blr_bbox["ymax"]
+  )
+
+cat("Bengaluru CPCB stations:", nrow(blr_cpcb), "\n")
+cat(
+  "Bengaluru non-CPCB stations:", nrow(blr_non_cpcb),
+  "(Airnet:", sum(blr_non_cpcb$provider == "airnet"),
+  "| Aurassure:", sum(blr_non_cpcb$provider == "aurassure"), ")\n"
+)
+
+# Nearest-CPCB pairs restricted to Bengaluru non-CPCB stations
+blr_segments <- nearest_cpcb |>
+  filter(non_cpcb_id %in% blr_non_cpcb$id) |>
+  mutate(inv_dist = 1 / dist_km)
+
+blr_cpcb_matched_ids <- unique(blr_segments$cpcb_id)
+blr_cpcb_matched <- blr_cpcb |> filter(id %in% blr_cpcb_matched_ids)
+blr_cpcb_bg <- blr_cpcb |> filter(!id %in% blr_cpcb_matched_ids)
+
+cat("Matched CPCB stations:", nrow(blr_cpcb_matched), "\n")
+```
+
+```{r blr-map, fig.width=11, fig.height=10, fig.cap="Bengaluru sensor network. Triangles = Airnet (CSTEP) and Aurassure low-cost sensors. Filled circles = CPCB reference stations matched as nearest neighbours. Open circles = other CPCB stations. Lines connect each non-CPCB sensor to its 3 nearest CPCB stations; thickness and opacity ∝ 1/distance."}
+provider_colours <- c(
+  "CPCB"           = "#2166ac",
+  "Airnet (CSTEP)" = "#d6604d",
+  "Aurassure"      = "#4dac26"
+)
+
+# Short name: strip city suffix for labels
+blr_non_cpcb <- blr_non_cpcb |>
+  mutate(name_short = name |>
+    stringr::str_remove(",?\\s*(Bengaluru|Bangalore).*$") |>
+    stringr::str_trunc(30))
+
+blr_cpcb_matched <- blr_cpcb_matched |>
+  mutate(name_short = name |>
+    stringr::str_remove(",?\\s*(Bengaluru|Bangalore).*$") |>
+    stringr::str_trunc(30))
+
+ggplot() +
+  {
+    if (!is.null(blr_boundary)) {
+      geom_sf(
+        data = blr_boundary, fill = "#f7f7f7", color = "grey65",
+        linewidth = 0.3
+      )
+    }
+  } +
+  # Background CPCB (unmatched)
+  geom_point(
+    data = blr_cpcb_bg,
+    aes(x = lon, y = lat),
+    shape = 1, size = 3, color = "grey70", stroke = 0.6
+  ) +
+  # Connecting segments
+  geom_segment(
+    data = blr_segments,
+    aes(
+      x = non_cpcb_lon, y = non_cpcb_lat,
+      xend = cpcb_lon, yend = cpcb_lat,
+      linewidth = inv_dist, alpha = inv_dist,
+      color = non_cpcb_provider
+    ),
+    lineend = "round"
+  ) +
+  # Matched CPCB stations
+  geom_point(
+    data = blr_cpcb_matched,
+    aes(x = lon, y = lat),
+    shape = 21, size = 4, fill = "#a6cee3", color = "#2166ac", stroke = 0.9
+  ) +
+  geom_text_repel(
+    data = blr_cpcb_matched,
+    aes(x = lon, y = lat, label = name_short),
+    color = "#2166ac", size = 2.3, max.overlaps = 25,
+    segment.size = 0.3, box.padding = 0.4, force = 1.2,
+    show.legend = FALSE
+  ) +
+  # Non-CPCB sensors
+  geom_point(
+    data = blr_non_cpcb,
+    aes(x = lon, y = lat, color = provider_label),
+    shape = 17, size = 3.5
+  ) +
+  geom_text_repel(
+    data = blr_non_cpcb,
+    aes(x = lon, y = lat, label = name_short, color = provider_label),
+    size = 2.2, max.overlaps = 30, segment.size = 0.3,
+    box.padding = 0.35, force = 1.5, show.legend = FALSE
+  ) +
+  scale_color_manual(values = provider_colours, name = "Provider") +
+  scale_linewidth_continuous(range = c(0.2, 1.8), guide = "none") +
+  scale_alpha_continuous(range = c(0.2, 0.8), guide = "none") +
+  coord_sf(
+    xlim = c(blr_bbox["xmin"], blr_bbox["xmax"]),
+    ylim = c(blr_bbox["ymin"], blr_bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(
+    title = "Bengaluru Air Quality Sensor Network",
+    subtitle = paste0(
+      "CPCB reference: ", nrow(blr_cpcb), " stations | ",
+      "Airnet: ", sum(blr_non_cpcb$provider == "airnet"), " | ",
+      "Aurassure: ", sum(blr_non_cpcb$provider == "aurassure"), "\n",
+      "Lines connect each non-CPCB sensor to its 3 nearest CPCB stations",
+      " | thickness \u221d 1/distance"
+    ),
+    caption = "Source: OAQ platform (oaq.notf.in)",
+    x = NULL, y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid      = element_blank(),
+    legend.position = "right",
+    plot.title      = element_text(face = "bold", size = 14),
+    plot.subtitle   = element_text(size = 9.5, color = "grey40"),
+    axis.text       = element_blank()
+  )
+
+ggsave(fig_path("fig_oaq_bengaluru.png"), width = 11, height = 10, dpi = 300)
+```
+
+---
+
+# Station count by state
+
+```{r state-counts}
+sf::sf_use_s2(FALSE)
+
+stations_sf <- all_stations |>
+  sf::st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+# Find name column in the GeoJSON
+state_col <- names(india_sf)[grep("name|NAME|state|STATE", names(india_sf),
+  ignore.case = TRUE
+)[1]]
+cat("Using state name column:", state_col, "\n")
+
+# Snap coordinates to 0.0001-degree grid to eliminate floating-point topology errors
+india_sf_snapped <- sf::st_set_precision(india_sf, 1e4) |> sf::st_make_valid()
+
+stations_with_state <- tryCatch(
+  sf::st_join(stations_sf, india_sf_snapped[, state_col]),
+  error = function(e) {
+    message("Spatial join failed (geometry issue in source GeoJSON): ", conditionMessage(e))
+    NULL
+  }
+)
+
+if (!is.null(stations_with_state)) {
+  state_counts <- stations_with_state |>
+    sf::st_drop_geometry() |>
+    count(state = .data[[state_col]], provider_label) |>
+    pivot_wider(names_from = provider_label, values_from = n, values_fill = 0) |>
+    arrange(desc(CPCB))
+  cat("\nTop 15 states by CPCB station count:\n")
+  print(head(state_counts, 15))
+} else {
+  cat("State counts not available due to source GeoJSON geometry issue.\n")
+}
+```
+
+---
+
+# Session information
+
+```{r session-info}
+sessionInfo()
+```

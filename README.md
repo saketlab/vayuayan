@@ -1,9 +1,12 @@
-# vayuayan: Air Quality Data Analysis for India
+# vayuayanR: Download and Analyze Air Pollution Data in R
 
-**vayuayan** is an R package for fetching and analysing air quality data from multiple sources:
+**vayuayan** is an R package for downloading and analyzing air quality data from multiple sources:
 
-- **WUSTL ACAG**: Washington University satellite PM2.5 data (Global)
-- **CPCB India**: Central Pollution Control Board monitoring network (India only)
+- **WUSTL ACAG Satellite PM2.5**: Satellite-derived PM2.5 estimates at ~1 km resolution, global coverage (1998-2022)
+- **CPCB CAAQMS**: Historical and real-time PM2.5, PM10, AQI data from 400+ Central Pollution Control Board monitoring stations (India)
+- **OAQ (Open Air Quality)**: Low-cost sensor network data from providers like Airnet (India)
+
+All three sources are accessible through a common R interface with tidy data output.
 
 This is the R port of the Python package [vayuayan](https://github.com/saketlab/vayuayan).
 
@@ -14,7 +17,7 @@ This is the R port of the Python package [vayuayan](https://github.com/saketlab/
 - **Vayu** (वायु): Wind, air
 - **Ayan** (अयन): Path, journey, movement
 
-Together, "Vayuayan" means "the path of wind" — representing the journey and movement of air quality data across space and time.
+Together, "Vayuayan" means "the path of wind."
 
 ---
 
@@ -23,11 +26,11 @@ Together, "Vayuayan" means "the path of wind" — representing the journey and m
 Install from GitHub using devtools:
 
 ```r
-# Install devtools 
+# Install devtools
 install.packages("devtools")
 
 # Install vayuayan
-devtools::install_github("saketkc/vayuayanR")
+devtools::install_github("saketlab/vayuayanR")
 ```
 
 ---
@@ -159,42 +162,19 @@ ggplot(stations_sf) +
 
 ---
 
-## API Reference
+## Data Sources
 
-### CPCB Functions
-
-| Function | Description |
-|----------|-------------|
-| `cpcb_get_state_list()` | Get all available states |
-| `cpcb_get_city_list(state)` | Get cities in a state |
-| `cpcb_get_station_list(city)` | Get stations in a city as a data frame |
-| `cpcb_get_complete_list()` | Get all states, cities, and stations |
-| `cpcb_add_coords(station_df)` | Add coordinates from CPCB live feed (Nominatim fallback for offline stations) |
-| `cpcb_download_city_data(city, year, save_location)` | Download city-level daily PM2.5 |
-| `cpcb_download_station_data(station_id, year, save_location)` | Download per-station daily PM2.5 |
-
-### PM2.5 Satellite Functions
-
-| Function | Description |
-|----------|-------------|
-| `pm25_get_stats(geojson_file, year, month, cache_dir, group_by)` | Extract mean PM2.5 stats for a region |
-| `pm25_download_netcdf(year, month, cache_dir)` | Download WUSTL ACAG NetCDF file |
-
-### Utility Functions
-
-| Function | Description |
-|----------|-------------|
-| `get_aqi_category(value)` | Get AQI category label for a single value |
-| `get_aqi_categories(values)` | Vectorised AQI category labels |
-| `clean_station_name(name)` | Sanitise station name for use as filename |
-| `haversine_distance(lat1, lon1, lat2, lon2)` | Distance between two coordinates (km) |
-| `stations_to_dataframe(data)` | Convert raw station list to tidy data frame |
+| Source | Coverage | Resolution | Period |
+|--------|----------|------------|--------|
+| WUSTL ACAG V5GL04 | Global satellite PM2.5 | ~1 km grid | 1998-2022 |
+| CPCB CAAQMS | 400+ stations in India | Daily/Hourly | 2015-present |
+| OAQ (Airnet, etc.) | Low-cost sensor networks in India | Daily/Monthly | Varies |
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a pull request.
+Pull requests and bug reports are welcome.
 
 ---
 
@@ -202,16 +182,4 @@ Contributions are welcome! Please feel free to submit a pull request.
 
 This package is not officially affiliated with any government agency or air
 quality monitoring network. It is a third-party tool for accessing publicly
-available environmental data. Users are responsible for verifying data accuracy
-and following proper attribution guidelines.
-
----
-
-## Citation
-
-If you use this package in your research, please cite:
-
-```
-Choudhary, S., & Prajapat, M. K. (2025). vayuayan: Air Quality Data Analysis
-for India. R package version 0.2.0. https://github.com/saketkc/vayuayanR
-```
+available environmental data.
