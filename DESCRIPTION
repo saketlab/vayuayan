@@ -1,21 +1,24 @@
 Package: vayuayan
 Type: Package
-Title: Comprehensive Air Quality Data Analysis for India
-Version: 0.2.0
+Title: Air Quality Data from CPCB, OAQ, and WUSTL Satellite PM2.5
+Version: 0.2.0.9001
 Authors@R: c(
     person("Saket", "Choudhary", , "saketc@iitb.ac.in", role = c("aut", "cre")),
     person("Mahesh Kumar", "Prajapat", , "22b0433@iitb.ac.in", role = "aut"),
-    person("Darakhshan", "Nehal", role = "ctb")
+    person("Darakhshan", "Nehal", "darakhshannehal@gmail.com", role = "ctb")
   )
-Description: Fetch and analyze air quality data from multiple sources including
-    CPCB (Central Pollution Control Board) India, OAQ (Open Air Quality platform),
-    and WUSTL ACAG satellite PM2.5 data. Provides functions for historical and
-    real-time AQI monitoring, geospatial station location services, and satellite
-    PM2.5 data processing.
+Description: Download and analyze air pollution data from three sources.
+    CPCB (Central Pollution Control Board) CAAQMS stations provide historical
+    and real-time PM2.5, PM10, and AQI readings across 400+ sites in India.
+    OAQ (Open Air Quality) aggregates low-cost sensor networks such as
+    Airnet, also in India. WUSTL ACAG V5GL04 provides satellite-derived
+    PM2.5 at 1 km resolution globally (1998-2022). Includes geospatial
+    station matching, AQI categorization, and NetCDF raster extraction
+    for arbitrary regions.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-Depends: 
+Depends:
     R (>= 4.0.0)
 Imports:
     httr,
@@ -46,6 +49,6 @@ Suggests:
     kableExtra,
     patchwork
 VignetteBuilder: knitr
-URL: https://saket-choudhary.me/vayuayanR/, https://github.com/saketkc/vayuayanR, https://saketkc.github.io/vayuayanR
-BugReports: https://github.com/saketkc/vayuayanR/issues
+URL: https://vayuayanr.saketlab.org/, https://github.com/saketlab/vayuayanR
+BugReports: https://github.com/saketlab/vayuayanR/issues
 Config/roxygen2/version: 8.0.0

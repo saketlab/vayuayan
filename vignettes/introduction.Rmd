@@ -21,33 +21,35 @@ knitr::opts_chunk$set(
 
 # Introduction
 
-**vayuayan** (वायुअयन) is an R package for fetching and analyzing air quality data from multiple sources in India. The name combines two Sanskrit words:
+**vayuayan** (वायुअयन) is an R package for fetching and analyzing air quality data from WUSTL ACAG satellite PM2.5 (global) and CPCB & OAQ monitoring networks (India). The name combines two Sanskrit words:
 
 - **Vayu** (वायु): Wind, air
 - **Ayan** (अयन): Path, journey, movement
 
-Together, "Vayuayan" means "the path of wind" - representing the journey and movement of air quality data across space and time.
+Together, "Vayuayan" means "the path of wind."
 
 ## Installation
 
 ```{r install, eval=FALSE}
 # Install from GitHub
-devtools::install_github("saketkc/vayuayanR")
+devtools::install_github("saketlab/vayuayanR")
 ```
 
 ## Data sources
 
 The package provides access to:
 
-1. **CPCB India**: Central Pollution Control Board monitoring network
-   - Historical AQI data
-   - Real-time monitoring data
+1. **WUSTL ACAG**: Washington University satellite PM2.5 data
+   - Global coverage at ~1 km resolution
+   - Monthly and annual data (1998-2022)
+
+2. **CPCB**: Central Pollution Control Board monitoring network (India)
+   - Historical and real-time AQI data
    - Station-level and city-level data
 
-2. **WUSTL ACAG**: Washington University satellite PM2.5 data
-   - Global coverage
-   - Monthly and annual data
-   - High-resolution gridded data
+3. **OAQ**: Open Air Quality low-cost sensor networks (India)
+   - Multiple providers including Airnet
+   - Daily, monthly, and annual data
 
 ## Quick start
 

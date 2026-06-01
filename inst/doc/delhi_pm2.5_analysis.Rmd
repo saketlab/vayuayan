@@ -109,16 +109,16 @@ if (!require("pacman", quietly = TRUE)) {
 }
 
 pacman::p_load(
-  vayuayan,      # CPCB data download + geocoding
-  tidyverse,     # data wrangling + ggplot2
-  purrr,         # map_dfr for iterating over months
-  terra,         # raster operations
-  sf,            # vector spatial data
-  tidyterra,     # ggplot2 + terra integration (geom_spatraster)
+  vayuayan, # CPCB data download + geocoding
+  tidyverse, # data wrangling + ggplot2
+  purrr, # map_dfr for iterating over months
+  terra, # raster operations
+  sf, # vector spatial data
+  tidyterra, # ggplot2 + terra integration (geom_spatraster)
   exactextractr, # area-weighted raster extraction to polygons
-  ncdf4,         # reading NetCDF files directly
-  khroma,        # diverging colour palettes
-  stringr        # string cleaning
+  ncdf4, # reading NetCDF files directly
+  khroma, # diverging colour palettes
+  stringr # string cleaning
 )
 ```
 
@@ -127,12 +127,15 @@ pacman::p_load(
 vignettes_dir <- "/NAS/darakshann/vayuayanR/vignettes"
 
 dirs <- c("data/delhi", "figures/delhi", "station_data")
-for (d in dirs) dir.create(file.path(vignettes_dir, d),
-                            recursive = TRUE, showWarnings = FALSE)
+for (d in dirs) {
+  dir.create(file.path(vignettes_dir, d),
+    recursive = TRUE, showWarnings = FALSE
+  )
+}
 
-data_path    <- function(f) file.path(vignettes_dir, "data/delhi",    f)
-fig_path     <- function(f) file.path(vignettes_dir, "figures/delhi", f)
-station_path <- function(f) file.path(vignettes_dir, "station_data",  f)
+data_path <- function(f) file.path(vignettes_dir, "data/delhi", f)
+fig_path <- function(f) file.path(vignettes_dir, "figures/delhi", f)
+station_path <- function(f) file.path(vignettes_dir, "station_data", f)
 ```
 
 ## Helper Functions
@@ -144,13 +147,13 @@ Delhi's bounding box, making extraction near-instant.
 
 ```{r helper-functions}
 read_v5gl04_fast <- function(nc_path, shape) {
-  bbox    <- sf::st_bbox(shape)
-  nc      <- ncdf4::nc_open(nc_path)
-  lons    <- ncdf4::ncvar_get(nc, "lon")
-  lats    <- ncdf4::ncvar_get(nc, "lat")
+  bbox <- sf::st_bbox(shape)
+  nc <- ncdf4::nc_open(nc_path)
+  lons <- ncdf4::ncvar_get(nc, "lon")
+  lats <- ncdf4::ncvar_get(nc, "lat")
   lon_idx <- which(lons >= bbox["xmin"] & lons <= bbox["xmax"])
   lat_idx <- which(lats >= bbox["ymin"] & lats <= bbox["ymax"])
-  data    <- ncdf4::ncvar_get(
+  data <- ncdf4::ncvar_get(
     nc, "GWRPM25",
     start = c(min(lon_idx), min(lat_idx)),
     count = c(length(lon_idx), length(lat_idx))
@@ -164,13 +167,13 @@ load_v5gl04_rast <- function(year, month, shape) {
     "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly/V5GL04.HybridPM25.Global.%04d%02d-%04d%02d.nc",
     year, month, year, month
   )
-  bbox    <- sf::st_bbox(shape)
-  nc      <- ncdf4::nc_open(nc_path)
-  lons    <- ncdf4::ncvar_get(nc, "lon")
-  lats    <- ncdf4::ncvar_get(nc, "lat")
+  bbox <- sf::st_bbox(shape)
+  nc <- ncdf4::nc_open(nc_path)
+  lons <- ncdf4::ncvar_get(nc, "lon")
+  lats <- ncdf4::ncvar_get(nc, "lat")
   lon_idx <- which(lons >= bbox["xmin"] & lons <= bbox["xmax"])
   lat_idx <- which(lats >= bbox["ymin"] & lats <= bbox["ymax"])
-  data    <- ncdf4::ncvar_get(
+  data <- ncdf4::ncvar_get(
     nc, "GWRPM25",
     start = c(min(lon_idx), min(lat_idx)),
     count = c(length(lon_idx), length(lat_idx))
@@ -178,9 +181,9 @@ load_v5gl04_rast <- function(year, month, shape) {
   ncdf4::nc_close(nc)
   r <- terra::rast(
     nrows = length(lat_idx), ncols = length(lon_idx),
-    xmin  = min(lons[lon_idx]), xmax = max(lons[lon_idx]),
-    ymin  = min(lats[lat_idx]), ymax = max(lats[lat_idx]),
-    crs   = "EPSG:4326"
+    xmin = min(lons[lon_idx]), xmax = max(lons[lon_idx]),
+    ymin = min(lats[lat_idx]), ymax = max(lats[lat_idx]),
+    crs = "EPSG:4326"
   )
   terra::values(r) <- t(data)[nrow(t(data)):1, ]
   r
@@ -221,7 +224,8 @@ print(delhi_ground)
 ```{r satellite-data}
 # Load BharatViz ward boundary — single boundary used throughout this vignette
 delhi_shape <- sf::st_read(
-  "/NAS/darakshann/geojson/delhi_bharat_viz_wards.geojson", quiet = TRUE
+  "/NAS/darakshann/geojson/delhi_bharat_viz_wards.geojson",
+  quiet = TRUE
 ) %>% sf::st_make_valid()
 
 delhi_sat_df <- map_dfr(1:12, function(m) {
@@ -242,15 +246,20 @@ print(delhi_final)
 ggplot(delhi_final, aes(x = month)) +
   geom_line(aes(y = ground_pm25, color = "CPCB Ground"), linewidth = 1) +
   geom_line(aes(y = sat_pm25, color = "WUSTL Satellite"),
-            linewidth = 0.85, linetype = "dashed") +
+    linewidth = 0.85, linetype = "dashed"
+  ) +
   geom_point(aes(y = ground_pm25, color = "CPCB Ground"), size = 2) +
-  geom_point(aes(y = sat_pm25,    color = "WUSTL Satellite"), size = 2) +
-  geom_hline(yintercept = 5,  linetype = "dotted", color = "darkgreen", linewidth = 0.6) +
-  geom_hline(yintercept = 15, linetype = "dotted", color = "orange",    linewidth = 0.6) +
-  annotate("text", x = 1, y = 18, label = "WHO 24hr limit (15 µg/m³)",
-           size = 3, color = "tan4", hjust = 0) +
-  annotate("text", x = 1, y = 8,  label = "WHO annual limit (5 µg/m³)",
-           size = 3, color = "darkgreen", hjust = 0) +
+  geom_point(aes(y = sat_pm25, color = "WUSTL Satellite"), size = 2) +
+  geom_hline(yintercept = 5, linetype = "dotted", color = "darkgreen", linewidth = 0.6) +
+  geom_hline(yintercept = 15, linetype = "dotted", color = "orange", linewidth = 0.6) +
+  annotate("text",
+    x = 1, y = 18, label = "WHO 24hr limit (15 µg/m³)",
+    size = 3, color = "tan4", hjust = 0
+  ) +
+  annotate("text",
+    x = 1, y = 8, label = "WHO annual limit (5 µg/m³)",
+    size = 3, color = "darkgreen", hjust = 0
+  ) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
   scale_color_manual(values = c(
     "CPCB Ground"     = "#d77027ff",
@@ -288,8 +297,8 @@ ggsave(fig_path("fig1_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
 ## 2. Where Is Pollution Highest? Spatial Heatmap
 
 ```{r heatmap-data}
-r_nov               <- load_v5gl04_rast(2022, 11, delhi_shape)
-delhi_raster_mask   <- terra::mask(r_nov, terra::vect(delhi_shape))
+r_nov <- load_v5gl04_rast(2022, 11, delhi_shape)
+delhi_raster_mask <- terra::mask(r_nov, terra::vect(delhi_shape))
 delhi_city_boundary <- sf::st_union(delhi_shape)
 ```
 
@@ -311,7 +320,8 @@ ggplot() +
     subtitle = "Satellite estimate: November 2022 | Blue outline = Delhi boundary",
     caption  = "Source: WUSTL ACAG V5GL04 | Resolution: ~1 km"
   ) +
-  xlab(NULL) + ylab(NULL) +
+  xlab(NULL) +
+  ylab(NULL) +
   theme_minimal(base_size = 11) +
   theme(
     text             = element_text(family = "Arial"),
@@ -344,7 +354,8 @@ if (file.exists(data_path("delhi_stations_with_coords.csv"))) {
   delhi_station_list <- cpcb_get_station_list("Delhi")
   delhi_station_list <- cpcb_add_coords(delhi_station_list)
   write.csv(delhi_station_list, data_path("delhi_stations_with_coords.csv"),
-            row.names = FALSE)
+    row.names = FALSE
+  )
 }
 
 delhi_full_sf <- delhi_station_list %>%
@@ -361,7 +372,8 @@ cat(nrow(delhi_full_sf), "stations loaded\n")
 # Compute area-weighted mean satellite PM2.5 per ward
 delhi_wards <- delhi_shape
 delhi_wards$sat_pm25 <- exactextractr::exact_extract(
-  r_nov, delhi_wards, 'mean', progress = FALSE
+  r_nov, delhi_wards, "mean",
+  progress = FALSE
 )
 ```
 
@@ -372,21 +384,22 @@ ggplot() +
     color = "white", linewidth = 0.1
   ) +
   geom_sf(
-    data  = delhi_full_sf, color = "black",
-    fill  = "steelblue4", size = 2.5, shape = 21, alpha = 0.85
+    data = delhi_full_sf, color = "black",
+    fill = "steelblue4", size = 2.5, shape = 21, alpha = 0.85
   ) +
   scale_fill_distiller(
     palette   = "YlOrRd",
     direction = 1,
     na.value  = "grey80",
-    name      = expression(paste("Sat PM"[2.5] ~ (mu * g/m^3)))
+    name      = expression(paste("Sat PM"[2.5] ~ (mu * g / m^3)))
   ) +
   labs(
     title    = "Delhi PM2.5 Monitoring Network",
     subtitle = "Ward shading = satellite average PM2.5 | Blue dots = CPCB stations",
     caption  = "November 2022 | Source: WUSTL ACAG V5GL04 + CPCB CAAQMS"
   ) +
-  xlab(NULL) + ylab(NULL) +
+  xlab(NULL) +
+  ylab(NULL) +
   theme_minimal(base_size = 11) +
   theme(
     text             = element_text(family = "Arial"),
@@ -427,33 +440,37 @@ For each of the **290 BharatViz wards** we:
 
 ```{r winter-ground}
 station_raw <- lapply(seq_along(delhi_station_list$value), function(i) {
-  id   <- delhi_station_list$value[i]
+  id <- delhi_station_list$value[i]
   file <- station_path(paste0(id, ".csv"))
 
-  tryCatch({
-    if (!file.exists(file)) {
-      cpcb_download_station_data(
-        station_id    = id,
-        year          = 2022,
-        save_location = file
-      )
+  tryCatch(
+    {
+      if (!file.exists(file)) {
+        cpcb_download_station_data(
+          station_id    = id,
+          year          = 2022,
+          save_location = file
+        )
+      }
+      df <- read.csv(file)
+      day_col <- names(df)[1]
+
+      df %>%
+        pivot_longer(
+          cols = -all_of(day_col),
+          names_to = "Month_Name",
+          values_to = "pm25"
+        ) %>%
+        mutate(month = match(Month_Name, month.name)) %>%
+        filter(month %in% c(1, 10, 11, 12), !is.na(pm25)) %>%
+        summarise(ground_pm25 = mean(pm25, na.rm = TRUE)) %>%
+        mutate(value = id)
+    },
+    error = function(e) {
+      message("Skipped: ", id)
+      data.frame(value = id, ground_pm25 = NA)
     }
-    df      <- read.csv(file)
-    day_col <- names(df)[1]
-
-    df %>%
-      pivot_longer(cols      = -all_of(day_col),
-                   names_to  = "Month_Name",
-                   values_to = "pm25") %>%
-      mutate(month = match(Month_Name, month.name)) %>%
-      filter(month %in% c(1, 10, 11, 12), !is.na(pm25)) %>%
-      summarise(ground_pm25 = mean(pm25, na.rm = TRUE)) %>%
-      mutate(value = id)
-
-  }, error = function(e) {
-    message("Skipped: ", id)
-    data.frame(value = id, ground_pm25 = NA)
-  })
+  )
 })
 
 station_ground <- do.call(rbind, station_raw)
@@ -472,24 +489,24 @@ cat(nrow(station_ground_sf), "stations with valid winter PM2.5\n")
 ```{r compute-delta}
 ward_centroids <- sf::st_centroid(delhi_wards)
 
-sat_centroid_vals              <- terra::extract(r_nov, terra::vect(ward_centroids))
+sat_centroid_vals <- terra::extract(r_nov, terra::vect(ward_centroids))
 delhi_wards[["sat_pm25_centroid"]] <- sat_centroid_vals[["lyr.1"]]
 
 dist_matrix_winter <- sf::st_distance(ward_centroids, station_ground_sf)
-nearest_idx        <- apply(dist_matrix_winter, 1, which.min)
+nearest_idx <- apply(dist_matrix_winter, 1, which.min)
 
 delhi_wards$nearest_ground_pm25 <- station_ground_sf$ground_pm25[nearest_idx]
-delhi_wards$nearest_winter_km   <- apply(dist_matrix_winter, 1, min) / 1000
-delhi_wards$delta               <- delhi_wards$sat_pm25_centroid -
-                                   delhi_wards$nearest_ground_pm25
+delhi_wards$nearest_winter_km <- apply(dist_matrix_winter, 1, min) / 1000
+delhi_wards$delta <- delhi_wards$sat_pm25_centroid -
+  delhi_wards$nearest_ground_pm25
 
 delhi_wards <- delhi_wards %>%
   mutate(
     priority = case_when(
       nearest_winter_km > 2 &
         sat_pm25_centroid > median(sat_pm25_centroid, na.rm = TRUE) ~ "High priority",
-      nearest_winter_km > 2                                          ~ "Medium priority",
-      TRUE                                                            ~ "Well monitored"
+      nearest_winter_km > 2 ~ "Medium priority",
+      TRUE ~ "Well monitored"
     )
   )
 
@@ -503,7 +520,7 @@ print(table(delhi_wards$priority))
 
 ```{r gap-map, fig.height=8, fig.cap="Monitoring gap map. Each ward is coloured by ground-satellite disagreement. Dashed lines connect each ward centroid to its nearest CPCB station. Yellow dots = CPCB stations."}
 centroid_coords <- sf::st_coordinates(ward_centroids)
-station_coords  <- sf::st_coordinates(station_ground_sf)[nearest_idx, ]
+station_coords <- sf::st_coordinates(station_ground_sf)[nearest_idx, ]
 
 connection_lines <- data.frame(
   x_from = centroid_coords[, 1],
@@ -524,26 +541,27 @@ ggplot() +
     color = "grey8", linewidth = 0.4, alpha = 0.6, linetype = "dashed"
   ) +
   geom_sf(
-    data  = station_ground_sf,
+    data = station_ground_sf,
     color = "black", fill = "yellow",
-    size  = 2.5, shape = 21, alpha = 0.7
+    size = 2.5, shape = 21, alpha = 0.7
   ) +
   scale_fill_gradientn(
-    colours  = khroma::colour("roma")(100),
-    values   = scales::rescale(c(
+    colours = khroma::colour("roma")(100),
+    values = scales::rescale(c(
       min(delhi_wards$delta, na.rm = TRUE),
       median(delhi_wards$delta, na.rm = TRUE),
       max(delhi_wards$delta, na.rm = TRUE)
     )),
     na.value = "grey80",
-    name     = expression(paste(Delta ~ PM[2.5] ~ (mu * g/m^3)))
+    name = expression(paste(Delta ~ PM[2.5] ~ (mu * g / m^3)))
   ) +
   labs(
     title    = "Delhi: Satellite vs Nearest Ground Station PM2.5 by Ward",
     subtitle = "Dashed lines connect each ward centroid to its nearest CPCB station\nColour shows relative difference | Yellow = CPCB stations",
     caption  = "Delta = satellite PM2.5 at ward centroid − nearest CPCB station reading\nNovember 2022 | Source: WUSTL ACAG V5GL04 + CPCB CAAQMS"
   ) +
-  xlab(NULL) + ylab(NULL) +
+  xlab(NULL) +
+  ylab(NULL) +
   coord_sf() +
   theme_minimal(base_size = 11) +
   theme(
@@ -571,9 +589,9 @@ ggplot() +
     color = "white", linewidth = 0.15
   ) +
   geom_sf(
-    data  = delhi_full_sf,
+    data = delhi_full_sf,
     color = "black", fill = "yellow",
-    size  = 3, shape = 21
+    size = 3, shape = 21
   ) +
   scale_fill_manual(
     values = c(
@@ -582,14 +600,15 @@ ggplot() +
       "Well monitored"  = "#4dac26"
     ),
     na.value = "grey80",
-    name     = "Monitoring priority"
+    name = "Monitoring priority"
   ) +
   labs(
     title    = "Delhi: Priority Wards for New CPCB Monitoring Stations",
     subtitle = "Red = above-median PM2.5 AND >2 km from nearest sensor\nOrange = >2 km from sensor | Green = well covered | Yellow = existing stations",
     caption  = "Source: WUSTL ACAG V5GL04 + CPCB CAAQMS | November 2022"
   ) +
-  xlab(NULL) + ylab(NULL) +
+  xlab(NULL) +
+  ylab(NULL) +
   theme_minimal(base_size = 13) +
   theme(
     text          = element_text(family = "Arial"),
@@ -616,14 +635,16 @@ ggplot(
 ) +
   geom_rug(alpha = 0.3, color = "grey40") +
   geom_point(aes(color = nearest_winter_km), size = 2, alpha = 0.5) +
-  geom_smooth(method = "loess", se = TRUE,
-              color = "firebrick", fill = "pink", alpha = 0.2) +
+  geom_smooth(
+    method = "loess", se = TRUE,
+    color = "firebrick", fill = "pink", alpha = 0.2
+  ) +
   annotate(
     "text",
-    x     = max(delhi_wards$nearest_winter_km, na.rm = TRUE) * 0.55,
-    y     = max(abs(delhi_wards$delta), na.rm = TRUE) * 0.92,
+    x = max(delhi_wards$nearest_winter_km, na.rm = TRUE) * 0.55,
+    y = max(abs(delhi_wards$delta), na.rm = TRUE) * 0.92,
     label = paste0("r = ", round(cor_val, 2)),
-    size  = 4.5, color = "grey20"
+    size = 4.5, color = "grey20"
   ) +
   scale_color_distiller(
     palette   = "YlOrRd",
@@ -634,7 +655,7 @@ ggplot(
     title    = "Sensor Distance Predicts Ground-Satellite Disagreement",
     subtitle = "Each point = one Delhi ward (n = 290) | LOESS fit with 95% CI",
     x        = "Distance to nearest CPCB station (km)",
-    y        = expression(paste("|Delta| PM"[2.5] ~ (mu * g/m^3))),
+    y        = expression(paste("|Delta| PM"[2.5] ~ (mu * g / m^3))),
     caption  = "November 2022 | Source: WUSTL ACAG V5GL04 + CPCB CAAQMS"
   ) +
   theme_minimal(base_size = 11) +

@@ -108,7 +108,7 @@ pacman::p_load(
   patchwork,
   ggrepel,
   geodata,
-  kableExtra  # formatted tables
+  kableExtra # formatted tables
 )
 ```
 
@@ -117,25 +117,28 @@ pacman::p_load(
 vignettes_dir <- "/NAS/darakshann/vayuayanR/vignettes"
 
 dirs <- c("data/metro", "figures/metro")
-for (d in dirs) dir.create(file.path(vignettes_dir, d),
-                            recursive = TRUE, showWarnings = FALSE)
+for (d in dirs) {
+  dir.create(file.path(vignettes_dir, d),
+    recursive = TRUE, showWarnings = FALSE
+  )
+}
 
 data_path <- function(f) file.path(vignettes_dir, "data/metro", f)
-fig_path  <- function(f) file.path(vignettes_dir, "figures/metro", f)
+fig_path <- function(f) file.path(vignettes_dir, "figures/metro", f)
 ```
 
 ## City Configuration
 
 ```{r city-config}
 cities <- list(
-  Delhi     = list(name = "Delhi",     color = "#c0392b"),
-  Mumbai    = list(name = "Mumbai",    color = "#2980b9"),
-  Kolkata   = list(name = "Kolkata",   color = "#8e44ad"),
-  Chennai   = list(name = "Chennai",   color = "#27ae60"),
+  Delhi     = list(name = "Delhi", color = "#c0392b"),
+  Mumbai    = list(name = "Mumbai", color = "#2980b9"),
+  Kolkata   = list(name = "Kolkata", color = "#8e44ad"),
+  Chennai   = list(name = "Chennai", color = "#27ae60"),
   Bengaluru = list(name = "Bengaluru", color = "#e67e22")
 )
 
-city_names  <- names(cities)
+city_names <- names(cities)
 city_colors <- setNames(sapply(cities, `[[`, "color"), city_names)
 
 # Extended 12-city palette for scatter plot
@@ -148,7 +151,7 @@ extra_colors <- c(
   Ahmedabad = "#cddc39",
   Hyderabad = "#ff5722"
 )
-all_colors   <- c(city_colors, extra_colors)
+all_colors <- c(city_colors, extra_colors)
 extra_cities <- names(extra_colors)
 
 city_download_names <- list(
@@ -169,13 +172,13 @@ shape_files <- list(
 
 ```{r helper-functions}
 read_v5gl04_fast <- function(nc_path, shape) {
-  bbox    <- sf::st_bbox(shape)
-  nc      <- ncdf4::nc_open(nc_path)
-  lons    <- ncdf4::ncvar_get(nc, "lon")
-  lats    <- ncdf4::ncvar_get(nc, "lat")
+  bbox <- sf::st_bbox(shape)
+  nc <- ncdf4::nc_open(nc_path)
+  lons <- ncdf4::ncvar_get(nc, "lon")
+  lats <- ncdf4::ncvar_get(nc, "lat")
   lon_idx <- which(lons >= bbox["xmin"] & lons <= bbox["xmax"])
   lat_idx <- which(lats >= bbox["ymin"] & lats <= bbox["ymax"])
-  data    <- ncdf4::ncvar_get(
+  data <- ncdf4::ncvar_get(
     nc, "GWRPM25",
     start = c(min(lon_idx), min(lat_idx)),
     count = c(length(lon_idx), length(lat_idx))
@@ -189,13 +192,13 @@ load_v5gl04_rast <- function(year, month, shape) {
     "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly/V5GL04.HybridPM25.Global.%04d%02d-%04d%02d.nc",
     year, month, year, month
   )
-  bbox    <- sf::st_bbox(shape)
-  nc      <- ncdf4::nc_open(nc_path)
-  lons    <- ncdf4::ncvar_get(nc, "lon")
-  lats    <- ncdf4::ncvar_get(nc, "lat")
+  bbox <- sf::st_bbox(shape)
+  nc <- ncdf4::nc_open(nc_path)
+  lons <- ncdf4::ncvar_get(nc, "lon")
+  lats <- ncdf4::ncvar_get(nc, "lat")
   lon_idx <- which(lons >= bbox["xmin"] & lons <= bbox["xmax"])
   lat_idx <- which(lats >= bbox["ymin"] & lats <= bbox["ymax"])
-  data    <- ncdf4::ncvar_get(
+  data <- ncdf4::ncvar_get(
     nc, "GWRPM25",
     start = c(min(lon_idx), min(lat_idx)),
     count = c(length(lon_idx), length(lat_idx))
@@ -203,9 +206,9 @@ load_v5gl04_rast <- function(year, month, shape) {
   ncdf4::nc_close(nc)
   r <- terra::rast(
     nrows = length(lat_idx), ncols = length(lon_idx),
-    xmin  = min(lons[lon_idx]), xmax = max(lons[lon_idx]),
-    ymin  = min(lats[lat_idx]), ymax = max(lats[lat_idx]),
-    crs   = "EPSG:4326"
+    xmin = min(lons[lon_idx]), xmax = max(lons[lon_idx]),
+    ymin = min(lats[lat_idx]), ymax = max(lats[lat_idx]),
+    crs = "EPSG:4326"
   )
   terra::values(r) <- t(data)[nrow(t(data)):1, ]
   r
@@ -240,11 +243,13 @@ for (city in city_names) {
 }
 
 ground_monthly <- map_dfr(city_names, function(city) {
-  df      <- read.csv(city_files[[city]])
+  df <- read.csv(city_files[[city]])
   day_col <- names(df)[1]
   df %>%
-    pivot_longer(cols = -all_of(day_col),
-                 names_to = "Month_Name", values_to = "pm25") %>%
+    pivot_longer(
+      cols = -all_of(day_col),
+      names_to = "Month_Name", values_to = "pm25"
+    ) %>%
     mutate(month = match(Month_Name, month.name)) %>%
     filter(!is.na(pm25), !is.na(month)) %>%
     group_by(month) %>%
@@ -270,8 +275,10 @@ sat_monthly <- map_dfr(city_names, function(city) {
       "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly/V5GL04.HybridPM25.Global.2022%02d-2022%02d.nc",
       m, m
     )
-    tibble(city = city, month = m,
-           sat_pm25 = read_v5gl04_fast(nc_file, shape))
+    tibble(
+      city = city, month = m,
+      sat_pm25 = read_v5gl04_fast(nc_file, shape)
+    )
   })
 })
 
@@ -286,10 +293,14 @@ ggplot(seasonal_combined, aes(x = month, color = city)) +
   geom_line(aes(y = ground_pm25), linewidth = 0.9) +
   geom_point(aes(y = ground_pm25), size = 2) +
   geom_line(aes(y = sat_pm25), linewidth = 0.7, linetype = "dashed", alpha = 0.7) +
-  geom_hline(yintercept = 15, linetype = "dotted",
-             color = "grey40", linewidth = 0.5) +
-  annotate("text", x = 11.5, y = 23,
-           label = "WHO 24hr (15)", size = 3, color = "grey40", hjust = 1) +
+  geom_hline(
+    yintercept = 15, linetype = "dotted",
+    color = "grey40", linewidth = 0.5
+  ) +
+  annotate("text",
+    x = 11.5, y = 23,
+    label = "WHO 24hr (15)", size = 3, color = "grey40", hjust = 1
+  ) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
   scale_color_manual(values = city_colors, name = NULL) +
   labs(
@@ -330,45 +341,58 @@ each monthly mean, computed from daily readings.
 ```{r seasonal-ribbon, fig.width=10, fig.height=10, fig.cap="Day-to-day variability in monthly PM2.5 across five metros, 2022. Line = monthly mean. Ribbon = ±1 SD across daily readings. Free Y-axis per city — Delhi's winter ribbon is enormous, reflecting extreme pollution events layered on top of an already high baseline."}
 # Compute monthly mean + SD — reuses city_files already loaded above
 ground_monthly_sd <- map_dfr(city_names, function(city) {
-  df      <- read.csv(city_files[[city]])
+  df <- read.csv(city_files[[city]])
   day_col <- names(df)[1]
   df %>%
-    pivot_longer(cols     = -all_of(day_col),
-                 names_to  = "Month_Name",
-                 values_to = "pm25") %>%
+    pivot_longer(
+      cols = -all_of(day_col),
+      names_to = "Month_Name",
+      values_to = "pm25"
+    ) %>%
     mutate(month = match(Month_Name, month.name)) %>%
     filter(!is.na(pm25), !is.na(month)) %>%
     group_by(month) %>%
     summarise(
       ground_pm25 = mean(pm25, na.rm = TRUE),
-      ground_sd   = sd(pm25,   na.rm = TRUE),
+      ground_sd   = sd(pm25, na.rm = TRUE),
       .groups     = "drop"
     ) %>%
     mutate(city = city)
 }) %>%
   # Order facets by pollution level — most polluted first
   mutate(city = factor(city,
-                       levels = c("Delhi", "Kolkata", "Mumbai",
-                                  "Chennai", "Bengaluru")))
+    levels = c(
+      "Delhi", "Kolkata", "Mumbai",
+      "Chennai", "Bengaluru"
+    )
+  ))
 
-ggplot(ground_monthly_sd,
-       aes(x = month, color = city, fill = city)) +
+ggplot(
+  ground_monthly_sd,
+  aes(x = month, color = city, fill = city)
+) +
   geom_ribbon(
-    aes(ymin = ground_pm25 - ground_sd,
-        ymax = ground_pm25 + ground_sd),
+    aes(
+      ymin = ground_pm25 - ground_sd,
+      ymax = ground_pm25 + ground_sd
+    ),
     alpha = 0.15, color = NA
   ) +
   geom_line(aes(y = ground_pm25), linewidth = 0.9) +
   geom_point(aes(y = ground_pm25), size = 2) +
-  geom_hline(yintercept = 15, linetype = "dotted",
-             color = "grey40", linewidth = 0.5) +
-  annotate("text", x = 1, y = 18,
-           label = "WHO 24hr (15 µg/m³)",
-           size = 2.8, color = "grey40", hjust = 0) +
+  geom_hline(
+    yintercept = 15, linetype = "dotted",
+    color = "grey40", linewidth = 0.5
+  ) +
+  annotate("text",
+    x = 1, y = 18,
+    label = "WHO 24hr (15 µg/m³)",
+    size = 2.8, color = "grey40", hjust = 0
+  ) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
   scale_color_manual(values = city_colors, guide = "none") +
-  scale_fill_manual(values  = city_colors, guide = "none") +
-  facet_wrap(~ city, ncol = 2, scales = "free_y") +
+  scale_fill_manual(values = city_colors, guide = "none") +
+  facet_wrap(~city, ncol = 2, scales = "free_y") +
   labs(
     title    = "Day-to-Day Variability in Monthly PM2.5 — Five Metros (2022)",
     subtitle = "Line = monthly mean | Ribbon = ±1 SD across daily readings | Free Y-axis per city",
@@ -388,7 +412,8 @@ ggplot(ground_monthly_sd,
   )
 
 ggsave(fig_path("fig1b_metro_seasonal_variability.png"),
-       width = 10, height = 10, dpi = 300)
+  width = 10, height = 10, dpi = 300
+)
 ```
 
 > **Key finding:** Delhi's winter ribbon is dramatically wider than any other
@@ -419,11 +444,13 @@ winter_ground <- ground_monthly %>%
   summarise(winter_ground_pm25 = mean(ground_pm25, na.rm = TRUE), .groups = "drop")
 
 who_exceedance <- map_dfr(city_names, function(city) {
-  df      <- read.csv(city_files[[city]])
+  df <- read.csv(city_files[[city]])
   day_col <- names(df)[1]
   df %>%
-    pivot_longer(cols = -all_of(day_col),
-                 names_to = "Month_Name", values_to = "pm25") %>%
+    pivot_longer(
+      cols = -all_of(day_col),
+      names_to = "Month_Name", values_to = "pm25"
+    ) %>%
     filter(!is.na(pm25)) %>%
     summarise(
       city            = city,
@@ -446,10 +473,10 @@ station_data <- map_dfr(city_names, function(city) {
 })
 
 city_summary <- station_data %>%
-  left_join(city_areas,     by = "city") %>%
-  left_join(annual_sat,     by = "city") %>%
-  left_join(annual_ground,  by = "city") %>%
-  left_join(winter_ground,  by = "city") %>%
+  left_join(city_areas, by = "city") %>%
+  left_join(annual_sat, by = "city") %>%
+  left_join(annual_ground, by = "city") %>%
+  left_join(winter_ground, by = "city") %>%
   left_join(who_exceedance, by = "city") %>%
   mutate(
     stations_per_100km2 = round(n_stations / area_km2 * 100, 2),
@@ -468,26 +495,38 @@ rankings <- city_summary %>%
 # Both ground and satellite side by side
 rankings_long <- rankings %>%
   select(city, annual_ground_pm25, annual_sat_pm25) %>%
-  pivot_longer(cols = c(annual_ground_pm25, annual_sat_pm25),
-               names_to = "source", values_to = "pm25") %>%
+  pivot_longer(
+    cols = c(annual_ground_pm25, annual_sat_pm25),
+    names_to = "source", values_to = "pm25"
+  ) %>%
   mutate(source = recode(source,
     "annual_ground_pm25" = "CPCB Ground",
     "annual_sat_pm25"    = "WUSTL Satellite"
   ))
 
-ggplot(rankings_long,
-       aes(x = reorder(city, pm25), y = pm25,
-           fill = city, alpha = source)) +
+ggplot(
+  rankings_long,
+  aes(
+    x = reorder(city, pm25), y = pm25,
+    fill = city, alpha = source
+  )
+) +
   geom_col(position = position_dodge(width = 0.6), width = 0.55) +
-  geom_hline(yintercept = 15, linetype = "dotted",
-             color = "grey40", linewidth = 0.4) +
-  annotate("text", x = 0.6, y = 18,
-           label = "WHO 24hr (15 µg/m³)", size = 3,
-           color = "grey40", hjust = 0) +
+  geom_hline(
+    yintercept = 15, linetype = "dotted",
+    color = "grey40", linewidth = 0.4
+  ) +
+  annotate("text",
+    x = 0.6, y = 18,
+    label = "WHO 24hr (15 µg/m³)", size = 3,
+    color = "grey40", hjust = 0
+  ) +
   coord_flip(clip = "off") +
   scale_fill_manual(values = city_colors, guide = "none") +
-  scale_alpha_manual(values = c("CPCB Ground" = 0.95, "WUSTL Satellite" = 0.5),
-                     name = NULL) +
+  scale_alpha_manual(
+    values = c("CPCB Ground" = 0.95, "WUSTL Satellite" = 0.5),
+    name = NULL
+  ) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
   labs(
     title    = "Annual Mean PM2.5 — Five Indian Metros (2022)",
@@ -530,7 +569,7 @@ colour scale** to reveal internal spatial structure clearly.
 igp_shape_files <- list(
   Delhi   = "/NAS/darakshann/geojson/delhi_gadm.geojson",
   Kolkata = "/NAS/darakshann/geojson/kolkata.geojson",
-  Kanpur  = NULL  # from GADM
+  Kanpur  = NULL # from GADM
 )
 
 coastal_shape_files <- list(
@@ -542,7 +581,7 @@ coastal_shape_files <- list(
 # Kanpur shape from GADM
 if (!exists("india_sf")) {
   india_dist <- geodata::gadm("IND", level = 2, path = data_path(""))
-  india_sf   <- sf::st_as_sf(india_dist)
+  india_sf <- sf::st_as_sf(india_dist)
 }
 kanpur_shape <- india_sf %>%
   filter(NAME_2 == "Kanpur Nagar") %>%
@@ -551,11 +590,11 @@ kanpur_shape <- india_sf %>%
 
 # Build all 6 shapes
 heatmap_shapes <- list(
-  Delhi     = sf::st_read(igp_shape_files$Delhi,         quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
-  Kolkata   = sf::st_read(igp_shape_files$Kolkata,       quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
+  Delhi     = sf::st_read(igp_shape_files$Delhi, quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
+  Kolkata   = sf::st_read(igp_shape_files$Kolkata, quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
   Kanpur    = kanpur_shape,
-  Mumbai    = sf::st_read(coastal_shape_files$Mumbai,    quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
-  Chennai   = sf::st_read(coastal_shape_files$Chennai,   quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
+  Mumbai    = sf::st_read(coastal_shape_files$Mumbai, quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
+  Chennai   = sf::st_read(coastal_shape_files$Chennai, quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union(),
   Bengaluru = sf::st_read(coastal_shape_files$Bengaluru, quiet = TRUE) %>% sf::st_make_valid() %>% sf::st_union()
 )
 
@@ -571,17 +610,19 @@ names(nov_rasters) <- heatmap_cities
 ```{r heatmap-fn}
 # Helper to build one heatmap panel
 make_heatmap <- function(city, label_color = "grey20") {
-  r        <- nov_rasters[[city]]
+  r <- nov_rasters[[city]]
   boundary <- heatmap_shapes[[city]]
-  vals      <- terra::values(r, na.rm = TRUE)
-  city_min  <- floor(quantile(vals, 0.02))
-  city_max  <- ceiling(quantile(vals, 0.98))
+  vals <- terra::values(r, na.rm = TRUE)
+  city_min <- floor(quantile(vals, 0.02))
+  city_max <- ceiling(quantile(vals, 0.98))
   city_mean <- round(mean(vals), 1)
 
   ggplot() +
     geom_spatraster(data = r) +
-    geom_sf(data = boundary, fill = NA,
-            color = label_color, linewidth = 0.5) +
+    geom_sf(
+      data = boundary, fill = NA,
+      color = label_color, linewidth = 0.5
+    ) +
     scale_fill_distiller(
       palette   = "YlOrRd",
       direction = 1,
@@ -594,17 +635,18 @@ make_heatmap <- function(city, label_color = "grey20") {
       title    = city,
       subtitle = paste0("Nov mean: ", city_mean, " µg/m³")
     ) +
-    xlab(NULL) + ylab(NULL) +
+    xlab(NULL) +
+    ylab(NULL) +
     theme_minimal(base_size = 10) +
     theme(
       text              = element_text(family = "Arial"),
       panel.grid        = element_blank(),
       legend.position   = "right",
       legend.key.width  = unit(0.4, "lines"),
-      legend.key.height = unit(3,   "lines"),
+      legend.key.height = unit(3, "lines"),
       legend.text       = element_text(size = 7),
       plot.title        = element_text(face = "bold", hjust = 0.5, size = 11),
-      plot.subtitle     = element_text(hjust = 0.5,  size = 9, color = "grey40")
+      plot.subtitle     = element_text(hjust = 0.5, size = 9, color = "grey40")
     )
 }
 ```
@@ -614,13 +656,13 @@ igp_plots <- map(c("Delhi", "Kolkata", "Kanpur"), make_heatmap)
 
 wrap_plots(igp_plots, ncol = 3) +
   plot_annotation(
-    title    = "IGP Cities: Delhi · Kolkata · Kanpur",
+    title = "IGP Cities: Delhi · Kolkata · Kanpur",
     subtitle = "Indo-Gangetic Plain — November 2022 | Per-city colour scale | Source: WUSTL ACAG V5GL04",
-    caption  = "Scales NOT comparable across panels — see Figure 2 for cross-city absolute comparison",
-    theme    = theme(
+    caption = "Scales NOT comparable across panels — see Figure 2 for cross-city absolute comparison",
+    theme = theme(
       plot.title    = element_text(face = "bold", size = 13),
       plot.subtitle = element_text(size = 10, color = "grey40"),
-      plot.caption  = element_text(size = 9,  color = "firebrick", face = "italic")
+      plot.caption  = element_text(size = 9, color = "firebrick", face = "italic")
     )
   )
 
@@ -637,13 +679,13 @@ coastal_plots <- map(c("Mumbai", "Chennai", "Bengaluru"), make_heatmap)
 
 wrap_plots(coastal_plots, ncol = 3) +
   plot_annotation(
-    title    = "Coastal & Southern Cities: Mumbai · Chennai · Bengaluru",
+    title = "Coastal & Southern Cities: Mumbai · Chennai · Bengaluru",
     subtitle = "November 2022 | Per-city colour scale | Source: WUSTL ACAG V5GL04",
-    caption  = "Scales NOT comparable across panels — see Figure 2 for cross-city absolute comparison",
-    theme    = theme(
+    caption = "Scales NOT comparable across panels — see Figure 2 for cross-city absolute comparison",
+    theme = theme(
       plot.title    = element_text(face = "bold", size = 13),
       plot.subtitle = element_text(size = 10, color = "grey40"),
-      plot.caption  = element_text(size = 9,  color = "firebrick", face = "italic")
+      plot.caption  = element_text(size = 9, color = "firebrick", face = "italic")
     )
   )
 
@@ -686,11 +728,13 @@ for (city in extra_cities) {
 }
 
 extra_ground <- map_dfr(extra_cities, function(city) {
-  df      <- read.csv(extra_city_files[[city]])
+  df <- read.csv(extra_city_files[[city]])
   day_col <- names(df)[1]
   df %>%
-    pivot_longer(cols = -all_of(day_col),
-                 names_to = "Month_Name", values_to = "pm25") %>%
+    pivot_longer(
+      cols = -all_of(day_col),
+      names_to = "Month_Name", values_to = "pm25"
+    ) %>%
     mutate(month = match(Month_Name, month.name)) %>%
     filter(!is.na(pm25), !is.na(month)) %>%
     summarise(annual_ground_pm25 = mean(pm25, na.rm = TRUE)) %>%
@@ -710,7 +754,7 @@ extra_city_gadm <- list(
 
 if (!exists("india_sf")) {
   india_dist <- geodata::gadm("IND", level = 2, path = data_path(""))
-  india_sf   <- sf::st_as_sf(india_dist)
+  india_sf <- sf::st_as_sf(india_dist)
 }
 
 extra_areas <- map_dfr(extra_cities, function(city) {
@@ -725,8 +769,10 @@ extra_areas <- map_dfr(extra_cities, function(city) {
 
 # Hyderabad: combine with Ranga Reddy for full GHMC metro area
 hyderabad_area <- india_sf %>%
-  filter(NAME_1 == "Telangana",
-         NAME_2 %in% c("Hyderabad", "Ranga Reddy")) %>%
+  filter(
+    NAME_1 == "Telangana",
+    NAME_2 %in% c("Hyderabad", "Ranga Reddy")
+  ) %>%
   sf::st_make_valid() %>%
   sf::st_union() %>%
   sf::st_transform(3857) %>%
@@ -741,13 +787,15 @@ extra_stations <- map_dfr(extra_cities, function(city) {
 })
 
 extra_summary <- extra_stations %>%
-  left_join(extra_areas,  by = "city") %>%
+  left_join(extra_areas, by = "city") %>%
   left_join(extra_ground, by = "city") %>%
   mutate(stations_per_100km2 = round(n_stations / area_km2 * 100, 2))
 
 all_city_summary <- bind_rows(
-  city_summary %>% select(city, n_stations, area_km2,
-                           annual_ground_pm25, stations_per_100km2),
+  city_summary %>% select(
+    city, n_stations, area_km2,
+    annual_ground_pm25, stations_per_100km2
+  ),
   extra_summary
 )
 
@@ -791,46 +839,54 @@ tbl_data %>%
 
 ```{r density-scatter, fig.width=9, fig.height=6, fig.cap="Station density vs annual mean PM2.5 across 12 Indian cities, 2022. Cities in the top-left (high PM2.5, low station density) are the most under-monitored relative to their pollution burden. Y-axis on log scale."}
 # Classify cities into quadrants for visual guidance
-median_pm25    <- median(all_city_summary$annual_ground_pm25, na.rm = TRUE)
+median_pm25 <- median(all_city_summary$annual_ground_pm25, na.rm = TRUE)
 median_density <- median(all_city_summary$stations_per_100km2, na.rm = TRUE)
 
 all_city_summary <- all_city_summary %>%
   mutate(
     quadrant = case_when(
       annual_ground_pm25 >= median_pm25 &
-        stations_per_100km2 <  median_density ~ "High pollution\nLow coverage",
+        stations_per_100km2 < median_density ~ "High pollution\nLow coverage",
       annual_ground_pm25 >= median_pm25 &
         stations_per_100km2 >= median_density ~ "High pollution\nGood coverage",
-      annual_ground_pm25 <  median_pm25 &
-        stations_per_100km2 <  median_density ~ "Low pollution\nLow coverage",
-      TRUE                                    ~ "Low pollution\nGood coverage"
+      annual_ground_pm25 < median_pm25 &
+        stations_per_100km2 < median_density ~ "Low pollution\nLow coverage",
+      TRUE ~ "Low pollution\nGood coverage"
     )
   )
 
-ggplot(all_city_summary,
-       aes(x = stations_per_100km2, y = annual_ground_pm25, color = city)) +
+ggplot(
+  all_city_summary,
+  aes(x = stations_per_100km2, y = annual_ground_pm25, color = city)
+) +
   # Quadrant shading
   annotate("rect",
-           xmin = -Inf, xmax = median_density,
-           ymin = median_pm25, ymax = Inf,
-           fill = "#d6604d", alpha = 0.06) +
+    xmin = -Inf, xmax = median_density,
+    ymin = median_pm25, ymax = Inf,
+    fill = "#d6604d", alpha = 0.06
+  ) +
   annotate("text",
-           x = median_density * 0.1, y = max(all_city_summary$annual_ground_pm25) * 0.95,
-           label = "Under-monitored\n(high PM2.5, low density)",
-           size = 3, color = "#d6604d", hjust = 0, fontface = "italic") +
-  geom_vline(xintercept = median_density, linetype = "dashed",
-             color = "grey60", linewidth = 0.4) +
-  geom_hline(yintercept = median_pm25, linetype = "dashed",
-             color = "grey60", linewidth = 0.4) +
+    x = median_density * 0.1, y = max(all_city_summary$annual_ground_pm25) * 0.95,
+    label = "Under-monitored\n(high PM2.5, low density)",
+    size = 3, color = "#d6604d", hjust = 0, fontface = "italic"
+  ) +
+  geom_vline(
+    xintercept = median_density, linetype = "dashed",
+    color = "grey60", linewidth = 0.4
+  ) +
+  geom_hline(
+    yintercept = median_pm25, linetype = "dashed",
+    color = "grey60", linewidth = 0.4
+  ) +
   geom_point(size = 5, alpha = 0.85) +
   ggrepel::geom_text_repel(
     aes(label = city),
-    size          = 3.5,
-    fontface      = "bold",
-    box.padding   = 0.6,
+    size = 3.5,
+    fontface = "bold",
+    box.padding = 0.6,
     point.padding = 0.4,
-    show.legend   = FALSE,
-    max.overlaps  = 20
+    show.legend = FALSE,
+    max.overlaps = 20
   ) +
   scale_color_manual(values = all_colors, guide = "none") +
   scale_x_continuous(labels = scales::number_format(accuracy = 0.01)) +

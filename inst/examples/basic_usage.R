@@ -55,34 +55,39 @@ cat("\n\n=== Live AQI Monitoring Examples ===\n\n")
 
 # Get current location using IP geolocation
 cat("Getting current location...\n")
-tryCatch({
-  location <- cpcb_get_system_location()
-  cat("Current location (lat, lon):", location, "\n")
+tryCatch(
+  {
+    location <- cpcb_get_system_location()
+    cat("Current location (lat, lon):", location, "\n")
 
-  # Find nearest monitoring station
-  cat("\nFinding nearest station...\n")
-  nearest <- cpcb_get_nearest_station(location)
-  cat("Nearest station:\n")
-  cat("  ID:", nearest$station_id, "\n")
-  cat("  Name:", nearest$station_name, "\n")
-  cat("  Distance:", round(nearest$distance_km, 2), "km\n")
+    # Find nearest monitoring station
+    cat("\nFinding nearest station...\n")
+    nearest <- cpcb_get_nearest_station(location)
+    cat("Nearest station:\n")
+    cat("  ID:", nearest$station_id, "\n")
+    cat("  Name:", nearest$station_name, "\n")
+    cat("  Distance:", round(nearest$distance_km, 2), "km\n")
 
-  # Get live AQI data for nearest station
-  cat("\nFetching live AQI data...\n")
-  aqi_data <- cpcb_get_live_aqi_data(station_id = nearest$station_id)
+    # Get live AQI data for nearest station
+    cat("\nFetching live AQI data...\n")
+    aqi_data <- cpcb_get_live_aqi_data(station_id = nearest$station_id)
 
-  if (!is.null(aqi_data$metrics) && length(aqi_data$metrics) > 0) {
-    cat("Live AQI metrics:\n")
-    for (metric in aqi_data$metrics) {
-      cat(sprintf("  %s: Avg=%s, Min=%s, Max=%s\n",
-                  metric$name, metric$avg, metric$min, metric$max))
+    if (!is.null(aqi_data$metrics) && length(aqi_data$metrics) > 0) {
+      cat("Live AQI metrics:\n")
+      for (metric in aqi_data$metrics) {
+        cat(sprintf(
+          "  %s: Avg=%s, Min=%s, Max=%s\n",
+          metric$name, metric$avg, metric$min, metric$max
+        ))
+      }
+    } else {
+      cat("No live data available (station may be offline)\n")
     }
-  } else {
-    cat("No live data available (station may be offline)\n")
+  },
+  error = function(e) {
+    cat("Error:", e$message, "\n")
   }
-}, error = function(e) {
-  cat("Error:", e$message, "\n")
-})
+)
 
 
 # ============================================================================
@@ -91,51 +96,53 @@ tryCatch({
 
 cat("\n\n=== All India Station Data Analysis ===\n\n")
 
-tryCatch({
-  # Get all stations across India
-  cat("Fetching all India station data...\n")
-  all_stations <- cpcb_get_all_india()
+tryCatch(
+  {
+    # Get all stations across India
+    cat("Fetching all India station data...\n")
+    all_stations <- cpcb_get_all_india()
 
-  # Convert to tidy dataframe
-  df <- stations_to_dataframe(all_stations)
+    # Convert to tidy dataframe
+    df <- stations_to_dataframe(all_stations)
 
-  cat("Total stations:", nrow(df), "\n")
-  cat("Live stations:", sum(df$live, na.rm = TRUE), "\n")
-  cat("Offline stations:", sum(!df$live, na.rm = TRUE), "\n")
+    cat("Total stations:", nrow(df), "\n")
+    cat("Live stations:", sum(df$live, na.rm = TRUE), "\n")
+    cat("Offline stations:", sum(!df$live, na.rm = TRUE), "\n")
 
-  # State-wise summary
-  cat("\nState-wise station summary:\n")
-  state_summary <- df %>%
-    group_by(state_id) %>%
-    summarise(
-      total_stations = n(),
-      live_stations = sum(live, na.rm = TRUE),
-      offline_stations = sum(!live, na.rm = TRUE),
-      avg_aqi = mean(avg_aqi, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    arrange(desc(live_stations)) %>%
-    head(10)
+    # State-wise summary
+    cat("\nState-wise station summary:\n")
+    state_summary <- df %>%
+      group_by(state_id) %>%
+      summarise(
+        total_stations = n(),
+        live_stations = sum(live, na.rm = TRUE),
+        offline_stations = sum(!live, na.rm = TRUE),
+        avg_aqi = mean(avg_aqi, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      arrange(desc(live_stations)) %>%
+      head(10)
 
-  print(state_summary)
+    print(state_summary)
 
-  # AQI category distribution
-  cat("\nAQI Category Distribution:\n")
-  df_with_aqi <- df %>%
-    filter(!is.na(avg_aqi)) %>%
-    mutate(aqi_category = get_aqi_categories(avg_aqi))
+    # AQI category distribution
+    cat("\nAQI Category Distribution:\n")
+    df_with_aqi <- df %>%
+      filter(!is.na(avg_aqi)) %>%
+      mutate(aqi_category = get_aqi_categories(avg_aqi))
 
-  category_counts <- table(df_with_aqi$aqi_category)
-  print(category_counts)
+    category_counts <- table(df_with_aqi$aqi_category)
+    print(category_counts)
 
-  # Comprehensive analysis
-  cat("\nComprehensive Station Analysis:\n")
-  analysis <- analyze_station_data(all_stations)
-  print(str(analysis))
-
-}, error = function(e) {
-  cat("Error:", e$message, "\n")
-})
+    # Comprehensive analysis
+    cat("\nComprehensive Station Analysis:\n")
+    analysis <- analyze_station_data(all_stations)
+    print(str(analysis))
+  },
+  error = function(e) {
+    cat("Error:", e$message, "\n")
+  }
+)
 
 
 # ============================================================================
@@ -193,36 +200,39 @@ if (length(cached_files) == 0) {
 cat("\n\n=== Geospatial Analysis Example ===\n\n")
 
 if (requireNamespace("sf", quietly = TRUE)) {
-  tryCatch({
-    all_stations <- cpcb_get_all_india()
-    df <- stations_to_dataframe(all_stations)
+  tryCatch(
+    {
+      all_stations <- cpcb_get_all_india()
+      df <- stations_to_dataframe(all_stations)
 
-    # Filter live stations with valid coordinates
-    live_stations <- df %>%
-      filter(live == TRUE, !is.na(longitude), !is.na(latitude))
+      # Filter live stations with valid coordinates
+      live_stations <- df %>%
+        filter(live == TRUE, !is.na(longitude), !is.na(latitude))
 
-    cat("Creating spatial object with", nrow(live_stations), "live stations...\n")
+      cat("Creating spatial object with", nrow(live_stations), "live stations...\n")
 
-    # Convert to sf object
-    stations_sf <- sf::st_as_sf(
-      live_stations,
-      coords = c("longitude", "latitude"),
-      crs = 4326
-    )
+      # Convert to sf object
+      stations_sf <- sf::st_as_sf(
+        live_stations,
+        coords = c("longitude", "latitude"),
+        crs = 4326
+      )
 
-    cat("Spatial object created successfully\n")
-    cat("CRS:", sf::st_crs(stations_sf)$input, "\n")
+      cat("Spatial object created successfully\n")
+      cat("CRS:", sf::st_crs(stations_sf)$input, "\n")
 
-    # Find stations within a bounding box (example: Maharashtra region)
-    mh_bbox <- sf::st_bbox(c(xmin = 72.5, ymin = 15.5, xmax = 80.5, ymax = 22.5),
-                           crs = 4326)
-    mh_stations <- sf::st_crop(stations_sf, mh_bbox)
+      # Find stations within a bounding box (example: Maharashtra region)
+      mh_bbox <- sf::st_bbox(c(xmin = 72.5, ymin = 15.5, xmax = 80.5, ymax = 22.5),
+        crs = 4326
+      )
+      mh_stations <- sf::st_crop(stations_sf, mh_bbox)
 
-    cat("Stations in Maharashtra region:", nrow(mh_stations), "\n")
-
-  }, error = function(e) {
-    cat("Error in geospatial analysis:", e$message, "\n")
-  })
+      cat("Stations in Maharashtra region:", nrow(mh_stations), "\n")
+    },
+    error = function(e) {
+      cat("Error in geospatial analysis:", e$message, "\n")
+    }
+  )
 } else {
   cat("sf package not available. Skipping geospatial analysis.\n")
   cat("Install with: install.packages('sf')\n")
