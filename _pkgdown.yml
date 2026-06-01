@@ -1,7 +1,7 @@
 url: https://vayuayanr.saketlab.org/
 
 development:
-  mode: auto
+  mode: release
 
 template:
   bootstrap: 5

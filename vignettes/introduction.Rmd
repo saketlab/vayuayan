@@ -10,6 +10,10 @@ vignette: >
 
 ```{r setup, include = FALSE}
 NOT_CRAN <- identical(tolower(Sys.getenv("NOT_CRAN", "true")), "true")
+CPCB_OK <- NOT_CRAN && tryCatch({
+  httr::HEAD("https://airquality.cpcb.gov.in", httr::timeout(3))
+  TRUE
+}, error = function(e) FALSE)
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -65,7 +69,7 @@ The `cpcb_` functions provide access to historical air quality data from the Cen
 
 ## Exploring available data
 
-```{r historical_explore}
+```{r historical_explore, eval = CPCB_OK}
 states <- cpcb_get_state_list()
 head(states)
 
@@ -78,7 +82,7 @@ head(stations)
 
 ### Adding coordinates to stations
 
-```{r add_coords}
+```{r add_coords, eval = CPCB_OK}
 # Primary source: CPCB live feed (same as Python vayuayan package)
 # Fallback: Nominatim geocoding for stations temporarily absent from live feed
 delhi_station_list <- cpcb_get_station_list("Delhi")
@@ -89,7 +93,7 @@ delhi_station_list <- cpcb_add_coords(delhi_station_list)
 
 ### City-level data
 
-```{r city_data}
+```{r city_data, eval = CPCB_OK}
 cpcb_download_city_data(
   city          = "Mumbai",
   year          = 2024,
@@ -99,7 +103,7 @@ cpcb_download_city_data(
 
 ### Station-level data
 
-```{r station_data}
+```{r station_data, eval = CPCB_OK}
 cpcb_download_station_data(
   station_id    = "site_5964",
   year          = 2024,
@@ -113,7 +117,7 @@ The `cpcb_` live functions enable real-time air quality monitoring.
 
 ## Location-based monitoring
 
-```{r live_location}
+```{r live_location, eval = CPCB_OK}
 location <- cpcb_get_system_location()
 print(location)
 
@@ -124,7 +128,7 @@ cat("Distance:", round(nearest$distance_km, 2), "km")
 
 ## Getting live AQI data
 
-```{r live_aqi}
+```{r live_aqi, eval = CPCB_OK}
 aqi_data <- cpcb_get_live_aqi_data()
 
 if (!is.null(aqi_data$metrics) && is.data.frame(aqi_data$metrics)) {
@@ -155,7 +159,7 @@ The package integrates seamlessly with tidyverse workflows.
 
 ## Station data analysis
 
-```{r tidyverse_analysis}
+```{r tidyverse_analysis, eval = CPCB_OK}
 library(dplyr)
 library(ggplot2)
 
@@ -179,7 +183,7 @@ print(head(state_summary, 10))
 
 ## AQI distribution analysis
 
-```{r aqi_distribution}
+```{r aqi_distribution, eval = CPCB_OK}
 df_with_categories <- df %>%
   filter(!is.na(avg_aqi)) %>%
   mutate(aqi_category = get_aqi_categories(avg_aqi))
@@ -275,51 +279,65 @@ pm25_list_cached_files()
 ```{r geospatial}
 library(sf)
 library(ggplot2)
+library(dplyr)
 
-all_stations <- cpcb_get_all_india()
-df <- stations_to_dataframe(all_stations)
-
-live_stations <- df %>%
-  filter(live == TRUE, !is.na(longitude), !is.na(latitude)) %>%
-  mutate(aqi_category = get_aqi_categories(avg_aqi))
-
-stations_sf <- st_as_sf(
-  live_stations,
-  coords = c("longitude", "latitude"),
-  crs    = 4326
+all_stations <- tryCatch(
+  cpcb_get_all_india(),
+  error = function(e) {
+    message("CPCB API unavailable: ", conditionMessage(e))
+    NULL
+  }
 )
 
-ggplot(stations_sf) +
-  geom_sf(aes(color = aqi_category), size = 2, alpha = 0.6) +
-  scale_color_manual(
-    values = c(
-      "Good"         = "green",
-      "Satisfactory" = "lightgreen",
-      "Moderate"     = "yellow",
-      "Poor"         = "orange",
-      "Very Poor"    = "red",
-      "Severe"       = "darkred"
-    )
-  ) +
-  labs(
-    title    = "Live Air Quality Monitoring Stations in India",
-    subtitle = paste("Total stations:", nrow(stations_sf)),
-    color    = "AQI Category"
-  ) +
-  theme_minimal()
+if (!is.null(all_stations)) {
+  df <- stations_to_dataframe(all_stations)
+
+  live_stations <- df %>%
+    filter(live == TRUE, !is.na(longitude), !is.na(latitude)) %>%
+    mutate(aqi_category = get_aqi_categories(avg_aqi))
+
+  stations_sf <- st_as_sf(
+    live_stations,
+    coords = c("longitude", "latitude"),
+    crs    = 4326
+  )
+
+  print(ggplot(stations_sf) +
+    geom_sf(aes(color = aqi_category), size = 2, alpha = 0.6) +
+    scale_color_manual(
+      values = c(
+        "Good"         = "green",
+        "Satisfactory" = "lightgreen",
+        "Moderate"     = "yellow",
+        "Poor"         = "orange",
+        "Very Poor"    = "red",
+        "Severe"       = "darkred"
+      )
+    ) +
+    labs(
+      title    = "Live Air Quality Monitoring Stations in India",
+      subtitle = paste("Total stations:", nrow(stations_sf)),
+      color    = "AQI Category"
+    ) +
+    theme_minimal())
+} else {
+  message("Skipping station map — CPCB API not reachable at build time.")
+}
 ```
 
 ## Spatial filtering
 
 ```{r spatial_filtering}
-mh_bbox <- st_bbox(
-  c(xmin = 72.5, ymin = 15.5, xmax = 80.5, ymax = 22.5),
-  crs = 4326
-)
-
-mh_stations <- st_crop(stations_sf, mh_bbox)
-
-cat("Stations in Maharashtra region:", nrow(mh_stations))
+if (exists("stations_sf")) {
+  mh_bbox <- st_bbox(
+    c(xmin = 72.5, ymin = 15.5, xmax = 80.5, ymax = 22.5),
+    crs = 4326
+  )
+  mh_stations <- st_crop(stations_sf, mh_bbox)
+  cat("Stations in Maharashtra region:", nrow(mh_stations))
+} else {
+  message("Skipping spatial filtering — station data not available.")
+}
 ```
 
 # Utility functions
@@ -350,7 +368,7 @@ cat("Distance from Mumbai to Delhi:", round(distance), "km")
 
 ## Comprehensive analysis
 
-```{r comprehensive}
+```{r comprehensive, eval = CPCB_OK}
 all_stations <- cpcb_get_all_india()
 analysis <- analyze_station_data(all_stations)
 
@@ -361,7 +379,7 @@ str(analysis)
 
 ## Error handling
 
-```{r error_handling}
+```{r error_handling, eval = CPCB_OK}
 # Always use tryCatch for API calls
 tryCatch(
   {
@@ -388,7 +406,7 @@ if (length(cached_files) > 10) {
 
 ## Data validation
 
-```{r validation}
+```{r validation, eval = CPCB_OK}
 df <- stations_to_dataframe(all_stations)
 
 stations_no_coords <- df %>%

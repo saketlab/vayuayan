@@ -653,7 +653,8 @@ station_order <- oaq_delhi %>%
   {
     stringr::str_remove(., ", New Delhi.*$")
   } %>%
-  stringr::str_trunc(30)
+  stringr::str_trunc(30) %>%
+  unique()
 
 oaq_long <- oaq_long %>%
   mutate(name_short = factor(name_short, levels = rev(station_order)))
@@ -662,7 +663,7 @@ ggplot(oaq_long, aes(x = pollutant, y = name_short)) +
   geom_point(aes(size = value_norm, fill = value_norm),
     shape = 21, color = "white", alpha = 0.85, na.rm = TRUE
   ) +
-  scale_size_continuous(range = c(1, 8), na.value = 0, guide = "none") +
+  scale_size_continuous(range = c(1, 8), guide = "none") +
   scale_fill_distiller(
     palette   = "YlOrRd",
     direction = 1,
