@@ -1,4 +1,4 @@
-# vayuayanR: Download and Analyze Air Pollution Data in R
+# vayuayanR: Download and analyze air pollution data in R
 
 **vayuayan** is an R package for downloading and analyzing air quality data from multiple sources:
 
