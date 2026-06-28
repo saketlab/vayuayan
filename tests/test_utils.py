@@ -7,7 +7,9 @@ from vayuayan.utils import (
     clean_station_name,
     get_aqi_category,
     haversine_distance,
+    parse_cpcb_rss_station_data,
     sort_station_data,
+    station_data_to_dropdown,
 )
 
 
@@ -83,3 +85,61 @@ def test_sort_station_data_live_first():
     result = sort_station_data(data)
     names = [s["name"] for s in result[0]["stationsInCity"]]
     assert names == ["A", "B"]  # live station first
+
+
+def test_parse_cpcb_rss_station_data_normalizes_live_feed():
+    rss_data = {
+        "country": [
+            {
+                "stateId": "Delhi",
+                "citiesInState": [
+                    {
+                        "cityId": "Delhi",
+                        "stationsInCity": [
+                            {
+                                "stationName": "ITO, Delhi - CPCB",
+                                "siteId": "site_123",
+                                "latitude": 28.63,
+                                "longitude": 77.24,
+                                "lastUpdate": "28-06-2026 12:00:00",
+                                "pollutants": [
+                                    {"indexId": "PM2.5", "avg": "42"},
+                                ],
+                                "airQualityIndex": {"value": "88"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    result = parse_cpcb_rss_station_data(rss_data)
+
+    assert result[0]["cityName"] == "Delhi"
+    assert result[0]["stateID"] == "Delhi"
+    station = result[0]["stationsInCity"][0]
+    assert station["id"] == "site_123"
+    assert station["name"] == "ITO, Delhi - CPCB"
+    assert station["avg"] == "88"
+    assert station["live"] is True
+    assert station["pollutants"][0]["indexId"] == "PM2.5"
+
+
+def test_station_data_to_dropdown_groups_by_state_and_city():
+    station_data = [
+        {
+            "cityName": "Delhi",
+            "stateID": "Delhi",
+            "stationsInCity": [
+                {"id": "site_123", "name": "ITO, Delhi - CPCB"},
+            ],
+        }
+    ]
+
+    dropdown = station_data_to_dropdown(station_data)
+
+    assert dropdown["cities"] == {"Delhi": [{"label": "Delhi", "value": "Delhi"}]}
+    assert dropdown["stations"] == {
+        "Delhi": [{"label": "ITO, Delhi - CPCB", "value": "site_123"}]
+    }
