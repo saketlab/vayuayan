@@ -141,7 +141,6 @@ python_files = [
 ]
 
 [tool.mypy]
-python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -157,7 +156,9 @@ strict_equality = true
 
 [[tool.mypy.overrides]]
 module = [
-    "bs4.*",
+    "boto3.*",
+    "botocore.*",
+    "ee.*",
     "pandas.*",
 ]
 ignore_missing_imports = true
@@ -168,6 +169,7 @@ module = [
     "geopy.*",
     "requests.*",
     "tqdm.*",
+    "urllib3.*",
     "xarray.*",
     "rioxarray.*",
 ]

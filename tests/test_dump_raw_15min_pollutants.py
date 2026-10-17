@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[1] / "scripts" / "dump_raw_15min_pollutants.py"
 )

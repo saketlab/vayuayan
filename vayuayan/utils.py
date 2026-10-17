@@ -665,10 +665,7 @@ def safe_post(
                 f"HTTP Error on attempt {attempt + 1}/{max_retries + 1}: {e}", verbose
             )
             # Do not retry client errors (4xx)
-            if (
-                hasattr(e.response, "status_code")
-                and 400 <= e.response.status_code < 500
-            ):
+            if e.response is not None and 400 <= e.response.status_code < 500:
                 raise NetworkError(f"HTTP {e.response.status_code} error: {e}") from e
 
         except (

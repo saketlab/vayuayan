@@ -1292,15 +1292,16 @@ class PM25Client:
                 "https://s3.us-west-2.amazonaws.com/v6.gl.02.04/V6.GL.02.04/GL/"
             )
             # GEE Fallback: Google Earth Engine Community Catalog (V6.GL.02, 2000-2022)
-            self.gee_collection_monthly = (
+            self.gee_collection_monthly: Optional[str] = (
                 "projects/sat-io/open-datasets/GLOBAL-SATELLITE-PM25/MONTHLY"
             )
-            self.gee_collection_annual = (
+            self.gee_collection_annual: Optional[str] = (
                 "projects/sat-io/open-datasets/GLOBAL-SATELLITE-PM25/ANNUAL"
             )
             self.variable_name = "PM25"  # V6 uses "PM25"
             self.year_range = (1998, 2023)
-            self.gee_year_range = (2000, 2022)  # GEE has a smaller range of years
+            # GEE has a smaller range of years
+            self.gee_year_range: Optional[Tuple[int, int]] = (2000, 2022)
         else:  # V5
             # V5.GL.05.02: GWR-based algorithm (older, with many validation studies)
             self.aws_base_url = (
@@ -1554,7 +1555,7 @@ class PM25Client:
         Raises:
             ValueError: If the year is not in the GEE data range.
         """
-        if not self.gee_initialized:
+        if not self.gee_initialized or self.gee_year_range is None:
             return None
 
         if not (self.gee_year_range[0] <= year <= self.gee_year_range[1]):
@@ -1774,7 +1775,7 @@ class PM25Client:
             else:
                 wustl_path = f"GL/Monthly/{year}/{filename}"
 
-            if not self.gee_initialized:
+            if not self.gee_initialized or self.gee_year_range is None:
                 gee_error = "Not authenticated (run 'earthengine authenticate')"
             elif not (self.gee_year_range[0] <= year <= self.gee_year_range[1]):
                 gee_error = f"Year {year} outside range ({self.gee_year_range[0]}-{self.gee_year_range[1]})"
@@ -1894,7 +1895,7 @@ class PM25Client:
         pm25 = pm25.rio.set_spatial_dims(x_dim=lon_coord, y_dim=lat_coord)
         pm25 = pm25.rio.write_crs("EPSG:4326")
 
-        return pm25
+        return cast(xr.DataArray, pm25)
 
     def _calculate_stats(
         self,
@@ -1989,12 +1990,8 @@ class PM25Client:
                     f"Point ({latitude}, {longitude}) is outside data bounds"
                 ) from e
 
-            pm25_value = point_data[pm25_var].values
-
-            if hasattr(pm25_value, "item"):
-                pm25_value = pm25_value.item()
-            else:
-                pm25_value = float(pm25_value)
+            values = point_data[pm25_var].values
+            pm25_value = float(values.item() if hasattr(values, "item") else values)
 
             if np.isnan(pm25_value):
                 raise ValueError(

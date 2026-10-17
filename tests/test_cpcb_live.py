@@ -2,7 +2,6 @@
 
 from vayuayan.air_quality_client import CPCBLive
 
-
 RSS_STATIONS = [
     {
         "cityName": "Agartala",
