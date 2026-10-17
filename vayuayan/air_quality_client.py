@@ -1596,7 +1596,7 @@ class PM25Client:
             tif_filename = base_filename.replace(".nc", ".tif")
             output_path = self.cache_dir / tif_filename
 
-            print(f"Requesting download URL from Google Earth Engine...")
+            print("Requesting download URL from Google Earth Engine...")
             print(f"Region: {region.bounds().getInfo()}")
             url = image.getDownloadURL(
                 {
@@ -1609,7 +1609,7 @@ class PM25Client:
 
             # GEE's getDownloadURL() returns a ZIP archive, not a raw GeoTIFF
             zip_path = output_path.with_suffix(".zip")
-            print(f"Downloading from GEE...")
+            print("Downloading from GEE...")
             print(f"Destination: {zip_path}")
 
             response = requests.get(url, stream=True, timeout=300)
@@ -1634,7 +1634,7 @@ class PM25Client:
             final_size = zip_path.stat().st_size
             print(f"✓ GEE download complete: {final_size / (1024 * 1024):.1f} MB")
 
-            print(f"Extracting GeoTIFF from ZIP archive...")
+            print("Extracting GeoTIFF from ZIP archive...")
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_contents = zip_ref.namelist()
                 print(f"  ZIP contents: {zip_contents}")
@@ -1722,14 +1722,14 @@ class PM25Client:
         cached_path.parent.mkdir(parents=True, exist_ok=True)
 
         # First, use AWS S3 with boto3 (anonymous access)
-        print(f"Attempting download from AWS S3...")
+        print("Attempting download from AWS S3...")
 
         s3_result = self._download_from_s3_boto3(year, month, cached_path)
         if s3_result:
             return s3_result
 
         aws_url = self._get_aws_url(year, month)
-        print(f"Trying S3 download via HTTP (fallback)...")
+        print("Trying S3 download via HTTP (fallback)...")
         print(f"Source: {aws_url}")
 
         try:
@@ -1760,7 +1760,7 @@ class PM25Client:
 
         except requests.RequestException as aws_error:
             print(f"⚠ AWS download failed: {aws_error}")
-            print(f"Trying fallback: Google Earth Engine...")
+            print("Trying fallback: Google Earth Engine...")
 
             if cached_path.exists():
                 cached_path.unlink()

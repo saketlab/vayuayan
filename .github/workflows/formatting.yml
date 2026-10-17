@@ -17,14 +17,14 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Install black
+    - name: Install ruff
       run: |
         python -m pip install --upgrade pip
-        pip install black
+        pip install ruff
 
-    - name: Check black formatting
+    - name: Check ruff formatting
       run: |
-        black --check --diff vayuayan/
+        ruff format --check --diff .
 
   auto-format:
     runs-on: ubuntu-latest
@@ -40,14 +40,14 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Install black
+    - name: Install ruff
       run: |
         python -m pip install --upgrade pip
-        pip install black
+        pip install ruff
 
-    - name: Format code with black
+    - name: Format code with ruff
       run: |
-        black vayuayan/
+        ruff format .
 
     - name: Check for changes
       id: verify-changed-files
@@ -64,5 +64,5 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add .
-        git commit -m "🤖 Auto-format code with black" -m "Automated formatting applied by GitHub Actions"
+        git commit -m "🤖 Auto-format code with ruff" -m "Automated formatting applied by GitHub Actions"
         git push

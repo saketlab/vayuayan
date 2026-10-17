@@ -67,8 +67,10 @@ dependencies = [
 dev = [
     "pytest>=6.0",
     "pytest-cov",
-    "black",
-    "flake8",
+    # tests/test_dump_raw_15min_pollutants.py imports scripts/dump_raw_15min_pollutants.py
+    "duckdb",
+    "pyarrow",
+    "ruff",
     "mypy",
     "pre-commit",
 ]
@@ -106,28 +108,14 @@ version = {attr = "vayuayan.__version__"}
 vayuayan = ["py.typed"]
 "vayuayan.data" = ["*.json"]
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+target-version = "py39"
 
-[tool.flake8]
-max-line-length = 88
-extend-ignore = [
-    "E203",
-]
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+# ruff format sets the line length; it does not split long strings
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

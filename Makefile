@@ -16,11 +16,11 @@ test-cov:  ## Run tests with coverage
 	python -m pytest tests/ --cov=vayuayan --cov-report=html --cov-report=term
 
 lint:  ## Run linting
-	flake8 vayuayan/
+	ruff check .
 	mypy vayuayan/
 
 format:  ## Format code
-	black vayuayan/
+	ruff format .
 
 clean:  ## Clean build artifacts
 	rm -rf build/

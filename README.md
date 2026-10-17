@@ -91,9 +91,13 @@ pm25 = PM25Client()
 # Combined stats for entire region
 delhi_stats = pm25.get_pm25_stats("delhi_ncr.geojson", 2023, 11)
 # Stats grouped by state
-state_stats = pm25.get_pm25_stats("india_districts.geojson", 2023, 11, group_by="state_name")
+state_stats = pm25.get_pm25_stats(
+    "india_districts.geojson", 2023, 11, group_by="state_name"
+)
 # Stats grouped by multiple columns (state and district)
-district_stats = pm25.get_pm25_stats("india_districts.geojson", 2023, 11, group_by="state_name,district_name")
+district_stats = pm25.get_pm25_stats(
+    "india_districts.geojson", 2023, 11, group_by="state_name,district_name"
+)
 ```
 
 

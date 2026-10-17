@@ -45,8 +45,7 @@ To contribute to vayuayan, use these commands:
 These commands install vayuayan in development mode with the development dependencies:
 
 - pytest (for tests)
-- black (to format the code)
-- flake8 (to lint the code)
+- ruff (to format and lint the code)
 - mypy (to do a type check)
 - pre-commit (for git hooks)
 
