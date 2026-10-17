@@ -1,13 +1,13 @@
 """
-Constants for CPCB data fetching.
+Constants of the vayuayan package.
 
-This module contains URL endpoints, headers, timeouts, and other configuration
-constants used throughout the vayuayan package.
+The constants are URL endpoints, headers, timeouts, and other configuration
+values.
 """
 
 import os
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # Base URLs
 BASE_URL = "https://airquality.cpcb.gov.in"
@@ -53,7 +53,7 @@ DATE_FORMATS: List[str] = [
     "%b %d %Y",  # May 27 2025
 ]
 
-# Month Abbreviations Mapping
+# Month abbreviations
 MONTH_ABBREV: Dict[str, str] = {
     "jan": "01",
     "feb": "02",
@@ -103,7 +103,7 @@ DEFAULT_DOWNLOAD_DIR: str = "downloads"
 
 
 def get_config_dir() -> Path:
-    """Get the standard configuration directory for vayuayan.
+    """Get the standard configuration directory of vayuayan.
 
     Returns:
         Path: Platform-specific config directory
@@ -128,3 +128,17 @@ def get_config_dir() -> Path:
 def get_gee_project_file() -> Path:
     """Get the path to the GEE project configuration file."""
     return get_config_dir() / "gee_project"
+
+
+CPCB_CREDENTIAL_ENV = {
+    "username": "CPCB_USERNAME",
+    "password": "CPCB_PASSWORD",
+    "client_id": "CPCB_CLIENT_ID",
+    "client_secret": "CPCB_CLIENT_SECRET",
+}
+
+
+def get_cpcb_credentials() -> Optional[Dict[str, str]]:
+    """Return CPCB OAuth credentials from the environment, or None if any is unset."""
+    creds = {key: os.environ.get(var, "") for key, var in CPCB_CREDENTIAL_ENV.items()}
+    return creds if all(creds.values()) else None

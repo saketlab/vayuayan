@@ -1,13 +1,13 @@
 Contributing
 ============
 
-We welcome contributions—this checklist keeps the process short and consistent.
+We accept contributions. This checklist keeps the procedure short and consistent.
 
 Quick setup
 -----------
 
 1. Fork the repository and clone your fork.
-2. Create a development environment and install extras:
+2. Make a development environment and install the extras:
 
    .. code-block:: bash
 
@@ -19,7 +19,7 @@ Quick setup
 Quality checks
 --------------
 
-Run the standard quality gates before pushing:
+Before you push your changes, run the standard quality checks:
 
 .. code-block:: bash
 
@@ -28,12 +28,12 @@ Run the standard quality gates before pushing:
    make test
    make test-cov
 
-Write focused tests, mock remote services, and keep changes small.
+Write small tests. Use mocks for remote services. Keep each change small.
 
 Documentation
 -------------
 
-Verify the docs build cleanly when you touch them:
+When you change the docs, make sure that the docs build without errors:
 
 .. code-block:: bash
 
@@ -42,17 +42,17 @@ Verify the docs build cleanly when you touch them:
 Workflow
 --------
 
-- Work on a feature branch: ``git checkout -b feature/your-topic``
-- Implement the change with tests and docs as needed
-- Stage and commit with a concise message
-- Push to your fork and open a pull request describing the change and validation
+- Make a feature branch: ``git checkout -b feature/your-topic``
+- Make the change. Add tests and docs if necessary.
+- Stage and commit the change with a short message
+- Push to your fork and open a pull request. Describe the change and how you did a test of it.
 
 Support
 -------
 
-For bug reports include Python version, vayuayan version, OS, reproduction steps, and any errors. Feature requests should explain the use case and whether you can help implement it.
+In a bug report, give the Python version, the vayuayan version, and the OS. Also give the steps that cause the bug, and the errors. In a feature request, describe the use case. Also tell us if you can help to make the feature.
 
 License
 -------
 
-By contributing you agree your code is released under the MIT License.
+When you contribute, you agree that your code uses the MIT License.

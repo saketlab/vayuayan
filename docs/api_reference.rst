@@ -1,7 +1,7 @@
 API Reference
 =============
 
-This section provides detailed documentation for all vayuayan classes and functions.
+This section gives the documentation of all vayuayan classes and functions.
 
 Core Classes
 ------------

@@ -14,7 +14,7 @@ def test_get_config_dir(tmp_path, monkeypatch):
     monkeypatch.setattr("platform.system", lambda: "Linux")
     d = get_config_dir()
     assert d == tmp_path / "vayuayan"
-    assert d.is_dir()  # created on call
+    assert d.is_dir()  # the call makes the directory
 
 
 def test_get_gee_project_file(tmp_path, monkeypatch):
@@ -26,7 +26,7 @@ def test_get_gee_project_file(tmp_path, monkeypatch):
 
 
 def test_aqi_categories_contiguous():
-    # Bands must be ordered and non-overlapping.
+    # The bands must be in order, and they must not overlap.
     bands = list(AQI_CATEGORIES.values())
     for lo, hi in zip(bands, bands[1:]):
         assert lo["max"] + 1 == hi["min"]

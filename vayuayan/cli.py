@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Command-line interface for vayuayan package
+Command-line interface of the vayuayan package
 """
 
 import argparse
@@ -22,7 +22,7 @@ from .commands import (
 
 
 def main() -> None:
-    """Main CLI entry point"""
+    """Entry point of the CLI"""
     parser = argparse.ArgumentParser(
         description="vayuayan CLI - Get air quality monitoring data",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -49,22 +49,22 @@ Examples:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # ------------------------------ AQI Commands ------------------------------ #
-    # List states command
+    # Command: list the states
     subparsers.add_parser("list_states", help="List all states")
 
-    # List cities command
+    # Command: list the cities
     list_cities_parser = subparsers.add_parser(
         "list_cities", help="List all cities in a state"
     )
     list_cities_parser.add_argument("state", help="State name")
 
-    # List stations command
+    # Command: list the stations
     list_stations_parser = subparsers.add_parser(
         "list_stations", help="List all stations in a city"
     )
     list_stations_parser.add_argument("city", help="City name")
 
-    # City data command
+    # Command: city data
     city_data_parser = subparsers.add_parser(
         "city_data", help="Get city-level AQI data"
     )
@@ -77,7 +77,7 @@ Examples:
     )
     city_data_parser.add_argument("--path", required=True, help="Path to output file")
 
-    # Station data command
+    # Command: station data
     station_data_parser = subparsers.add_parser(
         "station_data", help="Get station-level AQI data"
     )
@@ -170,17 +170,17 @@ Examples:
         parser.print_help()
         sys.exit(1)
 
-    # Initialize clients
+    # Make the clients
     aqi_client = CPCBHistorical()
     live_aqi_client = CPCBLive()
 
-    # PM25Client initialization with version (if pm25 command)
+    # Make the PM25Client with the version (for the pm25 command)
     if args.command == "pm25":
         pm25_client = PM25Client(version=args.version)
     else:
-        pm25_client = PM25Client()  # Default version for other commands
+        pm25_client = PM25Client()  # Default version for the other commands
 
-    # Execute command
+    # Run the command
     try:
         if args.command == "list_states":
             get_state_list(aqi_client)

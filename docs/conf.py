@@ -111,8 +111,8 @@ html_sidebars = {
 
 html_theme_options = {
     "navigation_with_keys": True,
-    "sidebar_hide_name": False,  # Show name alongside logo
-    "default_mode": "dark",  # Set dark theme as default for Furo
+    "sidebar_hide_name": False,  # Show the name next to the logo
+    "default_mode": "dark",  # Make the dark theme the default for Furo
     "light_css_variables": {
         "color-brand-primary": "#1b1b1f",
         "color-brand-content": "#1b1b1f",
@@ -127,7 +127,7 @@ html_theme_options = {
     },
 }
 
-# Set default color scheme to dark
+# Make dark the default color scheme
 html_css_files = ["css/custom.css"]
 
 # MyST-NB configuration

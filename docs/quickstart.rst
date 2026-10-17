@@ -7,7 +7,7 @@ Basic Usage
 Python API
 ~~~~~~~~~~~
 
-First, import the necessary clients:
+First, import the clients:
 
 .. code-block:: python
 
@@ -41,7 +41,7 @@ Get historical air quality data:
 Live AQI Data
 ~~~~~~~~~~~~~
 
-Get real-time air quality data:
+Get live air quality data:
 
 .. code-block:: python
 
@@ -130,7 +130,7 @@ PM2.5 Regional Data
 Error Handling
 --------------
 
-The library includes robust error handling:
+The library raises specific exceptions that you can catch:
 
 .. code-block:: python
 
@@ -149,6 +149,6 @@ The library includes robust error handling:
 Next Steps
 ----------
 
-- Explore the :doc:`api_reference` for detailed API documentation
-- Check out :doc:`examples` for more advanced usage patterns
-- See :doc:`cli_reference` for complete command line options
+- Read the :doc:`api_reference` for the full API documentation
+- Read the :doc:`examples` for more complex uses
+- Read the :doc:`cli_reference` for all command line options

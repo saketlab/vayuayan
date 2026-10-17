@@ -4,7 +4,7 @@ Installation
 Requirements
 ------------
 
-vayuayan requires Python 3.9 or higher and the following packages:
+vayuayan needs Python 3.9 or higher and these packages:
 
 - requests>=2.25.0
 - pandas>=1.3.0
@@ -19,7 +19,7 @@ vayuayan requires Python 3.9 or higher and the following packages:
 Install from PyPI
 -----------------
 
-The recommended way to install vayuayan is via pip:
+We recommend that you install vayuayan with pip:
 
 .. code-block:: bash
 
@@ -34,7 +34,7 @@ Install the latest development version from GitHub:
 
    pip install git+https://github.com/saketlab/vayuayan.git
 
-Or if you want to contribute to vayuayan:
+To contribute to vayuayan, use these commands:
 
 .. code-block:: bash
 
@@ -42,25 +42,25 @@ Or if you want to contribute to vayuayan:
    cd vayuayan
    pip install -e ".[dev]"
 
-This will install vayuayan in development mode with all development dependencies including:
+These commands install vayuayan in development mode with the development dependencies:
 
-- pytest (for testing)
-- black (for code formatting)
-- flake8 (for linting)
-- mypy (for type checking)
+- pytest (for tests)
+- black (to format the code)
+- flake8 (to lint the code)
+- mypy (to do a type check)
 - pre-commit (for git hooks)
 
 Verification
 ------------
 
-To verify your installation, run:
+To make sure that the installation is correct, run:
 
 .. code-block:: python
 
    import vayuayan
    print(vayuayan.__version__)
 
-Or test the command line interface:
+Or do a test of the command line interface:
 
 .. code-block:: bash
 

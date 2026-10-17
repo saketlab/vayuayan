@@ -1,18 +1,20 @@
 """
-Air Quality Client module for interacting with CPCB AQI services.
+Client classes for CPCB air quality data and PM2.5 satellite data.
 
-This module provides client classes for fetching air quality data from India's
-Central Pollution Control Board (CPCB) including AQI data, live monitoring data,
-and PM2.5 satellite data.
+The classes get AQI data and live station data from the Central Pollution
+Control Board (CPCB) of India. They also get PM2.5 satellite data.
 """
 
 import base64
+import io
 import json
 import os
 import zipfile
 from datetime import datetime
+from functools import lru_cache
+from importlib import resources
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union, cast
 from urllib.parse import urljoin
 
 import geopandas as gpd
@@ -41,21 +43,22 @@ try:
 except ImportError:
     BOTO3_AVAILABLE = False
 
-from .constants import get_gee_project_file
+from .constants import get_cpcb_credentials, get_gee_project_file
+from .utils import fetch_cpcb_rss_station_data, station_data_to_dropdown
 
-# Disable SSL warnings for CPCB endpoints with certificate issues
+# Disable SSL warnings, because some CPCB endpoints have bad certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def setup_earth_engine(project_id: Optional[str] = None) -> bool:
     """Set up Google Earth Engine with a Cloud project.
 
-    This is a user-friendly helper to set up Earth Engine authentication
-    and save the project ID for future use.
+    This function sets up the Earth Engine authentication and saves the
+    project ID.
 
     Args:
-        project_id: Optional Google Cloud project ID. If not provided,
-                   will prompt the user to enter it.
+        project_id: Optional Google Cloud project ID. If None, the
+                   function asks the user for the ID.
 
     Returns:
         True if setup succeeded, False otherwise.
@@ -75,12 +78,12 @@ def setup_earth_engine(project_id: Optional[str] = None) -> bool:
     print("=" * 70)
     print()
 
-    # Check if already authenticated
+    # Use the authentication that exists, if there is one
     if project_id:
         print(f"Using project ID: {project_id}")
     else:
         try:
-            # Try to initialize without project to check auth status
+            # Initialize without a project to find the authentication status
             ee.Initialize()
             print("✓ Already authenticated!")
             print("\nNote: You still need a project ID for the new API.")
@@ -125,11 +128,11 @@ def setup_earth_engine(project_id: Optional[str] = None) -> bool:
         # Authenticate
         ee.Authenticate(force=True)
 
-        # Try to initialize with the project
+        # Initialize with the project
         print(f"\nInitializing Earth Engine with project '{project_id}'...")
         ee.Initialize(project=project_id)
 
-        # Test access
+        # Do a test of the access
         print("\nTesting data access...")
         collection = ee.ImageCollection(
             "projects/sat-io/open-datasets/GLOBAL-SATELLITE-PM25/MONTHLY"
@@ -179,12 +182,13 @@ def _request_with_ssl_fallback(
     cookies: Optional[Dict[str, str]] = None,
     timeout: int = 30,
     stream: bool = False,
+    session: Optional[requests.Session] = None,
     **kwargs: Any,
 ) -> requests.Response:
-    """Make HTTP request with SSL fallback on certificate errors.
+    """Send an HTTP request, and send it again without SSL if SSL fails.
 
-    First attempts with SSL verification enabled. If that fails with an SSL error,
-    retries with SSL verification disabled.
+    The function first sends the request with SSL verification. If an SSL error
+    occurs, the function sends the request again without SSL verification.
 
     Args:
         method: HTTP method ('get' or 'post').
@@ -193,14 +197,15 @@ def _request_with_ssl_fallback(
         data: Optional request data.
         cookies: Optional request cookies.
         timeout: Request timeout in seconds.
-        stream: Whether to stream the response.
-        **kwargs: Additional arguments to pass to requests.
+        stream: If True, stream the response.
+        session: Optional session to send the request through.
+        **kwargs: More arguments for requests.
 
     Returns:
         Response object.
 
     Raises:
-        requests.RequestException: If request fails after SSL fallback attempt.
+        requests.RequestException: If the request without SSL verification fails.
     """
     request_kwargs = {
         "timeout": timeout,
@@ -214,16 +219,10 @@ def _request_with_ssl_fallback(
     if cookies:
         request_kwargs["cookies"] = cookies
 
+    send = session.request if session else requests.request
     try:
         request_kwargs["verify"] = True
-        if method.lower() == "get":
-            response = requests.get(
-                url, **request_kwargs
-            )  # nosec B113 - timeout in request_kwargs
-        else:
-            response = requests.post(
-                url, **request_kwargs
-            )  # nosec B113 - timeout in request_kwargs
+        response = send(method, url, **request_kwargs)  # nosec B113
         response.raise_for_status()
         return response
     except requests.exceptions.SSLError as e:
@@ -231,14 +230,7 @@ def _request_with_ssl_fallback(
         print("Retrying with SSL verification disabled...")
         try:
             request_kwargs["verify"] = False
-            if method.lower() == "get":
-                response = requests.get(
-                    url, **request_kwargs
-                )  # nosec B113 - timeout in request_kwargs
-            else:
-                response = requests.post(
-                    url, **request_kwargs
-                )  # nosec B113 - timeout in request_kwargs
+            response = send(method, url, **request_kwargs)  # nosec B113
             response.raise_for_status()
             return response
         except Exception as fallback_error:
@@ -247,13 +239,39 @@ def _request_with_ssl_fallback(
             ) from fallback_error
 
 
+StationEntry = Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]
+
+# level -> (custom query name, filter field) for the CPCB station directory
+DIRECTORY_QUERIES = {
+    "states": ("get-state-master-list-data", ""),
+    "cities": ("get-city-master-list", "state_code"),
+    "stations": ("get-site-station-master-data-list", "city_code"),
+}
+
+
+@lru_cache(maxsize=1)
+def _station_directory() -> Dict[str, Any]:
+    """Bundled snapshot of the CPCB station directory (states, cities, stations)."""
+    path = resources.files("vayuayan").joinpath("data/cpcb_station_directory.json")
+    return cast(Dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
+
+
+def _file_entries(parsed: Any) -> Optional[List[Dict[str, Any]]]:
+    """Return the file entries of a successful file-path response, else None."""
+    if not isinstance(parsed, dict) or parsed.get("status") != "success":
+        return None
+    data = parsed.get("data", [])
+    if not isinstance(data, list):
+        return None
+    return [cast(Dict[str, Any], entry) for entry in data if isinstance(entry, dict)]
+
+
 class CPCBHistorical:
-    """Client for fetching historical Air Quality Index (AQI) data from CPCB."""
+    """Client that gets historical Air Quality Index (AQI) data from CPCB."""
 
     def __init__(self) -> None:
         """Initialize the AQI Client with CPCB endpoints and headers."""
         self.base_url = "https://airquality.cpcb.gov.in"
-        self.base_path = f"{self.base_url}/dataRepository/download_file?file_name="
         self.data_repository = "/dataRepository/"
         self.dropdown_endpoint = f"{self.data_repository}all_india_stationlist"
         self.file_path_endpoint = f"{self.data_repository}file_Path"
@@ -262,6 +280,19 @@ class CPCBHistorical:
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             "Accept": "q=0.8;application/json;q=0.9",
         }
+        self.session = requests.Session()
+        self._access_token: Optional[str] = None
+        self.oauth_url = f"{self.base_url}/api/security/oauth/token"
+        self.custom_query_base = f"{self.base_url}/projectworkflow/client/custom/query"
+        self.new_file_path_endpoint = (
+            f"{self.base_url}/caaqms-common/dataRepository/file-path"
+        )
+        self.new_download_endpoint = (
+            f"{self.base_url}/caaqms-common/dataRepository/download-excel-file"
+        )
+        self._live_directory = get_cpcb_credentials() is not None
+        self._directory_cache: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+        self._rss_cache: Optional[List[Dict[str, Any]]] = None
 
     def _encode_base64(self, data: bytes) -> str:
         """Encode bytes to base64 string.
@@ -285,84 +316,317 @@ class CPCBHistorical:
         """
         return base64.b64decode(data.encode("utf-8")).decode("utf-8")
 
+    def _get_access_token(self) -> str:
+        if self._access_token:
+            return self._access_token
+        creds = get_cpcb_credentials()
+        if creds is None:
+            raise requests.RequestException("CPCB credentials are not set")
+
+        response = _request_with_ssl_fallback(
+            "post",
+            self.oauth_url,
+            session=self.session,
+            params={"grant_type": "password", **creds},
+            headers={"Content-Type": "application/json"},
+            json={},
+            timeout=30,
+        )
+        data = response.json()
+        token = data.get("access_token")
+        if not token:
+            raise requests.RequestException(
+                "CPCB token response did not include access_token"
+            )
+        self._access_token = str(token)
+        return self._access_token
+
+    def _new_api_headers(self, auth: bool = False) -> Dict[str, str]:
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        if auth:
+            headers["Authorization"] = self._get_access_token()
+        return headers
+
+    def _new_api_json(
+        self,
+        method: str,
+        url: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        auth: bool = False,
+    ) -> Any:
+        response = _request_with_ssl_fallback(
+            method,
+            url,
+            session=self.session,
+            headers=self._new_api_headers(auth),
+            params=params,
+            json=json_data,
+            timeout=30,
+        )
+        # CPCB answers 204 with an empty body when a query matches nothing
+        if not response.content:
+            return None
+        return response.json()
+
+    def _custom_query(
+        self, query_name: str, filter_query: str = ""
+    ) -> List[Dict[str, Any]]:
+        # Only the directory queries need a token. File-path and download do not.
+        data = self._new_api_json(
+            "get",
+            f"{self.custom_query_base}/{query_name}/data",
+            params={
+                "pageNo": -1,
+                "perPage": -1,
+                "filterQuery": filter_query,
+            },
+            auth=True,
+        )
+        if isinstance(data, list):
+            return [cast(Dict[str, Any], row) for row in data if isinstance(row, dict)]
+        return []
+
+    def _directory(self, level: str, code: str = "") -> List[Dict[str, Any]]:
+        """Directory rows for a level, live when credentials work, else the snapshot."""
+        key = (level, code)
+        if key not in self._directory_cache:
+            rows: List[Dict[str, Any]] = []
+            if self._live_directory:
+                query_name, field = DIRECTORY_QUERIES[level]
+                try:
+                    rows = self._custom_query(
+                        query_name, f"{field} IS '{code}'" if field else ""
+                    )
+                except (requests.RequestException, ValueError) as e:
+                    # the token URL carries the credentials, so never print the error
+                    status = getattr(getattr(e, "response", None), "status_code", None)
+                    print(
+                        f"CPCB station directory unavailable "
+                        f"({status or type(e).__name__}); using snapshot"
+                    )
+                    self._live_directory = False
+            if not rows:
+                snapshot = _station_directory()[level]
+                rows = snapshot.get(code, []) if code else snapshot
+            self._directory_cache[key] = rows
+        return self._directory_cache[key]
+
+    def _new_state_list(self) -> List[Dict[str, Any]]:
+        return self._directory("states")
+
+    def _new_city_list(self, state_code: str) -> List[Dict[str, Any]]:
+        return self._directory("cities", state_code)
+
+    def _new_station_list(self, city_code: str) -> List[Dict[str, Any]]:
+        return self._directory("stations", city_code)
+
+    def iter_stations(self, state: str = "", city: str = "") -> Iterator[StationEntry]:
+        """Yield (state, city, station) directory entries, with optional filters.
+
+        Args:
+            state: State name or code. Empty means all states.
+            city: City name or code. Empty means all cities.
+        """
+        if city:
+            state_entry, city_entry = self._resolve_city(city, state)
+            pairs: Iterator[Tuple[Dict[str, Any], Dict[str, Any]]] = iter(
+                [(state_entry, city_entry)] if state_entry and city_entry else []
+            )
+        else:
+            states = [self._resolve_state(state)] if state else self._new_state_list()
+            pairs = (
+                (state_entry, city_entry)
+                for state_entry in states
+                if state_entry
+                for city_entry in self._new_city_list(
+                    str(state_entry.get("state_code", ""))
+                )
+            )
+        for state_entry, city_entry in pairs:
+            for station in self._new_station_list(str(city_entry.get("city_code", ""))):
+                yield state_entry, city_entry, station
+
+    def _rss_cities(self) -> List[Dict[str, Any]]:
+        """The public RSS station feed. Each client gets it one time."""
+        if self._rss_cache is None:
+            try:
+                self._rss_cache = fetch_cpcb_rss_station_data(timeout=30)
+            except Exception as e:
+                print(f"CPCB RSS feed unavailable ({e})")
+                self._rss_cache = []
+        return self._rss_cache
+
+    def _rss_directory(self) -> Iterator[StationEntry]:
+        """RSS stations in directory shape, for stations newer than the snapshot."""
+        for city in self._rss_cities():
+            for st in city.get("stationsInCity", []):
+                yield (
+                    {"state_name": city.get("stateID", "")},
+                    {"city_name": city.get("cityName", "")},
+                    {
+                        "station_id": st.get("id", ""),
+                        "station_name": st.get("name", ""),
+                    },
+                )
+
+    def _normalize_frequency(self, frequency: str) -> str:
+        frequency_map = {
+            "hourly": "1H",
+            "1_hour": "1H",
+            "1h": "1H",
+            "daily": "1D",
+            "24_hours": "1D",
+            "24h": "1D",
+            "1d": "1D",
+            "monthly": "1M",
+            "1m": "1M",
+            "15_minute": "15M",
+            "15m": "15M",
+        }
+        return frequency_map.get(frequency.lower(), frequency)
+
+    def _resolve_state(self, state: str) -> Optional[Dict[str, Any]]:
+        if not state:
+            return None
+        state_lower = state.lower()
+        for entry in self._new_state_list():
+            if state_lower in {
+                str(entry.get("state_name", "")).lower(),
+                str(entry.get("state_code", "")).lower(),
+            }:
+                return entry
+        return None
+
+    def _resolve_city(
+        self, city: str, state: str = ""
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        city_lower = city.lower()
+        states = [self._resolve_state(state)] if state else self._new_state_list()
+        for state_entry in states:
+            if not state_entry:
+                continue
+            state_code = str(state_entry.get("state_code", ""))
+            for city_entry in self._new_city_list(state_code):
+                if city_lower in {
+                    str(city_entry.get("city_name", "")).lower(),
+                    str(city_entry.get("city_code", "")).lower(),
+                }:
+                    return state_entry, city_entry
+        return None, None
+
+    def _resolve_station(
+        self,
+        station_id: str,
+        station_name: str = "",
+        state: str = "",
+        city: str = "",
+    ) -> Tuple[
+        Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[Dict[str, Any]]
+    ]:
+        target_id = station_id.lower()
+        target_name = station_name.lower()
+
+        def matches(station_entry: Dict[str, Any]) -> bool:
+            sid = str(station_entry.get("station_id", "")).lower()
+            sname = str(station_entry.get("station_name", "")).lower()
+            return bool(target_id and target_id == sid) or bool(
+                target_name and target_name == sname
+            )
+
+        directory = self.iter_stations(state, city) if city else self.iter_stations()
+        for state_entry, city_entry, station_entry in directory:
+            if matches(station_entry):
+                return state_entry, city_entry, station_entry
+        for state_entry, city_entry, station_entry in self._rss_directory():
+            if matches(station_entry):
+                return state_entry, city_entry, station_entry
+        return None, None, None
+
     def get_complete_list(self) -> Dict[str, Any]:
-        """Fetch the complete list of all India stations and cities.
+        """Get the complete list of stations and cities in India.
 
         Returns:
-            Dictionary containing station and city data.
+            Dictionary with the station data and the city data.
 
         Raises:
             requests.RequestException: If the HTTP request fails.
-            json.JSONDecodeError: If response cannot be parsed as JSON.
+            json.JSONDecodeError: If the response is not valid JSON.
         """
+        cities = self._rss_cities()
+        if cities:
+            return station_data_to_dropdown(cities)
+
         form_body = self._encode_base64(b"{}")
-        response = _request_with_ssl_fallback(
-            method="post",
-            url=f"{self.base_url}{self.dropdown_endpoint}",
-            data=form_body,
-            timeout=30,
-        )
+        try:
+            response = _request_with_ssl_fallback(
+                method="post",
+                url=f"{self.base_url}{self.dropdown_endpoint}",
+                data=form_body,
+                timeout=30,
+            )
+            decoded_response = self._decode_base64(response.text)
+            parsed_response = cast(Dict[str, Any], json.loads(decoded_response))
 
-        decoded_response = self._decode_base64(response.text)
-        parsed_response = cast(Dict[str, Any], json.loads(decoded_response))
+            if parsed_response.get("status") == "success":
+                dropdown = parsed_response.get("dropdown", {})
+                if isinstance(dropdown, dict):
+                    return dropdown
+        except Exception:
+            pass
 
-        if parsed_response.get("status") == "success":
-            dropdown = parsed_response.get("dropdown", {})
-            if isinstance(dropdown, dict):
-                return dropdown
         return {}
 
     def get_state_list(self) -> List[str]:
-        """Get list of states available for AQI data.
+        """Get the list of states that have AQI data.
 
         Returns:
             Sorted list of state names.
         """
-        try:
-            complete_list = self.get_complete_list()
-            return list(sorted(complete_list.get("cities", {})))
-        except KeyError as e:
-            print(f"KeyError in get_state_list: {e}")
-            return []
-        except Exception as e:
-            print(f"Unexpected error in get_state_list: {e}")
-            return []
+        states = [str(state.get("state_name", "")) for state in self._new_state_list()]
+        return sorted(state for state in states if state)
 
     def get_city_list(self, state: str) -> List[str]:
-        """Get list of cities available in given state for AQI data.
+        """Get the list of cities in a state that have AQI data.
 
         Args:
-            state: State name to get cities for.
+            state: State name.
 
         Returns:
             Sorted list of city names in the state.
         """
-        try:
-            complete_list = self.get_complete_list()
-            cities = complete_list.get("cities", {})
-            if cities and state in cities:
-                return list(sorted([city["value"] for city in cities[state]]))
+        state_entry = self._resolve_state(state)
+        if not state_entry:
             return []
-        except Exception:
-            return []
+        state_code = str(state_entry.get("state_code", ""))
+        return sorted(
+            str(city.get("city_name", ""))
+            for city in self._new_city_list(state_code)
+            if city.get("city_name")
+        )
 
     def get_station_list(self, city: str) -> List[Dict]:
-        """Get station list available in given city for AQI data.
+        """Get the list of stations in a city that have AQI data.
 
         Args:
-            city: City name to get stations for.
+            city: City name.
 
         Returns:
             Sorted list of station dictionaries.
         """
-        try:
-            complete_list = self.get_complete_list()
-            stations = complete_list.get("stations", {})
-            if stations and city in stations:
-                return list(sorted(stations[city], key=lambda x: x.get("label", "")))
+        _, city_entry = self._resolve_city(city)
+        if not city_entry:
             return []
-        except Exception:
-            return []
+        city_code = str(city_entry.get("city_code", ""))
+        stations = [
+            {
+                "label": str(station.get("station_name", "")),
+                "value": str(station.get("station_id", "")),
+            }
+            for station in self._new_station_list(city_code)
+            if station.get("station_id") and station.get("station_name")
+        ]
+        return sorted(stations, key=lambda x: x.get("label", ""))
 
     def get_file_path(
         self,
@@ -374,7 +638,7 @@ class CPCBHistorical:
         frequency: str,
         data_type: str,
     ) -> List[Dict[str, Any]]:
-        """Get file path containing data for given query parameters.
+        """Get the data file paths for the query parameters.
 
         Args:
             station_id: Station ID.
@@ -383,15 +647,15 @@ class CPCBHistorical:
             city: City name.
             year: Year for data.
             frequency: Data frequency ('hourly' or 'daily').
-            data_type: Type of data ('cityLevel' or 'stationLevel').
+            data_type: Type of data ('cityLevel', 'stationLevel' or 'raw').
 
         Returns:
-            Dictionary containing file path data.
+            List of file entries, each with a file path.
 
         Raises:
             requests.RequestException: If the HTTP request fails.
         """
-        payload = {
+        legacy_payload = {
             "station_id": station_id,
             "station_name": station_name,
             "state": state,
@@ -400,30 +664,244 @@ class CPCBHistorical:
             "frequency": frequency,
             "dataType": data_type,
         }
+        payload = {**legacy_payload, "frequency": self._normalize_frequency(frequency)}
 
-        payload_str = json.dumps(payload)
+        try:
+            if data_type == "cityLevel":
+                state_entry, city_entry = self._resolve_city(city, state)
+                if state_entry and city_entry:
+                    payload.update(
+                        {
+                            "station_id": "",
+                            "station_name": "",
+                            "state": str(state_entry.get("state_name", "")),
+                            "city": str(city_entry.get("city_name", "")),
+                        }
+                    )
+            elif data_type in ("stationLevel", "raw"):
+                state_entry, city_entry, station_entry = self._resolve_station(
+                    station_id, station_name, state, city
+                )
+                if state_entry and city_entry and station_entry:
+                    payload.update(
+                        {
+                            "station_id": str(station_entry.get("station_id", "")),
+                            "station_name": str(station_entry.get("station_name", "")),
+                            "state": str(state_entry.get("state_name", "")),
+                            "city": str(city_entry.get("city_name", "")),
+                        }
+                    )
+
+            entries = _file_entries(
+                self._new_api_json(
+                    "post", self.new_file_path_endpoint, json_data=payload
+                )
+            )
+            if entries is not None:
+                return entries
+        except Exception:
+            pass
+
+        payload_str = json.dumps(legacy_payload)
         encoded_payload = self._encode_base64(payload_str.encode("utf-8"))
 
-        response = _request_with_ssl_fallback(
-            method="post",
-            url=f"{self.base_url}{self.file_path_endpoint}",
-            data=encoded_payload,
-            headers=self.headers,
-            timeout=30,
-        )
+        try:
+            response = _request_with_ssl_fallback(
+                method="post",
+                url=f"{self.base_url}{self.file_path_endpoint}",
+                data=encoded_payload,
+                headers=self.headers,
+                timeout=30,
+            )
 
-        decoded_response = self._decode_base64(response.text)
-        parsed_response = cast(Dict[str, Any], json.loads(decoded_response))
-
-        if parsed_response.get("status") == "success":
-            data = parsed_response.get("data", [])
-            if isinstance(data, list):
-                return [
-                    cast(Dict[str, Any], entry)
-                    for entry in data
-                    if isinstance(entry, dict)
-                ]
+            decoded_response = self._decode_base64(response.text)
+            entries = _file_entries(json.loads(decoded_response))
+            if entries is not None:
+                return entries
+        except Exception:
+            pass
         return []
+
+    def _download_repository_file(self, filepath: str) -> io.BytesIO:
+        response = _request_with_ssl_fallback(
+            "get",
+            self.new_download_endpoint,
+            session=self.session,
+            headers=self._new_api_headers(),
+            params={"file_name": filepath},
+            timeout=60,
+        )
+        return io.BytesIO(response.content)
+
+    def _read_repository_excel(self, filepath: str) -> pd.DataFrame:
+        return pd.read_excel(self._download_repository_file(filepath))
+
+    def _read_repository_csv(self, filepath: str) -> pd.DataFrame:
+        return pd.read_csv(self._download_repository_file(filepath))
+
+    def _select_repository_entry(
+        self,
+        entries: List[Dict[str, Any]],
+        year: str,
+        month: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        if month:
+            month_lower = month.lower()
+            return [
+                entry
+                for entry in entries
+                if str(entry.get("month", "")).lower() == month_lower
+                or month_lower in str(entry.get("filepath", "")).lower()
+            ]
+
+        year_matches = [
+            entry for entry in entries if str(entry.get("year", "")) == year
+        ]
+        if year_matches:
+            return year_matches
+        return entries
+
+    def _combine_repository_excels(
+        self, entries: List[Dict[str, Any]], year: str, month: Optional[str] = None
+    ) -> pd.DataFrame:
+        selected_entries = self._select_repository_entry(entries, year, month)
+        if not selected_entries:
+            raise Exception(
+                f"Data not found for year {year}"
+                + (f" and month {month}" if month else "")
+            )
+
+        frames = []
+        for entry in selected_entries:
+            filepath = entry.get("filepath")
+            if not filepath:
+                continue
+            df = self._read_repository_excel(str(filepath))
+            if entry.get("month") and "Month" not in df.columns:
+                df.insert(0, "Month", entry.get("month"))
+            if entry.get("year") and "Year" not in df.columns:
+                df.insert(0, "Year", entry.get("year"))
+            frames.append(df)
+
+        if not frames:
+            raise Exception(f"No downloadable files found for year {year}")
+        return pd.concat(frames, ignore_index=True)
+
+    def download_raw_aqi_data_station_level(
+        self,
+        station_id: str,
+        year: str,
+        save_location: str,
+        frequency: str = "15_minute",
+        station_name: str = "",
+        city: str = "",
+        state: str = "",
+    ) -> pd.DataFrame:
+        """Download raw CPCB station data, for example 15-minute observations.
+
+        Args:
+            station_id: Station ID.
+            year: Year for data.
+            save_location: Path to save the CSV. If empty, no file is saved.
+            frequency: Raw data interval. CPCB supports values such as
+                "15_minute", "1H", and "1D" for raw station files.
+            station_name: Optional station name. The client then does not look it up.
+            city: Optional city name. The client then examines only this city.
+            state: Optional state name, for cities with the same name.
+
+        Returns:
+            DataFrame with the raw station observations.
+        """
+        data_file_paths = self.get_file_path(
+            station_id,
+            station_name,
+            state,
+            city,
+            year,
+            frequency,
+            "raw",
+        )
+        if not data_file_paths:
+            raise Exception(
+                f"Raw data not found for station {station_id} in year {year}"
+            )
+
+        filepath = data_file_paths[0].get("filepath")
+        if not filepath:
+            raise Exception(f"No downloadable raw file found for station {station_id}")
+
+        df = self._read_repository_csv(str(filepath))
+        if save_location:
+            df.to_csv(save_location, index=False)
+        return df
+
+    def download_hourly_aqi_data_city_level(
+        self,
+        city: str,
+        year: str,
+        save_location: str,
+        month: Optional[str] = None,
+        state: str = "",
+    ) -> pd.DataFrame:
+        """Download hourly AQI data for a city.
+
+        Args:
+            city: City name.
+            year: Year for data.
+            save_location: Path to save the combined CSV. If empty, no file is saved.
+            month: Optional month name, for example "January". If None, the
+                client combines all the monthly workbooks for the year.
+            state: Optional state name, for cities with the same name.
+
+        Returns:
+            DataFrame with hourly AQI data.
+        """
+        data_file_paths = self.get_file_path(
+            "", "", state, city, year, "hourly", "cityLevel"
+        )
+        df = self._combine_repository_excels(data_file_paths, str(year), month)
+        if save_location:
+            df.to_csv(save_location, index=False)
+        return df
+
+    def download_hourly_aqi_data_station_level(
+        self,
+        station_id: str,
+        year: str,
+        save_location: str,
+        month: Optional[str] = None,
+        station_name: str = "",
+        city: str = "",
+        state: str = "",
+    ) -> pd.DataFrame:
+        """Download hourly AQI data for a station.
+
+        Args:
+            station_id: Station ID.
+            year: Year for data.
+            save_location: Path to save the combined CSV. If empty, no file is saved.
+            month: Optional month name, for example "January". If None, the
+                client combines all the monthly workbooks for the year.
+            station_name: Optional station name. The client then does not look it up.
+            city: Optional city name. The client then examines only this city.
+            state: Optional state name, for cities with the same name.
+
+        Returns:
+            DataFrame with hourly AQI data.
+        """
+        data_file_paths = self.get_file_path(
+            station_id,
+            station_name,
+            state,
+            city,
+            year,
+            "hourly",
+            "stationLevel",
+        )
+        df = self._combine_repository_excels(data_file_paths, str(year), month)
+        if save_location:
+            df.to_csv(save_location, index=False)
+        return df
 
     def download_past_year_aqi_data_city_level(
         self, city: str, year: str, save_location: str
@@ -439,15 +917,14 @@ class CPCBHistorical:
             DataFrame preview of the downloaded data.
 
         Raises:
-            Exception: If data is not found or download fails.
+            Exception: If the client cannot find or download the data.
         """
         data_file_paths = self.get_file_path("", "", "", city, "", "daily", "cityLevel")
 
         for entry in data_file_paths:
             if entry.get("year") == str(year):
-                file_url = f"{self.base_path}{entry['filepath']}"
-                df = pd.read_excel(file_url)
-                df = df.iloc[:31]  # Limit to first 31 rows (max days in month)
+                df = self._read_repository_excel(str(entry["filepath"]))
+                df = df.iloc[:31]  # Keep 31 rows: the maximum days in a month
                 if save_location:
                     df.to_csv(save_location, index=False)
                 return df
@@ -468,32 +945,26 @@ class CPCBHistorical:
             DataFrame preview of the downloaded data.
 
         Raises:
-            Exception: If station or data is not found.
+            Exception: If the client cannot find the station or the data.
         """
-        complete_list = self.get_complete_list()
-        station_list = complete_list.get("stations", [])
-
-        station_name = None
-        for city_stations in station_list.values():
-            for station in city_stations:
-                if station.get("value") == station_id:
-                    station_name = station.get("label")
-                    break
-            if station_name:
-                break
-
-        if not station_name:
+        state_entry, city_entry, station = self._resolve_station(station_id)
+        if not (state_entry and city_entry and station):
             raise Exception(f"Station ID {station_id} not found")
 
         data_file_paths = self.get_file_path(
-            station_id, station_name, "", "", "", "daily", "stationLevel"
+            station_id,
+            str(station.get("station_name", "")),
+            str(state_entry.get("state_name", "")),
+            str(city_entry.get("city_name", "")),
+            "",
+            "daily",
+            "stationLevel",
         )
 
         for entry in data_file_paths:
             if entry.get("year") == year:
-                file_url = f"{self.base_path}{entry['filepath']}"
-                df = pd.read_excel(file_url)
-                df = df.iloc[:31]  # Limit to first 31 rows (max days in month)
+                df = self._read_repository_excel(str(entry["filepath"]))
+                df = df.iloc[:31]  # Keep 31 rows: the maximum days in a month
                 df.to_csv(save_location, index=False)
                 return df.head()
 
@@ -501,7 +972,7 @@ class CPCBHistorical:
 
 
 class CPCBLive:
-    """Client for fetching live air quality data from CPCB."""
+    """Client that gets live air quality data from CPCB."""
 
     def __init__(self) -> None:
         """Initialize the Live AQI Client."""
@@ -524,7 +995,7 @@ class CPCBLive:
         data: str,
         cookies: Dict[str, str],
     ) -> Dict[str, Any]:
-        """Make a POST request and return base64 decoded JSON response.
+        """Send a POST request and return the decoded base64 JSON response.
 
         Args:
             url: Request URL.
@@ -536,8 +1007,8 @@ class CPCBLive:
             Parsed JSON response.
 
         Raises:
-            requests.RequestException: If request fails.
-            json.JSONDecodeError: If response cannot be decoded.
+            requests.RequestException: If the request fails.
+            json.JSONDecodeError: If the client cannot decode the response.
         """
         response = _request_with_ssl_fallback(
             method="post",
@@ -587,13 +1058,13 @@ class CPCBLive:
         return cleaned_data
 
     def get_system_location(self) -> Tuple[float, float]:
-        """Retrieve system's geolocation using IP-based lookup.
+        """Get the location of this system from its IP address.
 
         Returns:
             Tuple of (latitude, longitude).
 
         Raises:
-            Exception: If geolocation lookup fails.
+            Exception: If the client cannot find the location.
         """
         try:
             response = _request_with_ssl_fallback(
@@ -614,14 +1085,14 @@ class CPCBLive:
         """Get the nearest air quality monitoring station.
 
         Args:
-            coords: Optional tuple of (latitude, longitude). If None, uses IP
-                geolocation.
+            coords: Optional tuple of (latitude, longitude). If None, the client
+                finds the location from the IP address.
 
         Returns:
             Tuple of (station_id, station_name).
 
         Raises:
-            Exception: If no stations found or coordinates invalid.
+            Exception: If there is no station, or the coordinates are not valid.
         """
         try:
             cities = self.get_all_india()
@@ -665,24 +1136,16 @@ class CPCBLive:
                 self.station_url, self.headers, body, self.cookies
             )
             stations = response.get("stations", [])
-            if isinstance(stations, list):
+            if isinstance(stations, list) and stations:
                 return [
                     cast(Dict[str, Any], station)
                     for station in stations
                     if isinstance(station, dict)
                 ]
         except Exception:
-            response = self._make_request(
-                self.station_url, self.headers, body, self.cookies
-            )
-            stations = response.get("stations", [])
-            if isinstance(stations, list):
-                return [
-                    cast(Dict[str, Any], station)
-                    for station in stations
-                    if isinstance(station, dict)
-                ]
-        return []
+            pass
+
+        return fetch_cpcb_rss_station_data(timeout=30)
 
     def get_live_aqi_data_for_station(
         self, station_id: str, date_time: str
@@ -697,8 +1160,8 @@ class CPCBLive:
             Live air quality data dictionary.
 
         Raises:
-            ValueError: If parameters are invalid.
-            Exception: If request fails.
+            ValueError: If a parameter is not valid.
+            Exception: If the request fails.
         """
         if not station_id or not date_time:
             raise ValueError("Both station_id and date_time must be provided.")
@@ -706,9 +1169,36 @@ class CPCBLive:
         raw_body = json.dumps({"station_id": station_id, "date": date_time})
         encoded_data = base64.b64encode(raw_body.encode()).decode("utf-8")
 
-        return self._make_request(
-            self.parameters_url, self.headers, encoded_data, self.cookies
-        )
+        try:
+            return self._make_request(
+                self.parameters_url, self.headers, encoded_data, self.cookies
+            )
+        except Exception:
+            for city in fetch_cpcb_rss_station_data(timeout=30):
+                for station in city.get("stationsInCity", []):
+                    if (
+                        station.get("id") == station_id
+                        or station.get("name") == station_id
+                    ):
+                        metrics = []
+                        for pollutant in station.get("pollutants", []):
+                            metrics.append(
+                                {
+                                    "name": pollutant.get("indexId"),
+                                    "avg": pollutant.get("avg"),
+                                    "min": pollutant.get("min"),
+                                    "max": pollutant.get("max"),
+                                    "avgDesc": station.get("lastUpdate", date_time),
+                                }
+                            )
+                        return {
+                            "station_id": station.get("id"),
+                            "station_name": station.get("name"),
+                            "lastUpdate": station.get("lastUpdate"),
+                            "airQualityIndex": station.get("airQualityIndex", {}),
+                            "metrics": metrics,
+                        }
+            raise
 
     def get_live_aqi_data(
         self,
@@ -717,20 +1207,21 @@ class CPCBLive:
         date: Optional[str] = None,
         hour: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Get live AQI data with flexible parameter options.
+        """Get live AQI data for a station or a location, a date, and an hour.
 
         Args:
-            station_id: Optional station ID. If not provided, uses nearest station.
+            station_id: Optional station ID. If None, the client uses the nearest
+                station.
             coords: Optional (latitude, longitude) tuple.
-            date: Optional date in 'YYYY-MM-DD' format. Defaults to today.
-            hour: Optional hour (0-23). Defaults to current hour.
+            date: Optional date in 'YYYY-MM-DD' format. The default is today.
+            hour: Optional hour (0-23). The default is the current hour.
 
         Returns:
             Processed live AQI data dictionary.
 
         Raises:
-            ValueError: If hour is invalid.
-            Exception: If data retrieval fails.
+            ValueError: If the hour is not valid.
+            Exception: If the client cannot get the data.
         """
         if not station_id:
             if coords:
@@ -756,9 +1247,9 @@ class CPCBLive:
 
 
 class PM25Client:
-    """Client for processing PM2.5 satellite data from NetCDF files.
+    """Client that processes PM2.5 satellite data from NetCDF files.
 
-    Supports both V5.GL.05.02 (GWR-based) and V6.GL.02.04 (CNN-based) datasets
+    The client supports the V5.GL.05.02 (GWR) and V6.GL.02.04 (CNN) datasets
     from the WUSTL Atmospheric Composition Analysis Group (ACAG).
     """
 
@@ -768,10 +1259,10 @@ class PM25Client:
         Args:
             version: Dataset version to use. Options:
                 - "V6" (default): V6.GL.02.04 - CNN-based algorithm (1998-2023)
-                  Most advanced, recommended for new studies
+                  The most accurate model. Use it for new studies.
                 - "V5": V5.GL.05.02 - GWR-based algorithm (1998-2024)
-                  Traditional approach, compatible with published studies
-            cache_dir: Directory to cache downloaded NetCDF files.
+                  The older model. Use it to compare with published studies.
+            cache_dir: Directory for the cache of downloaded NetCDF files.
 
         Raises:
             ValueError: If version is not "V5" or "V6".
@@ -793,9 +1284,9 @@ class PM25Client:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Configure data source based on version
+        # Set the data source for the version
         if version == "V6":
-            # V6.GL.02.04: CNN-based algorithm (most advanced)
+            # V6.GL.02.04: CNN-based algorithm (most accurate)
             # Primary: AWS S3 Open Data Registry
             self.aws_base_url = (
                 "https://s3.us-west-2.amazonaws.com/v6.gl.02.04/V6.GL.02.04/GL/"
@@ -809,25 +1300,25 @@ class PM25Client:
             )
             self.variable_name = "PM25"  # V6 uses "PM25"
             self.year_range = (1998, 2023)
-            self.gee_year_range = (2000, 2022)  # GEE has limited range
+            self.gee_year_range = (2000, 2022)  # GEE has a smaller range of years
         else:  # V5
-            # V5.GL.05.02: GWR-based algorithm (traditional, well-validated)
+            # V5.GL.05.02: GWR-based algorithm (older, with many validation studies)
             self.aws_base_url = (
                 "https://s3.us-west-2.amazonaws.com/acag-data/V5.GL.05.02/GL/"
             )
-            # V5 not available on GEE
+            # GEE does not have V5
             self.gee_collection_monthly = None
             self.gee_collection_annual = None
             self.variable_name = "GWRPM25"  # V5 uses "GWRPM25"
             self.year_range = (1998, 2024)
             self.gee_year_range = None
 
-        # Initialize GEE if available
+        # Initialize GEE if it is available
         self.gee_initialized = False
         if GEE_AVAILABLE and self.gee_collection_monthly:
             self.gee_initialized = self._initialize_gee()
 
-        # Local paths (legacy support)
+        # Local paths for old versions
         self.annual_data_path = f"examples/{version}GL01.0p10.PM25.Global"
         self.monthly_data_path = f"examples/{version}GL01.0p10.PM25.Global"
 
@@ -838,7 +1329,7 @@ class PM25Client:
             self.box_shared_folder = "https://wustl.box.com/v/ACAG-V5GL0502-GWRPM25"
 
     def _initialize_gee(self) -> bool:
-        """Initialize Google Earth Engine with automatic project detection and setup.
+        """Initialize Google Earth Engine, and find and set the project.
 
         Returns:
             True if initialization succeeded, False otherwise.
@@ -925,17 +1416,18 @@ class PM25Client:
             return False
 
     def _get_aws_filename(self, year: int, month: Optional[int] = None) -> str:
-        """Generate AWS filename for given year and optional month.
+        """Make the AWS filename for a year and an optional month.
 
         Args:
             year: Year for data.
-            month: Optional month (1-12). If None, returns annual filename.
+            month: Optional month (1-12). If None, the function returns the annual
+                filename.
 
         Returns:
             AWS filename for the NetCDF file.
 
         Raises:
-            ValueError: If year is outside valid range for the version.
+            ValueError: If the year is not in the range of the version.
         """
         if not (self.year_range[0] <= year <= self.year_range[1]):
             raise ValueError(
@@ -955,11 +1447,11 @@ class PM25Client:
             return f"V5GL05.02.GWRPM25.GL.{year}{month:02d}-{year}{month:02d}.nc"
 
     def _get_aws_url(self, year: int, month: Optional[int] = None) -> str:
-        """Generate AWS URL for given year and optional month.
+        """Make the AWS URL for a year and an optional month.
 
         Args:
             year: Year for data.
-            month: Optional month (1-12). If None, returns annual URL.
+            month: Optional month (1-12). If None, the function returns the annual URL.
 
         Returns:
             Full AWS URL for the NetCDF file.
@@ -972,12 +1464,12 @@ class PM25Client:
     def _download_from_s3_boto3(
         self, year: int, month: Optional[int] = None, cached_path: Optional[Path] = None
     ) -> Optional[str]:
-        """Download PM2.5 data from AWS S3 using boto3 with anonymous access.
+        """Download PM2.5 data from AWS S3 with boto3 and anonymous access.
 
         Args:
             year: Year for data.
-            month: Optional month (1-12). If None, downloads annual data.
-            cached_path: Path where to save the file.
+            month: Optional month (1-12). If None, the client downloads annual data.
+            cached_path: Path for the file.
 
         Returns:
             Path to downloaded file if successful, None otherwise.
@@ -1028,7 +1520,9 @@ class PM25Client:
                     )
 
             final_size = cached_path.stat().st_size
-            print(f"✓ S3 download complete (boto3): {final_size / (1024*1024):.1f} MB")
+            print(
+                f"✓ S3 download complete (boto3): {final_size / (1024 * 1024):.1f} MB"
+            )
             return str(cached_path)
 
         except Exception as e:
@@ -1045,20 +1539,20 @@ class PM25Client:
     ) -> Optional[str]:
         """Download PM2.5 data from Google Earth Engine.
 
-        Note: GEE has a 32768x32768 pixel download limit. For global data,
-        you must provide a region to clip to, or use the export-to-Drive API.
+        Note: GEE has a download limit of 32768x32768 pixels. For global data,
+        give a region for the clip, or use the export-to-Drive API.
 
         Args:
             year: Year for data.
-            month: Optional month (1-12). If None, downloads annual data.
-            region: Optional ee.Geometry to clip to. If None and image is too large,
-                    will clip to India bounds as fallback.
+            month: Optional month (1-12). If None, the client downloads annual data.
+            region: Optional ee.Geometry for the clip. If None and the image is
+                    too large, the client clips the image to the India bounds.
 
         Returns:
-            Path to downloaded GeoTIFF file, or None if GEE unavailable.
+            Path to the downloaded GeoTIFF file, or None if GEE is not available.
 
         Raises:
-            ValueError: If year is outside GEE data range.
+            ValueError: If the year is not in the GEE data range.
         """
         if not self.gee_initialized:
             return None
@@ -1087,10 +1581,10 @@ class PM25Client:
                 print(f"⚠ No GEE data found for {year}-{month or 'annual'}")
                 return None
 
-            # If no region specified, use India bounds as default
-            # This downloads the full India raster once and caches it,
-            # allowing all stations to extract their values from the same file
-            # (more efficient than downloading separate clips for each station)
+            # If there is no region, use the India bounds.
+            # The client downloads the full India raster one time and keeps it
+            # in the cache. All stations then get their values from this file.
+            # This is faster than one clip for each station.
             if region is None:
                 print("ℹ Downloading India region raster (will be cached for reuse)")
                 region = ee.Geometry.Rectangle([68.0, 8.0, 98.0, 37.0])  # India
@@ -1137,7 +1631,7 @@ class PM25Client:
                             pbar.update(len(chunk))
 
             final_size = zip_path.stat().st_size
-            print(f"✓ GEE download complete: {final_size / (1024*1024):.1f} MB")
+            print(f"✓ GEE download complete: {final_size / (1024 * 1024):.1f} MB")
 
             print(f"Extracting GeoTIFF from ZIP archive...")
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
@@ -1173,7 +1667,8 @@ class PM25Client:
 
         Args:
             year: Year for data.
-            month: Optional month (1-12). If None, returns annual data path.
+            month: Optional month (1-12). If None, the function returns the annual
+                data path.
 
         Returns:
             Path to NetCDF file (cached locally).
@@ -1181,51 +1676,51 @@ class PM25Client:
         filename = self._get_aws_filename(year, month)
         cached_path = self.cache_dir / filename
 
-        # Return cached path regardless of whether file exists
-        # (download_netcdf_if_needed will handle downloading)
+        # Return the cache path, also if the file does not exist.
+        # download_netcdf_if_needed downloads the file.
         return str(cached_path)
 
     def download_netcdf_if_needed(
         self, year: int, month: Optional[int] = None, force_download: bool = False
     ) -> str:
-        """Download NetCDF file from AWS if not cached.
+        """Download the NetCDF file from AWS if it is not in the cache.
 
         Args:
             year: Year for data.
-            month: Optional month (1-12). If None, downloads annual data.
-            force_download: Whether to re-download even if file exists.
+            month: Optional month (1-12). If None, the client downloads annual data.
+            force_download: If True, download the file again, also if it exists.
 
         Returns:
             Path to the downloaded NetCDF or GeoTIFF file.
 
         Raises:
-            requests.RequestException: If download fails.
-            IOError: If file cannot be written.
+            requests.RequestException: If the download fails.
+            IOError: If the client cannot write the file.
         """
         cached_path = Path(self.get_netcdf_path(year, month))
 
-        # Also check for GeoTIFF version (from GEE downloads)
+        # Also look for a GeoTIFF file (from GEE downloads)
         cached_tif_path = cached_path.with_suffix(".tif")
 
-        # Check if NetCDF file exists
+        # Look for the NetCDF file
         if cached_path.exists() and not force_download:
             file_size = cached_path.stat().st_size
-            if file_size > 1024 * 1024:  # At least 1MB (reasonable for NetCDF)
+            if file_size > 1024 * 1024:  # Minimum 1MB for a valid NetCDF file
                 print(f"Using cached file: {cached_path}")
                 return str(cached_path)
             else:
                 print("Warning: Cached file appears incomplete, re-downloading...")
 
-        # Check if GeoTIFF file exists (from previous GEE download)
+        # Look for a GeoTIFF file from an earlier GEE download
         if cached_tif_path.exists() and not force_download:
             file_size = cached_tif_path.stat().st_size
-            if file_size > 100 * 1024:  # At least 100KB (reasonable for GeoTIFF)
+            if file_size > 100 * 1024:  # Minimum 100KB for a valid GeoTIFF file
                 print(f"Using cached GeoTIFF file: {cached_tif_path}")
                 return str(cached_tif_path)
 
         cached_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Try AWS S3 first with boto3 (proper anonymous access)
+        # First, use AWS S3 with boto3 (anonymous access)
         print(f"Attempting download from AWS S3...")
 
         s3_result = self._download_from_s3_boto3(year, month, cached_path)
@@ -1259,7 +1754,7 @@ class PM25Client:
                             pbar.update(len(chunk))
 
             final_size = cached_path.stat().st_size
-            print(f"✓ AWS download complete: {final_size / (1024*1024):.1f} MB")
+            print(f"✓ AWS download complete: {final_size / (1024 * 1024):.1f} MB")
             return str(cached_path)
 
         except requests.RequestException as aws_error:
@@ -1287,9 +1782,9 @@ class PM25Client:
                 gee_error = "Download failed"
 
             manual_instructions = (
-                f"\n{'='*80}\n"
+                f"\n{'=' * 80}\n"
                 f"AUTOMATED DOWNLOAD FAILED\n"
-                f"{'='*80}\n\n"
+                f"{'=' * 80}\n\n"
                 f"All automated download sources are currently unavailable:\n"
                 f"  ✗ AWS S3: {aws_error}\n"
                 f"  ✗ Google Earth Engine: {gee_error}\n\n"
@@ -1304,13 +1799,13 @@ class PM25Client:
                 f"After download:\n"
                 f"  1. Save file as: {cached_path}\n"
                 f"  2. Re-run your script\n\n"
-                f"{'='*80}\n"
+                f"{'=' * 80}\n"
             )
 
             raise requests.RequestException(manual_instructions) from aws_error
 
     def _detect_pm25_variable(self, ds: xr.Dataset) -> Tuple[str, xr.Dataset]:
-        """Detect PM2.5 variable name and prepare dataset.
+        """Find the PM2.5 variable name and prepare the dataset.
 
         Args:
             ds: xarray Dataset.
@@ -1334,7 +1829,7 @@ class PM25Client:
         return pm25_var, ds
 
     def _detect_coordinates(self, ds: xr.Dataset) -> Tuple[str, str]:
-        """Detect coordinate names in dataset.
+        """Find the coordinate names in the dataset.
 
         Args:
             ds: xarray Dataset.
@@ -1368,10 +1863,10 @@ class PM25Client:
             lat_coord: Name of latitude coordinate.
             lon_coord: Name of longitude coordinate.
             bbox: Bounding box as (minx, miny, maxx, maxy).
-            buffer: Buffer to add around bbox in degrees.
+            buffer: Buffer around the bbox, in degrees.
 
         Returns:
-            PM2.5 DataArray ready for clipping.
+            PM2.5 DataArray that is ready for the clip.
         """
         lat_vals = ds[lat_coord].values
         lon_vals = ds[lon_coord].values
@@ -1411,14 +1906,16 @@ class PM25Client:
 
         Args:
             clipped: Clipped PM2.5 DataArray.
-            include_count: Whether to include count in results.
-            allow_empty: If True, return NaN stats for empty data. If False, raise error.
+            include_count: If True, add the count to the results.
+            allow_empty: If True, return NaN stats for empty data. If False, raise
+                an error.
 
         Returns:
-            Dictionary with mean, std, min, max (and optionally count) statistics.
+            Dictionary with mean, std, min, and max statistics. It also has the count
+            if include_count is True.
 
         Raises:
-            ValueError: If no valid data found and allow_empty=False.
+            ValueError: If there is no valid data and allow_empty=False.
         """
         values = clipped.values.flatten()
         values = values[~np.isnan(values)]
@@ -1457,20 +1954,20 @@ class PM25Client:
     ) -> float:
         """Get PM2.5 value at a specific latitude/longitude point.
 
-        Selects the nearest grid cell to the specified coordinates.
+        The function uses the grid cell that is nearest to the coordinates.
 
         Args:
             latitude: Latitude in decimal degrees.
             longitude: Longitude in decimal degrees.
             year: Year of the data.
-            month: Optional month (1-12). If None, uses annual data.
+            month: Optional month (1-12). If None, the function uses annual data.
 
         Returns:
             PM2.5 value in µg/m³ at the nearest grid cell.
 
         Raises:
-            ValueError: If point is outside data bounds or no data available.
-            requests.RequestException: If download fails.
+            ValueError: If the point is outside the data bounds, or there is no data.
+            requests.RequestException: If the download fails.
 
         Example:
             >>> client = PM25Client()
@@ -1513,29 +2010,29 @@ class PM25Client:
         month: Optional[int] = None,
         group_by: Optional[str] = None,
     ) -> Union[Dict[str, float], pd.DataFrame]:
-        """Compute PM2.5 statistics inside a polygon region from GeoJSON.
+        """Calculate PM2.5 statistics in a polygon region from a GeoJSON file.
 
-        This function automatically downloads the required NetCDF data from AWS
-        if not cached locally.
+        If the NetCDF data is not in the local cache, this function downloads
+        the data from AWS.
 
         Args:
             geojson_file: Path to GeoJSON file with polygon.
             year: Year of the NetCDF data.
             month: Optional month of the NetCDF data.
-            group_by: Optional column name(s) to group polygons by.
-                     Can be a single column (e.g., 'state_name') or comma-separated
-                     multiple columns (e.g., 'state_name,district_name').
-                     If None, aggregates entire polygon boundary.
-                     If specified, aggregates by unique combinations of values.
+            group_by: Optional column name or names for the polygon groups.
+                     Give one column (for example 'state_name') or a comma-separated
+                     list of columns (for example 'state_name,district_name').
+                     If None, the function aggregates the full polygon boundary.
+                     If given, the function aggregates each unique combination.
 
         Returns:
             If group_by is None: Dictionary with mean, std, min, and max PM2.5 values.
-            If group_by is specified: DataFrame with statistics for each group.
+            If group_by is given: DataFrame with statistics for each group.
 
         Raises:
-            FileNotFoundError: If GeoJSON file not found.
-            requests.RequestException: If NetCDF download fails.
-            ValueError: If group_by column not found in GeoJSON.
+            FileNotFoundError: If the GeoJSON file does not exist.
+            requests.RequestException: If the NetCDF download fails.
+            ValueError: If the GeoJSON file does not have the group_by column.
         """
         if not os.path.exists(geojson_file):
             raise FileNotFoundError(f"GeoJSON file not found: {geojson_file}")
@@ -1545,7 +2042,7 @@ class PM25Client:
         gdf = gpd.read_file(geojson_file)
         gdf = gdf.to_crs("EPSG:4326")
 
-        # If group_by is specified, delegate to grouped processing
+        # If group_by is given, use the group method
         if group_by is not None:
             group_cols = [col.strip() for col in group_by.split(",")]
 
@@ -1558,7 +2055,7 @@ class PM25Client:
                 )
 
             return self._get_pm25_stats_grouped(gdf, Path(nc_file), group_cols)
-        # Combine polygons if multiple
+        # Combine the polygons if there is more than one
         polygon = gdf.union_all()
         bounds = polygon.bounds
 
@@ -1573,12 +2070,13 @@ class PM25Client:
     def _get_pm25_stats_grouped(
         self, gdf: gpd.GeoDataFrame, nc_file: Path, group_by: Union[str, List[str]]
     ) -> pd.DataFrame:
-        """Compute PM2.5 statistics grouped by column(s) in the GeoDataFrame.
+        """Calculate PM2.5 statistics for each group in the GeoDataFrame.
 
         Args:
             gdf: GeoDataFrame with geometries (already in EPSG:4326).
             nc_file: Path to NetCDF file.
-            group_by: Column name(s) to group by. Can be a string or list of strings.
+            group_by: Column name or names for the groups. A string or a list of
+                strings.
 
         Returns:
             DataFrame with statistics for each unique value or combination in the
@@ -1646,22 +2144,22 @@ class PM25Client:
         month: Optional[int] = None,
         id_field: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Compute PM2.5 statistics for each polygon in GeoJSON file.
+        """Calculate PM2.5 statistics for each polygon in a GeoJSON file.
 
         Args:
             geojson_file: Path to GeoJSON file with polygons.
             year: Year of the NetCDF data.
             month: Optional month of the NetCDF data.
-            id_field: Optional field in GeoJSON properties to use as identifier.
+            id_field: Optional GeoJSON property to use as the identifier.
 
         Returns:
             DataFrame with statistics for each polygon.
 
         Raises:
-            FileNotFoundError: If NetCDF or GeoJSON file not found.
+            FileNotFoundError: If the NetCDF file or the GeoJSON file does not exist.
 
-        This function automatically downloads the required NetCDF data from AWS
-        if not cached locally.
+        If the NetCDF data is not in the local cache, this function downloads
+        the data from AWS.
         """
         if not os.path.exists(geojson_file):
             raise FileNotFoundError(f"GeoJSON file not found: {geojson_file}")
@@ -1677,7 +2175,7 @@ class PM25Client:
             lat_coord, lon_coord = self._detect_coordinates(ds)
             pm25 = self._prepare_pm25_data(ds, pm25_var, lat_coord, lon_coord, bbox)
 
-            # Determine column name once at the beginning
+            # Find the column name one time, before the loop
             if id_field and id_field in gdf.columns:
                 column_name = id_field
             elif "NAME_1" in gdf.columns:

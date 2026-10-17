@@ -1,8 +1,8 @@
 """
-Utility functions for CPCB data fetching and processing.
+Utility functions for CPCB data.
 
-This module provides utilities for data cleaning, network requests, date parsing,
-station data conversion, and analysis functions.
+The functions clean data, send network requests, parse dates, convert station
+data, and analyze station data.
 """
 
 import json
@@ -25,6 +25,7 @@ from .constants import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_TIMEOUT,
     MONTH_ABBREV,
+    RSS_URL_WITH_COORDINATES,
 )
 from .exceptions import NetworkError
 
@@ -33,23 +34,23 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class DataProcessingError(Exception):
-    """Custom exception for data processing errors."""
+    """Error when the client cannot process the data."""
 
     pass
 
 
 def clean_station_name(station_name: str) -> str:
-    """Convert station name to clean underscore-separated format.
+    """Convert a station name to a clean name with underscores.
 
-    Rules applied:
-    1. Remove/replace special characters and punctuation
+    The function applies these rules:
+    1. Remove or replace special characters and punctuation
     2. Replace spaces with underscores
     3. Remove multiple consecutive underscores
     4. Remove leading/trailing underscores
-    5. Handle common patterns like "City - Organization"
+    5. Change frequent patterns, for example "City - Organization"
 
     Args:
-        station_name: Original station name string.
+        station_name: Original station name.
 
     Returns:
         Cleaned station name with underscores.
@@ -65,19 +66,19 @@ def clean_station_name(station_name: str) -> str:
 
     cleaned = station_name.strip()
 
-    # Handle "City - Organization" pattern
+    # Change the "City - Organization" pattern
     cleaned = re.sub(r"\s*-\s*", " ", cleaned)
-    # Remove commas and replace with space
+    # Replace commas with a space
     cleaned = re.sub(r",\s*", " ", cleaned)
     # Remove dots but keep the text
     cleaned = re.sub(r"\.", "", cleaned)
-    # Remove other punctuation and special characters
+    # Remove the other punctuation and special characters
     cleaned = re.sub(r"[^\w\s]", " ", cleaned)
-    # Replace multiple whitespace with single space
+    # Replace two or more spaces with one space
     cleaned = re.sub(r"\s+", " ", cleaned)
     # Replace spaces with underscores
     cleaned = cleaned.replace(" ", "_")
-    # Remove multiple consecutive underscores
+    # Replace two or more consecutive underscores with one
     cleaned = re.sub(r"_+", "_", cleaned)
     # Remove leading and trailing underscores
     cleaned = cleaned.strip("_")
@@ -86,21 +87,21 @@ def clean_station_name(station_name: str) -> str:
 
 
 def sort_station_data(data: List[Dict]) -> List[Dict]:
-    """Sort station data by live status and city name.
+    """Sort the station data by live status and city name.
 
-    For each city, stations are sorted by:
+    The function sorts the stations of each city by:
     1. Live status (live stations first: True before False)
-    2. City name (alphabetically)
+    2. City name (alphabetical order)
 
     Args:
         data: List of cities with nested stations from CPCB API.
 
     Returns:
-        Sorted list with the same structure but ordered by live status and city name.
+        Sorted list with the same structure, in order of live status and city name.
     """
 
     def get_live_status_priority(city_dict: Dict) -> Tuple[float, str]:
-        """Calculate priority for sorting: live stations get higher priority."""
+        """Calculate the sort priority. Live stations get a higher priority."""
         stations = city_dict.get("stationsInCity", [])
         live_count = sum(1 for station in stations if station.get("live", False))
         total_count = len(stations)
@@ -108,13 +109,13 @@ def sort_station_data(data: List[Dict]) -> List[Dict]:
         # Calculate live percentage (0-100)
         live_percentage = (live_count / total_count * 100) if total_count > 0 else 0
 
-        # Return tuple for sorting: (live_percentage desc, city_name asc)
+        # Sort key: (live_percentage descending, city_name ascending)
         return (-live_percentage, city_dict.get("cityName", "").lower())
 
     # Sort the cities
     sorted_data = sorted(data, key=get_live_status_priority)
 
-    # Sort stations within each city by live status
+    # Sort the stations in each city by live status
     for city in sorted_data:
         if "stationsInCity" in city:
             city["stationsInCity"] = sorted(
@@ -128,8 +129,88 @@ def sort_station_data(data: List[Dict]) -> List[Dict]:
     return sorted_data
 
 
+def parse_cpcb_rss_station_data(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert CPCB RSS JSON station data to the package station shape."""
+    cities: List[Dict[str, Any]] = []
+
+    for state in data.get("country", []):
+        state_id = state.get("stateId", "")
+        for city in state.get("citiesInState", []):
+            stations = []
+            for station in city.get("stationsInCity", []):
+                aqi = station.get("airQualityIndex") or {}
+                avg = aqi.get("value") or aqi.get("Value") or ""
+                station_id = station.get("siteId") or station.get("stationName", "")
+                station_name = station.get("stationName", "")
+
+                stations.append(
+                    {
+                        "id": station_id,
+                        "siteId": station_id,
+                        "name": station_name,
+                        "stationName": station_name,
+                        "latitude": station.get("latitude"),
+                        "longitude": station.get("longitude"),
+                        "live": bool(station.get("lastUpdate")),
+                        "avg": avg,
+                        "lastUpdate": station.get("lastUpdate", ""),
+                        "pollutants": station.get("pollutants", []),
+                        "airQualityIndex": aqi,
+                    }
+                )
+
+            cities.append(
+                {
+                    "cityName": city.get("cityId", ""),
+                    "cityID": city.get("cityId", ""),
+                    "stateID": state_id,
+                    "stationsInCity": stations,
+                }
+            )
+
+    return sort_station_data(cities)
+
+
+def station_data_to_dropdown(station_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build historical-client dropdown data from normalized station data."""
+    cities: Dict[str, List[Dict[str, str]]] = {}
+    stations: Dict[str, List[Dict[str, str]]] = {}
+
+    for city in station_data:
+        state = str(city.get("stateID", ""))
+        city_name = str(city.get("cityName", ""))
+        if not city_name:
+            continue
+
+        cities.setdefault(state, [])
+        if not any(entry.get("value") == city_name for entry in cities[state]):
+            cities[state].append({"label": city_name, "value": city_name})
+
+        city_stations = []
+        for station in city.get("stationsInCity", []):
+            station_id = str(station.get("id", ""))
+            station_name = str(station.get("name", ""))
+            if station_id and station_name:
+                city_stations.append({"label": station_name, "value": station_id})
+        stations[city_name] = sorted(city_stations, key=lambda item: item["label"])
+
+    for state in cities:
+        cities[state] = sorted(cities[state], key=lambda item: item["label"])
+
+    return {"cities": cities, "stations": stations}
+
+
+def fetch_cpcb_rss_station_data(timeout: int = DEFAULT_TIMEOUT) -> List[Dict[str, Any]]:
+    """Get the current CPCB stations from the JSON RSS endpoint."""
+    response = safe_get(
+        RSS_URL_WITH_COORDINATES, timeout=timeout, allow_ssl_fallback=True
+    )
+    data = cast(Dict[str, Any], response.json())
+    return parse_cpcb_rss_station_data(data)
+
+
 def get_aqi_category(aqi_value: float) -> str:
-    """Convert AQI numeric value to category.
+    """Convert a numeric AQI value to a category.
 
     Args:
         aqi_value: Numeric AQI value.
@@ -154,14 +235,14 @@ def get_aqi_category(aqi_value: float) -> str:
 
 
 def _safe_float_conversion(value: Any, default: float = np.nan) -> float:
-    """Safely convert value to float with fallback.
+    """Convert a value to float, or return a default value.
 
     Args:
         value: Value to convert.
-        default: Default value if conversion fails.
+        default: Value to return if the conversion fails.
 
     Returns:
-        Converted float value or default.
+        Float value, or the default value.
     """
     if value == "" or value is None:
         return default
@@ -207,13 +288,13 @@ def stations_to_dataframe(data: List[Dict]) -> pd.DataFrame:
 
 
 def stations_to_city_summary(data: List[Dict]) -> pd.DataFrame:
-    """Convert station data to city-level summary DataFrame.
+    """Convert station data to a DataFrame with a summary for each city.
 
     Args:
         data: List of cities with nested stations.
 
     Returns:
-        DataFrame with city-level aggregated statistics.
+        DataFrame with aggregated statistics for each city.
     """
     rows = []
 
@@ -222,7 +303,7 @@ def stations_to_city_summary(data: List[Dict]) -> pd.DataFrame:
         total_stations = len(stations)
         live_stations = sum(1 for station in stations if station.get("live", False))
 
-        # Calculate average AQI for live stations
+        # Calculate the average AQI of the live stations
         live_aqi_values = [
             _safe_float_conversion(station.get("avg"))
             for station in stations
@@ -256,13 +337,13 @@ def stations_to_city_summary(data: List[Dict]) -> pd.DataFrame:
 
 
 def stations_to_coordinates_dataframe(data: List[Dict]) -> pd.DataFrame:
-    """Convert station data to DataFrame optimized for mapping.
+    """Convert station data to a DataFrame for maps.
 
     Args:
         data: List of cities with nested stations.
 
     Returns:
-        DataFrame with geographic information and essential station details.
+        DataFrame with the locations and the primary station data.
     """
     rows = []
 
@@ -301,19 +382,19 @@ def stations_to_coordinates_dataframe(data: List[Dict]) -> pd.DataFrame:
 def convert_station_data_to_dataframe(
     data: List[Dict], method: str = "stations"
 ) -> pd.DataFrame:
-    """Main conversion function with multiple output formats.
+    """Convert station data to a DataFrame in one of three formats.
 
     Args:
         data: List of cities with nested stations from CPCB API.
         method: Conversion method ('stations', 'city_summary', 'coordinates').
 
     Returns:
-        Converted DataFrame based on specified method.
+        DataFrame in the format of the given method.
 
-    Available methods:
-        - 'stations': Flat DataFrame with one row per station (default)
-        - 'city_summary': City-level summary with aggregated statistics
-        - 'coordinates': Optimized for mapping with geographic data
+    Methods:
+        - 'stations': Flat DataFrame with one row for each station (default)
+        - 'city_summary': Summary of each city, with aggregated statistics
+        - 'coordinates': DataFrame for maps, with the station locations
     """
     methods = {
         "stations": stations_to_dataframe,
@@ -328,13 +409,13 @@ def convert_station_data_to_dataframe(
 
 
 def analyze_station_data(data: List[Dict]) -> Dict[str, Any]:
-    """Comprehensive analysis of station data.
+    """Analyze the station data.
 
     Args:
         data: List of cities with nested stations.
 
     Returns:
-        Dictionary with analysis results.
+        Dictionary with the results of the analysis.
     """
     df = stations_to_dataframe(data)
 
@@ -355,7 +436,7 @@ def analyze_station_data(data: List[Dict]) -> Dict[str, Any]:
         ),
     }
 
-    # Add AQI category distribution
+    # Add the distribution of AQI categories
     df_with_categories = df.copy()
     df_with_categories["aqi_category"] = df_with_categories["avg_aqi"].apply(
         get_aqi_category
@@ -368,11 +449,11 @@ def analyze_station_data(data: List[Dict]) -> Dict[str, Any]:
 
 
 def _log_if_verbose(message: str, verbose: bool) -> None:
-    """Print message only if verbose mode is enabled.
+    """Print the message only if verbose mode is on.
 
     Args:
         message: Message to print.
-        verbose: Whether verbose mode is enabled.
+        verbose: If True, verbose mode is on.
     """
     if verbose:
         print(message)
@@ -386,22 +467,22 @@ def safe_get(
     allow_ssl_fallback: bool = False,
     verbose: bool = False,
 ) -> requests.Response:
-    """Make HTTP GET request with retry logic.
+    """Send an HTTP GET request, and send it again if it fails.
 
     Args:
-        url: URL to fetch.
-        max_retries: Maximum retry attempts.
-        timeout: Request timeout.
-        verify_ssl: Whether to verify SSL certificates.
-        allow_ssl_fallback: Whether to allow fallback to unverified SSL if
-            verification fails.
-        verbose: Whether to print status messages.
+        url: URL of the request.
+        max_retries: Maximum number of retries.
+        timeout: Request timeout in seconds.
+        verify_ssl: If True, verify the SSL certificates.
+        allow_ssl_fallback: If True, send the request again without SSL
+            verification when the verification fails.
+        verbose: If True, print status messages.
 
     Returns:
         requests.Response object.
 
     Raises:
-        NetworkError: If request fails after all retries.
+        NetworkError: If all the retries fail.
     """
     for attempt in range(max_retries + 1):
         try:
@@ -451,7 +532,7 @@ def safe_get(
                 verbose,
             )
 
-        # Wait before retrying (exponential backoff)
+        # Wait before the next retry (exponential backoff)
         if attempt < max_retries:
             wait_time = DEFAULT_BACKOFF_FACTOR * (2**attempt)
             _log_if_verbose(f"Waiting {wait_time:.1f} seconds before retry...", verbose)
@@ -474,30 +555,30 @@ def safe_post(
     allow_ssl_fallback: bool = False,
     verbose: bool = False,
 ) -> Dict[str, Any]:
-    """Make robust POST request with retry logic and base64 decoding.
+    """Send a POST request with retries, and decode the base64 response.
 
     Args:
-        url: URL to send POST request to.
+        url: URL of the POST request.
         headers: Request headers.
         data: Request data (dict, string, or bytes).
         cookies: Optional cookies dict.
         max_retries: Maximum number of retry attempts.
-        backoff_factor: Backoff factor for exponential retry delay.
+        backoff_factor: Factor for the exponential delay between retries.
         timeout: Request timeout in seconds.
-        verify_ssl: Whether to verify SSL certificates.
-        allow_ssl_fallback: Whether to allow fallback to unverified SSL if
-            verification fails.
-        verbose: Whether to print status messages.
+        verify_ssl: If True, verify the SSL certificates.
+        allow_ssl_fallback: If True, send the request again without SSL
+            verification when the verification fails.
+        verbose: If True, print status messages.
 
     Returns:
-        Parsed JSON response as dictionary.
+        Parsed JSON response, as a dictionary.
 
     Raises:
-        NetworkError: If all retries failed or network issues.
-        DataProcessingError: If base64 decoding or JSON parsing fails.
-        ValueError: If input parameters are invalid.
+        NetworkError: If all retries fail, or there is a network problem.
+        DataProcessingError: If the client cannot decode the base64 or parse the JSON.
+        ValueError: If an input parameter is not valid.
     """
-    # Input validation
+    # Validate the input
     if not url or not isinstance(url, str):
         raise ValueError("URL must be a non-empty string")
     if not headers or not isinstance(headers, dict):
@@ -583,7 +664,7 @@ def safe_post(
             _log_if_verbose(
                 f"HTTP Error on attempt {attempt + 1}/{max_retries + 1}: {e}", verbose
             )
-            # For client errors (4xx), don't retry
+            # Do not retry client errors (4xx)
             if (
                 hasattr(e.response, "status_code")
                 and 400 <= e.response.status_code < 500
@@ -601,10 +682,10 @@ def safe_post(
             )
 
         except DataProcessingError:
-            # Don't retry data processing errors
+            # Do not retry data processing errors
             raise
 
-        # Wait before retrying (exponential backoff)
+        # Wait before the next retry (exponential backoff)
         if attempt < max_retries:
             wait_time = backoff_factor * (2**attempt)
             _log_if_verbose(f"Waiting {wait_time:.1f} seconds before retry...", verbose)
@@ -616,7 +697,7 @@ def safe_post(
 
 
 def url_encode(data_dict: Dict[str, Any]) -> str:
-    """Encode dictionary as base64 JSON string.
+    """Encode a dictionary as a base64 JSON string.
 
     Args:
         data_dict: Dictionary to encode.
@@ -629,7 +710,7 @@ def url_encode(data_dict: Dict[str, Any]) -> str:
 
 
 def time_to_isodate(timestamp: int) -> str:
-    """Convert timestamp to ISO date format.
+    """Convert a timestamp to the ISO date format.
 
     Args:
         timestamp: Unix timestamp in milliseconds.
@@ -642,9 +723,10 @@ def time_to_isodate(timestamp: int) -> str:
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate great circle distance between two points using Haversine formula.
+    """Calculate the great circle distance between two points (haversine formula).
 
-    More accurate than Euclidean distance for geographical coordinates.
+    For locations on the globe, this distance is more accurate than the
+    Euclidean distance.
 
     Args:
         lat1, lon1: Latitude and longitude of first point.
@@ -672,7 +754,8 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 def euclidean_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate simple Euclidean distance.
 
-    Faster but less accurate for long distances than haversine_distance.
+    This function is faster than haversine_distance, but less accurate for long
+    distances.
 
     Args:
         lat1, lon1: Latitude and longitude of first point.
@@ -685,13 +768,13 @@ def euclidean_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 
 def parse_date(date_text: str) -> Optional[str]:
-    """Parse various date formats to standardized format.
+    """Parse a date in one of many formats to the standard format.
 
     Args:
         date_text: Raw date text.
 
     Returns:
-        Standardized date in YYYY-MM-DD format, or None if parsing fails.
+        Date in YYYY-MM-DD format, or None if the parse fails.
     """
     if not date_text:
         return None
@@ -710,7 +793,7 @@ def parse_date(date_text: str) -> Optional[str]:
 
 
 def clean_city_name(city_text: str) -> Optional[str]:
-    """Clean and standardize city name.
+    """Clean a city name and make it standard.
 
     Args:
         city_text: Raw city text.
@@ -721,16 +804,16 @@ def clean_city_name(city_text: str) -> Optional[str]:
     if not city_text:
         return None
 
-    # Remove extra whitespace
+    # Remove extra spaces
     city = re.sub(r"\s+", " ", city_text.strip())
-    # Remove parentheses content
+    # Remove the text in parentheses
     city = re.sub(r"\s*\([^)]*\)", "", city)
-    # Remove common prefixes/suffixes
+    # Remove frequent prefixes and suffixes
     city = re.sub(r"^(For|Weather|Report|Forecast):\s*", "", city, flags=re.IGNORECASE)
     city = re.sub(r"\s*(Weather|Report|Forecast)$", "", city, flags=re.IGNORECASE)
     # Remove HTML artifacts
     city = re.sub(r"[<>]", "", city)
-    # Capitalize properly
+    # Use the correct capital letters
     city = city.title()
     # Normalize hyphens
     city = re.sub(r"\s*-\s*", "-", city)
@@ -739,13 +822,13 @@ def clean_city_name(city_text: str) -> Optional[str]:
 
 
 def convert_date_to_iso(date_str: str) -> Optional[str]:
-    """Convert dates like "27-May", "2-Jun" to YYYY-MM-DD format.
+    """Convert dates such as "27-May" and "2-Jun" to the YYYY-MM-DD format.
 
     Args:
-        date_str: Date string in format "DD-MMM" (e.g., "27-May", "2-Jun").
+        date_str: Date string in the "DD-MMM" format (for example "27-May").
 
     Returns:
-        Date in YYYY-MM-DD format, or None if parsing fails.
+        Date in YYYY-MM-DD format, or None if the parse fails.
     """
     if not date_str:
         return None
@@ -753,15 +836,15 @@ def convert_date_to_iso(date_str: str) -> Optional[str]:
     current_year = datetime.now().year
 
     try:
-        # Split by dash and clean
+        # Split at the dash and clean the parts
         parts = date_str.strip().replace("-", " ").replace("  ", " ").split(" ")
         if len(parts) != 2:
             return None
 
         day, month_abbr = parts
-        day = day.zfill(2)  # Convert to 2-digit format
+        day = day.zfill(2)  # Convert to the 2-digit format
 
-        # Convert month abbreviation to number
+        # Convert the month abbreviation to a number
         month_key = month_abbr.lower()[:3]
         if month_key not in MONTH_ABBREV:
             return None

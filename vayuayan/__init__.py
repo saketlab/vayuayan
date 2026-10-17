@@ -1,14 +1,14 @@
 """
-Vayuayan - Comprehensive Air Quality Data Analysis Package.
+Vayuayan: air quality data for India.
 
-Vayuayan (वायुअयन) meaning "path of the wind" in Sanskrit, is a comprehensive
-Python package for fetching and analyzing air quality data from multiple sources.
+Vayuayan (वायुअयन) is Sanskrit for "path of the wind". This Python package gets
+air quality data from many sources and analyzes the data.
 
 Main Classes:
-    - CPCBClient: Low-level client for CPCB web services
-    - CPCBHistorical: Historical air quality data client
-    - CPCBLive: Live air quality monitoring client
-    - PM25Client: Satellite PM2.5 data processing client
+    - CPCBClient: Legacy client for CPCB web services
+    - CPCBHistorical: Client for historical air quality data
+    - CPCBLive: Client for live air quality data
+    - PM25Client: Client for satellite PM2.5 data
 
 Usage:
     >>> from vayuayan import CPCBHistorical, CPCBLive
@@ -27,14 +27,14 @@ __description__ = (
 )
 __url__ = "https://github.com/saketlab/vayuayan"
 
-# Import main client classes
+# Client classes
 from .air_quality_client import CPCBHistorical, CPCBLive, PM25Client, setup_earth_engine
 from .client import CPCBClient
 
-# Import configuration helpers
+# Configuration functions
 from .constants import get_config_dir, get_gee_project_file
 
-# Import exceptions for convenience
+# Exceptions
 from .exceptions import (
     AuthenticationError,
     CityNotFoundError,
@@ -48,7 +48,7 @@ from .exceptions import (
     StationNotFoundError,
 )
 
-# Import utility functions that might be useful for users
+# Utility functions for users
 from .utils import (
     analyze_station_data,
     clean_station_name,
@@ -58,14 +58,14 @@ from .utils import (
     stations_to_dataframe,
 )
 
-# Define what gets exported when using "from vayuayan import *"
+# Names that "from vayuayan import *" exports
 __all__ = [
-    # Main client classes
+    # Client classes
     "CPCBClient",
     "CPCBHistorical",
     "CPCBLive",
     "PM25Client",
-    # Setup helpers
+    # Setup functions
     "setup_earth_engine",
     "get_config_dir",
     "get_gee_project_file",
@@ -100,10 +100,10 @@ def get_version() -> str:
 
 
 def get_package_info() -> dict:
-    """Get comprehensive package information.
+    """Get the package information.
 
     Returns:
-        Dictionary containing package metadata.
+        Dictionary with the package metadata.
     """
     return {
         "name": "vayuayan",

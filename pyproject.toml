@@ -5,9 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vayuayan"
 dynamic = ["version"]
-description = "Package for fetching and analyzing air quality data from multiple sources"
+description = "Get and analyze air quality data: CPCB India AQI and WUSTL ACAG satellite PM2.5"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
+keywords = [
+    "air quality",
+    "AQI",
+    "PM2.5",
+    "pollution",
+    "CPCB",
+    "India",
+    "satellite",
+    "WUSTL ACAG",
+    "GeoJSON",
+]
 authors = [
     {name = "Saket Choudhary", email = "saketc@iitb.ac.in"},
     {name = "Mahesh Kumar Prajapat", email = "22b0433@iitb.ac.in"}
@@ -18,7 +30,10 @@ maintainers = [
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Environment :: Console",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
@@ -28,13 +43,15 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Scientific/Engineering :: GIS",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Typing :: Typed",
 ]
 requires-python = ">=3.9"
 dependencies = [
     "requests>=2.25.0",
     "pandas>=1.3.0",
-    "openpyxl==3.1.5",
+    "openpyxl>=3.1.0",
     "urllib3>=1.26.0",
     "geopandas>=1.0.1",
     "geopy>=2.4.1",
@@ -74,22 +91,24 @@ Homepage = "https://github.com/saketlab/vayuayan"
 Repository = "https://github.com/saketlab/vayuayan.git"
 Documentation = "https://vayuayan.saketlab.org"
 "Bug Tracker" = "https://github.com/saketlab/vayuayan/issues"
+Changelog = "https://vayuayan.saketlab.org/history.html"
 
 [project.scripts]
 vayuayan = "vayuayan.cli:main"
 
 [tool.setuptools]
-packages = ["vayuayan"]
+packages = ["vayuayan", "vayuayan.data"]
 
 [tool.setuptools.dynamic]
 version = {attr = "vayuayan.__version__"}
 
 [tool.setuptools.package-data]
 vayuayan = ["py.typed"]
+"vayuayan.data" = ["*.json"]
 
 [tool.black]
 line-length = 88
-target-version = ['py37', 'py38', 'py39', 'py310', 'py311', 'py312', 'py313']
+target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 extend-exclude = '''
 /(
   # directories

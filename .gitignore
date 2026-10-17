@@ -140,10 +140,38 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
+# Ruff, uv, scratch
+.ruff_cache/
+.tmp/
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
 # Project specific
 *.csv
 *.json
+!vayuayan/data/*.json
 *.xlsx
 *.nc
+*.tif
+*.tiff
 *.geojson
+*.pid
 examples/V6GL01*
+
+# PM2.5 downloads (PM25Client default cache_dir) and the GEE project file
+pm25_data/
+.gee_project
+
+# Bulk dump caches and outputs (scripts/). The rules start with / so that they
+# do not match vayuayan/data/. Files in data/ that git already tracks stay tracked.
+/data/.r2_archive/
+/data/.duckdb_tmp/
+/data/cpcb_raw_15min_cache/
+/data/cpcb_raw_15min_station_parquet/
+/data/cpcb_raw_15min_pollutants.parquet
+*.duckdb
+*.duckdb.wal
+*.parquet.tmp

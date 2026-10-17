@@ -1,4 +1,4 @@
-"""Module entry point for ``python -m vayuayan`` commands."""
+"""Entry point for the ``python -m vayuayan`` command."""
 
 from .cli import main
 

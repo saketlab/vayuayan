@@ -1,9 +1,8 @@
 """
-CPCB Client module for interacting with Central Pollution Control Board services.
+Legacy client for Central Pollution Control Board (CPCB) web services.
 
-This module provides the main client class for fetching air quality
-monitoring data from CPCB web services, including station data,
-raw data downloads, and geographic station lookups.
+The CPCBClient class gets station data and raw data files from CPCB.
+It also finds the stations that are nearest to a location.
 """
 
 import heapq
@@ -17,6 +16,7 @@ from .constants import ALL_STATION_URL, DOWNLOAD_URL, POST_HEADERS
 from .exceptions import CPCBError, NetworkError
 from .utils import (
     clean_station_name,
+    fetch_cpcb_rss_station_data,
     haversine_distance,
     safe_get,
     safe_post,
@@ -26,14 +26,14 @@ from .utils import (
 
 
 class CPCBClient:
-    """Main client for fetching CPCB air quality data."""
+    """Legacy client that gets CPCB air quality data."""
 
     def __init__(self, use_test_endpoint: bool = True) -> None:
         """Initialize the CPCB Client.
 
         Args:
-            use_test_endpoint: Whether to use the test endpoint (unused,
-                kept for compatibility).
+            use_test_endpoint: Not used. The parameter stays for
+                compatibility.
         """
         self.station_url = ALL_STATION_URL
         self.cookies = {"ccr_public": "A"}
@@ -41,16 +41,16 @@ class CPCBClient:
     def list_stations(
         self, as_dataframe: bool = False
     ) -> Union[List[Dict], pd.DataFrame]:
-        """Get list of all available air quality monitoring stations.
+        """Get the list of all air quality monitoring stations.
 
         Args:
-            as_dataframe: Whether to return data as pandas DataFrame.
+            as_dataframe: If True, return the data as a pandas DataFrame.
 
         Returns:
             List of station dictionaries or DataFrame if as_dataframe=True.
 
         Raises:
-            CPCBError: If failed to fetch station data.
+            CPCBError: If the client cannot get the station data.
         """
         try:
             data = "e30="
@@ -59,19 +59,19 @@ class CPCBClient:
             )
             stations = response.get("stations", [])
             sorted_stations = sort_station_data(stations)
+        except Exception:
+            sorted_stations = fetch_cpcb_rss_station_data()
 
-            if as_dataframe:
-                return stations_to_dataframe(sorted_stations)
-            return sorted_stations
-        except Exception as e:
-            raise CPCBError(f"Failed to fetch stations: {str(e)}") from e
+        if as_dataframe:
+            return stations_to_dataframe(sorted_stations)
+        return sorted_stations
 
     def _log_if_verbose(self, message: str, verbose: bool) -> None:
-        """Print message only if verbose mode is enabled.
+        """Print the message only if verbose mode is on.
 
         Args:
             message: Message to print.
-            verbose: Whether verbose mode is enabled.
+            verbose: If True, verbose mode is on.
         """
         if verbose:
             print(message)
@@ -85,7 +85,7 @@ class CPCBClient:
         year: str,
         filename: Optional[str],
     ) -> str:
-        """Generate filename for downloaded data.
+        """Make a filename for downloaded data.
 
         Args:
             url: Source URL.
@@ -96,7 +96,7 @@ class CPCBClient:
             filename: Custom filename.
 
         Returns:
-            Generated filename with .csv extension.
+            Filename with the .csv extension.
         """
         if filename is None:
             if url:
@@ -108,11 +108,11 @@ class CPCBClient:
             else:
                 filename = f"{site_id}_{station_name}_{time_period}.csv"
 
-        # Add year to filename if not already present
+        # Add the year to the filename if it is not there
         if not filename.endswith(f"_{year}.csv"):
             filename = filename.replace(".csv", f"_{year}.csv")
 
-        # Ensure .csv extension
+        # Make sure that the extension is .csv
         if not filename.endswith(".csv"):
             filename += ".csv"
 
@@ -130,35 +130,35 @@ class CPCBClient:
         return_dataframe: bool = False,
         verbose: bool = False,
     ) -> Union[str, pd.DataFrame, None]:
-        """Download CSV file from CPCB data repository.
+        """Download a CSV file from the CPCB data repository.
 
         Args:
-            url: Direct URL to download from. If provided, other parameters
-                are ignored.
-            site_id: Station site ID (required if url not provided).
-            station_name: Station name (required if url not provided).
-            time_period: Time period for data (required if url not provided).
-            year: Year for data (required if url not provided).
-            output_dir: Directory to save downloaded file.
-            filename: Custom filename (optional, auto-generated if not provided).
-            return_dataframe: Whether to return pandas DataFrame instead of a
+            url: Direct URL of the file. If you give a URL, the client
+                ignores the other parameters.
+            site_id: Station site ID (necessary if url is None).
+            station_name: Station name (necessary if url is None).
+            time_period: Time period for data (necessary if url is None).
+            year: Year for data (necessary if url is None).
+            output_dir: Directory for the downloaded file.
+            filename: Optional custom filename. If None, the client makes a filename.
+            return_dataframe: If True, return a pandas DataFrame and not a
                 file path.
-            verbose: Whether to print status messages.
+            verbose: If True, print status messages.
 
         Returns:
-            Path to downloaded file, DataFrame, or None if download fails.
+            Path to the downloaded file, a DataFrame, or None if the download fails.
 
         Raises:
-            CPCBError: If required parameters are missing or download fails.
-            NetworkError: If network request fails.
+            CPCBError: If a necessary parameter is missing or the download fails.
+            NetworkError: If the network request fails.
 
         Examples:
             >>> client = CPCBClient()
-            >>> # Download using direct URL
+            >>> # Download with a direct URL
             >>> path = client.download_raw_data(
             ...     url="https://airquality.cpcb.gov.in/.../Delhi_Punjabi_Bagh_2024.csv"
             ... )
-            >>> # Download using parameters
+            >>> # Download with parameters
             >>> df = client.download_raw_data(
             ...     site_id="DL001",
             ...     station_name="Punjabi_Bagh",
@@ -167,7 +167,7 @@ class CPCBClient:
             ...     return_dataframe=True
             ... )
         """
-        # Construct URL if not provided directly
+        # Make the URL if the caller did not give one
         if url is None:
             if not all([site_id, station_name, time_period, year]):
                 raise CPCBError(
@@ -188,10 +188,10 @@ class CPCBClient:
         self._log_if_verbose(f"Downloading CSV from: {url}", verbose)
 
         try:
-            # Make the request with longer timeout for file downloads
+            # Send the request with a longer timeout for file downloads
             response = safe_get(url, timeout=60, max_retries=3)
 
-            # Check content type
+            # Examine the content type
             content_type = response.headers.get("content-type", "").lower()
             if (
                 "text/csv" not in content_type
@@ -201,12 +201,12 @@ class CPCBClient:
                     f"Warning: Unexpected content type: {content_type}", verbose
                 )
 
-            # Generate filename
+            # Make the filename
             generated_filename = self._generate_filename(
                 url, site_id, station_name, time_period, year or "", filename
             )
 
-            # Create output directory and file path
+            # Make the output directory and the file path
             Path(output_dir).mkdir(parents=True, exist_ok=True)
             file_path = Path(output_dir) / generated_filename
 
@@ -217,7 +217,7 @@ class CPCBClient:
 
             self._log_if_verbose(f"Successfully downloaded: {file_path}", verbose)
 
-            # Return DataFrame if requested
+            # Return a DataFrame if the caller asked for one
             if return_dataframe:
                 try:
                     df = pd.read_csv(file_path)
@@ -243,19 +243,20 @@ class CPCBClient:
     def get_nearest_station(
         self, lat: float, lon: float, return_distance: bool = False
     ) -> Union[str, Tuple[str, float]]:
-        """Find the nearest station to given coordinates using optimized algorithms.
+        """Find the station that is nearest to the given coordinates.
 
         Args:
             lat: Target latitude.
             lon: Target longitude.
-            return_distance: Whether to return distance along with station ID.
+            return_distance: If True, return the distance and the station ID.
 
         Returns:
-            Station ID of nearest station, or tuple of (station_id, distance)
-            if return_distance is True.
+            Station ID of the nearest station, or a tuple of (station_id,
+            distance) if return_distance is True.
 
         Raises:
-            CPCBError: If failed to fetch station data or no stations available.
+            CPCBError: If the client cannot get the station data, or there are no
+                stations.
         """
         try:
             cities = self.list_stations()
@@ -269,14 +270,14 @@ class CPCBClient:
         min_distance = float("inf")
         nearest_station_id: Optional[str] = None
 
-        # Single pass through all stations
+        # Examine all stations one time
         for city in cities:
             for station in city.get("stationsInCity", []):
                 try:
                     station_lat = float(station["latitude"])
                     station_lon = float(station["longitude"])
 
-                    # Use haversine distance for accurate geographical distance
+                    # Use the haversine distance, because it is accurate on the globe
                     distance = haversine_distance(
                         target_lat, target_lon, station_lat, station_lon
                     )
@@ -289,7 +290,7 @@ class CPCBClient:
                         nearest_station_id = str(candidate_id)
 
                 except (ValueError, KeyError, TypeError):
-                    # Skip stations with invalid coordinates
+                    # Ignore stations that have invalid coordinates
                     continue
 
         if nearest_station_id is None:
@@ -302,7 +303,7 @@ class CPCBClient:
     def get_k_nearest_stations(
         self, lat: float, lon: float, k: int = 5
     ) -> List[Tuple[Dict, float]]:
-        """Find the k nearest stations to given coordinates.
+        """Find the k stations that are nearest to the given coordinates.
 
         Args:
             lat: Target latitude.
@@ -310,12 +311,13 @@ class CPCBClient:
             k: Number of nearest stations to return.
 
         Returns:
-            List of tuples: [(station_info, distance), ...] sorted by distance.
-            Each station_info dict contains: id, name, latitude, longitude,
+            List of tuples: [(station_info, distance), ...], sorted by distance.
+            Each station_info dict has: id, name, latitude, longitude,
             live, avg, cityID, and stateID.
 
         Raises:
-            CPCBError: If failed to fetch station data or no stations available.
+            CPCBError: If the client cannot get the station data, or there are no
+                stations.
         """
         try:
             cities = self.list_stations()
@@ -327,7 +329,7 @@ class CPCBClient:
 
         target_lat, target_lon = float(lat), float(lon)
 
-        # Use a min-heap to efficiently track k nearest stations
+        # A min-heap keeps the k nearest stations
         heap: List[Tuple[float, str, float, Dict[str, Any]]] = []
 
         for city in cities:
@@ -343,10 +345,10 @@ class CPCBClient:
                     station_id = str(station.get("id", ""))
 
                     if len(heap) < k:
-                        # Heap not full, add station
+                        # The heap is not full, so add the station
                         heapq.heappush(heap, (-distance, station_id, distance, station))
                     elif distance < -heap[0][0]:
-                        # Found closer station, replace farthest
+                        # This station is nearer, so replace the farthest station
                         heapq.heapreplace(
                             heap, (-distance, station_id, distance, station)
                         )
@@ -354,7 +356,7 @@ class CPCBClient:
                 except (ValueError, KeyError, TypeError):
                     continue
 
-        # Extract results and sort by distance (closest first)
+        # Get the results and sort them by distance (nearest first)
         results: List[Tuple[Dict[str, Any], float]] = [
             (station_info, distance) for _, _, distance, station_info in heap
         ]
@@ -363,18 +365,18 @@ class CPCBClient:
     def get_nearest_station_within_radius(
         self, lat: float, lon: float, max_distance_km: float = 100
     ) -> Optional[Tuple[str, float]]:
-        """Find nearest station within a specified radius.
+        """Find the nearest station in a given radius.
 
         Args:
             lat: Target latitude.
             lon: Target longitude.
-            max_distance_km: Maximum search radius in kilometers.
+            max_distance_km: Maximum radius in kilometers.
 
         Returns:
-            Tuple of (station_id, distance) or None if no station found within radius.
+            Tuple of (station_id, distance), or None if no station is in the radius.
 
         Raises:
-            CPCBError: If failed to fetch station data.
+            CPCBError: If the client cannot get the station data.
         """
         try:
             cities = self.list_stations()
@@ -383,7 +385,7 @@ class CPCBClient:
 
         target_lat, target_lon = float(lat), float(lon)
 
-        # Calculate bounding box for optimization
+        # Calculate a bounding box to make the search faster
         # 1 degree latitude ≈ 111 km
         # 1 degree longitude ≈ 111 km * cos(latitude)
         lat_delta = max_distance_km / 111.0
@@ -403,7 +405,7 @@ class CPCBClient:
                     station_lat = float(station["latitude"])
                     station_lon = float(station["longitude"])
 
-                    # Quick bounding box check for optimization
+                    # Fast bounding box test, to ignore stations that are far away
                     if not (
                         min_lat <= station_lat <= max_lat
                         and min_lon <= station_lon <= max_lon

@@ -1,11 +1,11 @@
 .. meta::
-   :description: vayuayan is a Python package and CLI for fetching and analysing air quality data worldwide: WUSTL ACAG satellite PM2.5 (1998-2024) and CPCB India AQI monitoring (historical and live).
+   :description: vayuayan is a Python package and CLI that gets and analyzes air quality data: WUSTL ACAG satellite PM2.5 (1998-2024) and CPCB India AQI monitoring (historical and live).
    :keywords: air quality, PM2.5, pollution, AQI, CPCB, India, WUSTL ACAG, satellite, Python, air pollution data
 
 vayuayan: Collect and Analyze Air Quality and Pollution Data
 ============================================================
 
-A Python package for fetching and analysing air quality data from multiple sources worldwide:
+A Python package that gets and analyzes air quality data from many sources:
 
 .. image:: https://img.shields.io/pypi/v/vayuayan.svg
    :target: https://pypi.org/project/vayuayan/
@@ -22,12 +22,12 @@ A Python package for fetching and analysing air quality data from multiple sourc
 Overview
 --------
 
-vayuayan provides a simple and powerful interface to access pollution monitoring data from India's Central Pollution Control Board and WUSTL ACAG. It supports:
+vayuayan gives a simple interface to pollution data from the Central Pollution Control Board (CPCB) of India and from WUSTL ACAG. It supports:
 
-- **Air Quality Index (AQI) data**: Historical and real-time air quality measurements
-- **PM2.5 data**: Fine particulate matter data for any geographic region using GeoJSON
-- **Live monitoring**: Real-time air quality parameters for monitoring stations
-- **Geolocation support**: Automatic detection and nearest station finding
+- **Air Quality Index (AQI) data**: Historical and live air quality measurements
+- **PM2.5 data**: Fine particulate matter data for a geographic region in a GeoJSON file
+- **Live data**: Live air quality parameters of monitoring stations
+- **Location**: The package finds your location and the nearest station
 
 Quick Start
 -----------
@@ -87,7 +87,7 @@ Command Line Interface
 Jupyter Notebooks
 ==================
 
-Interactive notebooks with hands-on examples live in the ``notebooks/`` directory:
+The ``notebooks/`` directory has interactive notebooks with examples:
 
 .. toctree::
    :maxdepth: 1

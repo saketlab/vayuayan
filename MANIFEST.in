@@ -1,0 +1,6 @@
+# Files in the sdist in addition to the package and the license.
+include README.md
+graft tests
+# tests/test_dump_raw_15min_pollutants.py imports this script
+include scripts/dump_raw_15min_pollutants.py
+global-exclude __pycache__ *.py[cod]

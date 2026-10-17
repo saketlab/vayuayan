@@ -1,5 +1,5 @@
 """
-Command functions for vayuayan CLI.
+Command functions of the vayuayan CLI.
 """
 
 import json
@@ -13,7 +13,7 @@ def _print_error(message: str) -> None:
     """Print a formatted error message.
 
     Args:
-        message: The error message to display.
+        message: The error message.
     """
     print(f"Error: {message}")
 
@@ -22,8 +22,8 @@ def _print_list_items(title: str, items: list) -> None:
     """Print a formatted list of items.
 
     Args:
-        title: The title to display above the list.
-        items: List of items to display.
+        title: The title above the list.
+        items: The items to show.
     """
     print(f"{title}:")
     for item in items:
@@ -31,7 +31,7 @@ def _print_list_items(title: str, items: list) -> None:
 
 
 def get_state_list(client: CPCBHistorical) -> bool:
-    """Display list of states available for AQI data.
+    """Show the list of states that have AQI data.
 
     Args:
         client: The AQI client instance.
@@ -50,11 +50,11 @@ def get_state_list(client: CPCBHistorical) -> bool:
 
 
 def get_city_list(client: CPCBHistorical, state: str) -> bool:
-    """Display list of cities available in given state for AQI data.
+    """Show the list of cities in a state that have AQI data.
 
     Args:
         client: The AQI client instance.
-        state: The state name to get cities for.
+        state: The state name.
 
     Returns:
         True if successful, False otherwise.
@@ -76,11 +76,11 @@ def get_city_list(client: CPCBHistorical, state: str) -> bool:
 
 
 def get_station_list(client: CPCBHistorical, city: str) -> bool:
-    """Display station list with IDs and names for given city.
+    """Show the IDs and names of the stations in a city.
 
     Args:
         client: The AQI client instance.
-        city: The city name to get stations for.
+        city: The city name.
 
     Returns:
         True if successful, False otherwise.
@@ -107,13 +107,13 @@ def get_station_list(client: CPCBHistorical, city: str) -> bool:
 
 
 def get_city_data(client: CPCBHistorical, city: str, year: int, path: str) -> bool:
-    """Download and display city-level AQI data for a specific year.
+    """Download and show the AQI data of a city for a year.
 
     Args:
         client: The AQI client instance.
         city: The city name.
-        year: The year for which to fetch data.
-        path: The file path to save the data.
+        year: The year of the data.
+        path: The file path for the data.
 
     Returns:
         True if successful, False otherwise.
@@ -135,13 +135,13 @@ def get_city_data(client: CPCBHistorical, city: str, year: int, path: str) -> bo
 def get_station_data(
     client: CPCBHistorical, station_id: str, year: int, path: str
 ) -> bool:
-    """Download and display station-level AQI data for a specific year.
+    """Download and show the AQI data of a station for a year.
 
     Args:
         client: The AQI client instance.
         station_id: The station ID.
-        year: The year for which to fetch data.
-        path: The file path to save the data.
+        year: The year of the data.
+        path: The file path for the data.
 
     Returns:
         True if successful, False otherwise.
@@ -163,7 +163,7 @@ def get_station_data(
 
 
 def locate_me(client: CPCBLive) -> bool:
-    """Fetch and display current geolocation based on IP address.
+    """Get and show the current location from the IP address.
 
     Args:
         client: The LiveAQI client instance.
@@ -183,7 +183,7 @@ def locate_me(client: CPCBLive) -> bool:
 def get_nearest_station(
     client: CPCBLive, lat: Optional[float] = None, lon: Optional[float] = None
 ) -> bool:
-    """Fetch nearest station details using coordinates or IP-based geolocation.
+    """Get the nearest station from the coordinates or from the IP address.
 
     Args:
         client: The LiveAQI client instance.
@@ -207,10 +207,10 @@ def get_nearest_station(
 
 
 def _format_aqi_metrics(metrics: list) -> None:
-    """Format and print AQI metrics in a table format.
+    """Print the AQI metrics in a table.
 
     Args:
-        metrics: List of metric dictionaries containing pollutant data.
+        metrics: List of metric dictionaries with pollutant data.
     """
     print("Live AQI data:")
     print("Pollutant   Avg   Min   Max   Period")
@@ -233,16 +233,16 @@ def get_live_aqi(
     hour: Optional[int] = None,
     path: Optional[str] = None,
 ) -> bool:
-    """Fetch live AQI data for nearest station or specified station.
+    """Get live AQI data for the nearest station or for a given station.
 
     Args:
         client: The LiveAQI client instance.
         lat: Optional latitude coordinate.
         lon: Optional longitude coordinate.
-        station_id: Optional specific station ID.
+        station_id: Optional station ID.
         date: Optional date in YYYY-MM-DD format.
         hour: Optional hour (0-23).
-        path: Optional file path to save data.
+        path: Optional file path for the data.
 
     Returns:
         True if successful, False otherwise.
@@ -278,14 +278,15 @@ def get_pm25_data(
     month: Optional[int] = None,
     group_by: Optional[str] = None,
 ) -> bool:
-    """Fetch and process PM2.5 data for given polygon and time period.
+    """Get and process PM2.5 data for a polygon and a time period.
 
     Args:
         client: The PM25 client instance.
         geojson_path: Path to the GeoJSON file with polygon data.
-        year: The year for which to fetch data.
-        month: Optional month (1-12). If None, annual data is used.
-        group_by: Optional column name to group polygons by (e.g., 'state_name').
+        year: The year of the data.
+        month: Optional month (1-12). If None, the function uses annual data.
+        group_by: Optional column name for the polygon groups (for example
+            'state_name').
 
     Returns:
         True if successful, False otherwise.

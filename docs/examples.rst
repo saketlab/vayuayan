@@ -1,7 +1,7 @@
 Examples
 ========
 
-This section provides comprehensive examples of using vayuayan for various use cases.
+This section gives examples of how to use vayuayan for different tasks.
 
 Basic AQI Data Retrieval
 -------------------------

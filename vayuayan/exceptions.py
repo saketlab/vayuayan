@@ -1,116 +1,108 @@
 """
-Custom exceptions for the CPCB data fetching package.
+Exception classes of the vayuayan package.
 
-This module defines exception classes used throughout the vayuayan package
-to provide specific error handling for different types of failures.
+Each class identifies one type of failure, so that callers can catch it.
 """
 
 
 class CPCBError(Exception):
-    """Base exception for all CPCB related errors.
+    """Base class for all vayuayan exceptions.
 
-    This is the base class for all custom exceptions in the vayuayan package.
-    All other exceptions inherit from this class.
+    All other exceptions in the vayuayan package inherit from this class.
     """
 
     pass
 
 
 class NetworkError(CPCBError):
-    """Raised when network requests fail.
+    """Error when a network request fails.
 
-    This exception is raised when HTTP requests to CPCB services fail due to
-    network issues, timeouts, or server errors.
+    A network problem, a timeout, or a server error can cause this error.
     """
 
     pass
 
 
 class DataParsingError(CPCBError):
-    """Raised when data parsing fails.
+    """Error when the client cannot parse the data.
 
-    This exception is raised when received data cannot be parsed or processed,
-    such as malformed JSON, corrupt Excel files, or unexpected data formats.
+    Malformed JSON, a corrupt Excel file, or an unknown data format can cause
+    this error.
     """
 
     pass
 
 
 class DataProcessingError(CPCBError):
-    """Raised when data processing operations fail.
+    """Error when a data operation fails.
 
-    This exception is raised when operations like base64 decoding, data
-    transformation, or statistical calculations fail.
+    Examples are a failed base64 decode, a failed data transformation, and a
+    failed statistical calculation.
     """
 
     pass
 
 
 class CityNotFoundError(CPCBError):
-    """Raised when a city is not found in the CPCB database.
+    """Error when the CPCB database does not have a city.
 
-    This exception is raised when a requested city or location is not
-    available in the CPCB monitoring network.
+    The CPCB monitoring network does not have the requested city or location.
     """
 
     pass
 
 
 class StationNotFoundError(CPCBError):
-    """Raised when a monitoring station is not found.
+    """Error when the client cannot find a monitoring station.
 
-    This exception is raised when a requested station ID or station name
-    is not available in the CPCB monitoring network.
+    The CPCB monitoring network does not have the requested station ID or
+    station name.
     """
 
     pass
 
 
 class InvalidDataError(CPCBError):
-    """Raised when received data is invalid or corrupted.
+    """Error when the received data is not valid.
 
-    This exception is raised when data validation fails, such as missing
-    required fields, invalid coordinates, or data outside expected ranges.
+    Examples are a missing necessary field, invalid coordinates, and data
+    outside the expected range.
     """
 
     pass
 
 
 class AuthenticationError(CPCBError):
-    """Raised when authentication with CPCB services fails.
+    """Error when the authentication with CPCB services fails.
 
-    This exception is raised when API authentication fails or access
-    is denied to CPCB services.
+    The API authentication failed, or CPCB refused the access.
     """
 
     pass
 
 
 class RateLimitError(CPCBError):
-    """Raised when API rate limits are exceeded.
+    """Error when the client goes above the API rate limit.
 
-    This exception is raised when too many requests are made to CPCB
-    services in a short period of time.
+    The client sent too many requests to CPCB services in a short time.
     """
 
     pass
 
 
 class FileNotFoundError(CPCBError):
-    """Raised when a required file is not found.
+    """Error when a necessary file does not exist.
 
-    This exception is raised when attempting to access files (NetCDF, GeoJSON)
-    that don't exist at the specified paths.
+    A NetCDF file or a GeoJSON file is not at the given path.
     """
 
     pass
 
 
 class ConfigurationError(CPCBError):
-    """Raised when configuration is invalid or missing.
+    """Error when the configuration is missing or not valid.
 
-    This exception is raised when required configuration parameters
-    are missing or have invalid values.
+    A necessary configuration parameter is missing or has an invalid value.
     """
 
     pass

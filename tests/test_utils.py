@@ -61,7 +61,7 @@ def test_haversine_zero_distance():
 
 
 def test_haversine_known_distance():
-    # Mumbai -> Delhi is ~1150 km; allow generous tolerance.
+    # Mumbai to Delhi is approximately 1150 km. Permit a large tolerance.
     d = haversine_distance(19.0760, 72.8777, 28.7041, 77.1025)
     assert 1100 < d < 1200
 

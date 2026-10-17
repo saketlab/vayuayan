@@ -4,10 +4,10 @@
 
 # Vayuayan
 
-**Vayuayan** is a comprehensive Python package for fetching and analysing air quality data from multiple sources worldwide:
+**Vayuayan** is a Python package that gets air quality data from these sources and analyzes the data:
 
 - **WUSTL ACAG**: [Washington University satellite PM2.5 data](https://sites.wustl.edu/acag/datasets/surface-pm2-5/) (Global)
-- **CPCB India**: Central Pollution Control Board](https://cpcb.nic.in/) monitoring network (India only)
+- **CPCB India**: [Central Pollution Control Board](https://cpcb.nic.in/) monitoring network (India only)
 
 ## Installation
 
@@ -17,13 +17,13 @@ Install from PyPI (recommended):
 pip install vayuayan
 ```
 
-Install development version from GitHub:
+Install the development version from GitHub:
 
 ```bash
 pip install git+https://github.com/saketlab/vayuayan.git
 ```
 
-Or install from source:
+Or install from the source code:
 
 ```bash
 git clone https://github.com/saketlab/vayuayan.git
@@ -96,17 +96,14 @@ state_stats = pm25.get_pm25_stats("india_districts.geojson", 2023, 11, group_by=
 district_stats = pm25.get_pm25_stats("india_districts.geojson", 2023, 11, group_by="state_name,district_name")
 ```
 
+
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a pull request.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+We accept contributions. To contribute, open a pull request.
 
 ## Disclaimer
 
-This package is not officially affiliated with any government agency or air quality monitoring network. It's a third-party tool for accessing publicly available environmental data. Users are responsible for verifying data accuracy and following proper attribution guidelines.
+This package has no official relation to a government agency or to an air quality monitoring network. It is a third-party tool for public environmental data. Users must make sure that the data is accurate. Users must also give the correct attribution.
 
 ## Etymology
 
@@ -114,4 +111,4 @@ This package is not officially affiliated with any government agency or air qual
 - **Vayu** (वायु): Wind, air 
 - **Ayan** (अयन): Path, journey, movement
 
-Together, "Vayuayan" means "the path of wind" - representing the journey and movement of air quality data across space and time.
+Thus, "Vayuayan" means "the path of wind". The name refers to the movement of air quality data across space and time.
