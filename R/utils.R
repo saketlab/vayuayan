@@ -5,6 +5,8 @@
 #'
 #' @param station_name Original station name string
 #' @return Cleaned station name with underscores
+#' @examples
+#' clean_station_name("Bandra Kurla Complex, Mumbai - IITM")
 #' @export
 clean_station_name <- function(station_name) {
   if (is.null(station_name) || !is.character(station_name) || nchar(station_name) == 0) {
@@ -32,6 +34,8 @@ clean_station_name <- function(station_name) {
 #'
 #' @param aqi_value Numeric AQI value
 #' @return AQI category string
+#' @examples
+#' get_aqi_category(150)
 #' @export
 get_aqi_category <- function(aqi_value) {
   if (is.na(aqi_value)) {
@@ -58,9 +62,11 @@ get_aqi_category <- function(aqi_value) {
 #'
 #' @param aqi_values Numeric vector of AQI values
 #' @return Character vector of AQI categories
+#' @examples
+#' get_aqi_categories(c(42, 180, NA, 450))
 #' @export
 get_aqi_categories <- function(aqi_values) {
-  sapply(aqi_values, get_aqi_category)
+  vapply(aqi_values, get_aqi_category, character(1), USE.NAMES = FALSE)
 }
 
 #' Calculate haversine distance
@@ -73,6 +79,9 @@ get_aqi_categories <- function(aqi_values) {
 #' @param lat2 Latitude of second point
 #' @param lon2 Longitude of second point
 #' @return Distance in kilometers
+#' @examples
+#' # Delhi to Mumbai
+#' haversine_distance(28.61, 77.21, 19.08, 72.88)
 #' @export
 haversine_distance <- function(lat1, lon1, lat2, lon2) {
   lat1_rad <- lat1 * pi / 180
@@ -100,6 +109,9 @@ haversine_distance <- function(lat1, lon1, lat2, lon2) {
 #' @return Data frame with columns: station_id, station_name, city_name,
 #'   city_id, state_id, longitude, latitude, live, avg_aqi, status,
 #'   aqi_category
+#' @examplesIf interactive()
+#' df <- stations_to_dataframe(cpcb_get_all_india())
+#' table(df$aqi_category)
 #' @export
 stations_to_dataframe <- function(data) {
   rows <- list()
@@ -190,12 +202,14 @@ stations_to_dataframe <- function(data) {
 #'
 #' @param data List of cities with nested stations
 #' @return List with analysis results
+#' @examplesIf interactive()
+#' analyze_station_data(cpcb_get_all_india())
 #' @export
 analyze_station_data <- function(data) {
   df <- stations_to_dataframe(data)
 
   analysis <- list(
-    total_cities = length(data),
+    total_cities = NROW(data),
     total_stations = nrow(df),
     live_stations = sum(df$live, na.rm = TRUE),
     offline_stations = sum(!df$live, na.rm = TRUE),
@@ -218,10 +232,13 @@ analyze_station_data <- function(data) {
 #' @description
 #' Display package information and usage
 #'
+#' @return \code{NULL}, invisibly. Called for its printed side effect.
+#' @examples
+#' vayuayan_welcome()
 #' @export
 vayuayan_welcome <- function() {
   cli::cli_h1("Vayuayan - Air quality data analysis")
-  cli::cli_text("Version 0.1.3")
+  cli::cli_text("Version {utils::packageVersion('vayuayan')}")
   cli::cli_text(" ")
   cli::cli_h2("Available functions:")
   cli::cli_ul(c(
@@ -239,8 +256,9 @@ vayuayan_welcome <- function() {
     "location <- cpcb_get_system_location()",
     "aqi <- cpcb_get_live_aqi_data()",
     " ",
-    "stats <- pm25_get_stats('region.geojson', 2023, 11)"
+    "stats <- pm25_get_stats('region.geojson', 2023, 11, region = 'AS')"
   ))
+  invisible(NULL)
 }
 
 #' Find the nearest stations between two sets of points
@@ -259,9 +277,12 @@ vayuayan_welcome <- function() {
 #'   \code{from_id}, \code{to_id}, \code{rank} (1 = closest), and
 #'   \code{dist_km}.
 #' @examples
-#' \dontrun{
-#' nearest_stations(airnet, cpcb, k = 3, from_id = "id", to_id = "id")
-#' }
+#' sensors <- data.frame(id = c("a", "b"), lat = c(28.61, 19.08), lon = c(77.21, 72.88))
+#' stations <- data.frame(
+#'   id = c("delhi", "mumbai", "pune"),
+#'   lat = c(28.63, 19.07, 18.52), lon = c(77.22, 72.87, 73.86)
+#' )
+#' nearest_stations(sensors, stations, k = 2)
 #' @export
 nearest_stations <- function(from, to, k = 1,
                              from_id = "id", to_id = "id") {
@@ -277,6 +298,56 @@ nearest_stations <- function(from, to, k = 1,
       to_id = to[[to_id]][idx],
       rank = seq_len(k),
       dist_km = d[idx],
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+#' Summarize station data by city
+#'
+#' @description
+#' One row per city with station counts and the AQI of its live stations.
+#'
+#' @param data Cities with nested stations, from \code{cpcb_get_all_india()}.
+#' @return Data frame with \code{city_name}, \code{city_id}, \code{state_id},
+#'   \code{total_stations}, \code{live_stations}, \code{offline_stations},
+#'   \code{live_percentage}, \code{avg_aqi}, \code{min_aqi}, \code{max_aqi}
+#'   and \code{stations_with_data}.
+#' @examplesIf interactive()
+#' summary <- stations_to_city_summary(cpcb_get_all_india())
+#' head(summary[order(-summary$avg_aqi), ])
+#' @export
+stations_to_city_summary <- function(data) {
+  cities <- if (is.data.frame(data)) {
+    lapply(seq_len(nrow(data)), function(i) {
+      list(
+        cityName = data$cityName[i], cityID = data$cityID[i],
+        stateID = data$stateID[i], stationsInCity = data$stationsInCity[[i]]
+      )
+    })
+  } else {
+    data
+  }
+  rows <- lapply(cities, function(city) {
+    st <- city$stationsInCity
+    live <- if (is.data.frame(st)) !is.na(st$live) & st$live else vapply(st, function(s) isTRUE(s$live), logical(1))
+    avg <- if (is.data.frame(st)) st$avg else vapply(st, function(s) as.character(s$avg %||% NA), character(1))
+    aqi <- suppressWarnings(as.numeric(avg))[live]
+    aqi <- aqi[!is.na(aqi)]
+    total <- length(live)
+    data.frame(
+      city_name = city$cityName %||% "",
+      city_id = city$cityID %||% "",
+      state_id = city$stateID %||% "",
+      total_stations = total,
+      live_stations = sum(live),
+      offline_stations = total - sum(live),
+      live_percentage = if (total > 0) sum(live) / total * 100 else 0,
+      avg_aqi = if (length(aqi)) mean(aqi) else NA_real_,
+      min_aqi = if (length(aqi)) min(aqi) else NA_real_,
+      max_aqi = if (length(aqi)) max(aqi) else NA_real_,
+      stations_with_data = length(aqi),
       stringsAsFactors = FALSE
     )
   })

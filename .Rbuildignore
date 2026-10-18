@@ -30,3 +30,8 @@ vignettes/.*_files$
 .*\.knit\.md$
 .*\.utf8\.md$
 ^vignettes/.*\.html$
+^vignettes/articles$
+^cran-comments\.md$
+^CRAN-SUBMISSION$
+^inst/examples$
+^vignettes/data$

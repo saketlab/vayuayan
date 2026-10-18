@@ -69,8 +69,8 @@ library(here)
 
 ```{r paths}
 vignettes_dir <- here::here("vignettes")
-fig_path <- function(f) file.path(vignettes_dir, "figures/blr_networks", f)
-dir.create(fig_path(""), recursive = TRUE, showWarnings = FALSE)
+fig_dir <- file.path(vignettes_dir, "figures/blr_networks")
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 ```
 
 ---
@@ -81,24 +81,16 @@ dir.create(fig_path(""), recursive = TRUE, showWarnings = FALSE)
 session <- oaq_session()
 ```
 
-`oaq_fetch_monthly_stations()` pulls every station for a provider in a city
+`oaq_fetch_monthly_stations()` pulls every station for each provider in a city
 across the chosen months and returns one tidy table of daily readings, already
 joined to station coordinates.
 
 ```{r fetch-data, cache=TRUE}
-get_blr <- function(provider) {
-  oaq_fetch_monthly_stations(
-    session, provider,
-    year = 2026, months = c("03", "04"), city = "Bengaluru"
-  ) |>
-    mutate(date = as.Date(date), pm25 = as.numeric(pm25), network = provider)
-}
-
-cpcb <- get_blr("cpcb")
-airnet <- get_blr("airnet")
-
-both <- bind_rows(cpcb, airnet) |>
-  mutate(network = recode(network,
+both <- oaq_fetch_monthly_stations(
+  session, c("cpcb", "airnet"),
+  year = 2026, months = c("03", "04"), city = "Bengaluru"
+) |>
+  mutate(network = recode(provider,
     cpcb   = "CPCB reference",
     airnet = "Airnet low-cost"
   ))
@@ -175,7 +167,7 @@ ggplot(daily, aes(x = date, colour = network, fill = network)) +
     plot.subtitle    = element_text(size = 9.5, colour = "grey40")
   )
 
-ggsave(fig_path("fig1_daily_trend.png"), width = 9, height = 5, dpi = 300)
+ggsave(file.path(fig_dir, "fig1_daily_trend.png"), width = 9, height = 5, dpi = 300)
 ```
 
 ---
@@ -229,7 +221,7 @@ ggplot(matched, aes(x = cpcb, y = airnet)) +
   theme_minimal(base_size = 11) +
   theme(plot.title = element_text(face = "bold"))
 
-ggsave(fig_path("fig2_day_matched.png"), width = 6, height = 5.5, dpi = 300)
+ggsave(file.path(fig_dir, "fig2_day_matched.png"), width = 6, height = 5.5, dpi = 300)
 ```
 
 ---
@@ -240,15 +232,10 @@ The two networks differ most in density. The map shows every station, sized by
 its mean PM2.5 over the period, over Bengaluru's ward boundaries.
 
 ```{r blr-boundary}
-blr_boundary <- tryCatch(
-  sf::st_read("https://geo.bharatviz.org/geojsons/cities/bengaluru.geojson",
-    quiet = TRUE
-  ) |> sf::st_transform(4326),
-  error = function(e) {
-    warning("Could not load Bengaluru GeoJSON: ", e$message)
-    NULL
-  }
-)
+blr_boundary <- sf::st_read(
+  "https://geo.bharatviz.org/geojsons/cities/bengaluru.geojson",
+  quiet = TRUE
+) |> sf::st_transform(4326)
 ```
 
 ```{r station-means}
@@ -263,11 +250,7 @@ station_sf <- sf::st_as_sf(station_means, coords = c("lon", "lat"), crs = 4326)
 
 ```{r station-map, fig.height=7, fig.width=9, fig.cap="Monitoring network density in Bengaluru. Red = CPCB reference stations, blue = Airnet low-cost sensors. Point size = mean PM2.5 (March–April 2026). The low-cost network is roughly 4x denser."}
 ggplot() +
-  {
-    if (!is.null(blr_boundary)) {
-      geom_sf(data = blr_boundary, fill = "grey97", colour = "grey85", linewidth = 0.2)
-    }
-  } +
+  geom_sf(data = blr_boundary, fill = "grey97", colour = "grey85", linewidth = 0.2) +
   geom_sf(
     data = station_sf,
     aes(colour = network, size = mean_pm25),
@@ -292,7 +275,7 @@ ggplot() +
     plot.title      = element_text(face = "bold")
   )
 
-ggsave(fig_path("fig3_network_map.png"), width = 9, height = 7, dpi = 300)
+ggsave(file.path(fig_dir, "fig3_network_map.png"), width = 9, height = 7, dpi = 300)
 ```
 
 ---
@@ -327,16 +310,18 @@ paired <- nearest_stations(
     by = c("to_id" = "station_id")
   )
 
-control_table <- map_dfr(c(3, 5, 8), function(radius) {
-  p <- paired |> filter(dist_km <= radius)
-  tibble(
-    `Max pairing distance` = paste0("≤ ", radius, " km"),
-    `Co-located pairs`     = nrow(p),
-    `Mean Airnet`          = round(mean(p$airnet_pm25), 1),
-    `Mean CPCB`            = round(mean(p$cpcb_pm25), 1),
-    `Mean difference`      = round(mean(p$airnet_pm25 - p$cpcb_pm25), 1)
-  )
-})
+control_table <- paired |>
+  crossing(radius = c(3, 5, 8)) |>
+  filter(dist_km <= radius) |>
+  group_by(radius) |>
+  summarise(
+    `Co-located pairs` = n(),
+    `Mean Airnet`      = round(mean(airnet_pm25), 1),
+    `Mean CPCB`        = round(mean(cpcb_pm25), 1),
+    `Mean difference`  = round(mean(airnet_pm25 - cpcb_pm25), 1)
+  ) |>
+  mutate(`Max pairing distance` = paste0("≤ ", radius, " km"), .before = 1) |>
+  select(-radius)
 
 uncontrolled_diff <- round(median(air_st$mean_pm25) - median(cpcb_st$mean_pm25), 1)
 
@@ -386,7 +371,7 @@ ggplot(obs, aes(x = pm25, fill = network, colour = network)) +
     plot.title      = element_text(face = "bold")
   )
 
-ggsave(fig_path("fig4_distribution.png"), width = 9, height = 5, dpi = 300)
+ggsave(file.path(fig_dir, "fig4_distribution.png"), width = 9, height = 5, dpi = 300)
 ```
 
 ---
@@ -394,8 +379,8 @@ ggsave(fig_path("fig4_distribution.png"), width = 9, height = 5, dpi = 300)
 # Conclusion
 
 ```{r conclusion-stats, echo=FALSE}
-cpcb_med <- round(median(cpcb$pm25, na.rm = TRUE), 1)
-airnet_med <- round(median(airnet$pm25, na.rm = TRUE), 1)
+cpcb_med <- round(median(both$pm25[both$provider == "cpcb"], na.rm = TRUE), 1)
+airnet_med <- round(median(both$pm25[both$provider == "airnet"], na.rm = TRUE), 1)
 r_round <- round(r_val, 2)
 bias_round <- round(bias, 1)
 slope_round <- round(coef(fit)[2], 2)

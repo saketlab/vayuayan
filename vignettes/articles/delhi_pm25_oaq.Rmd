@@ -80,20 +80,14 @@ library(here)
 ```{r folder-setup}
 vignettes_dir <- here::here("vignettes")
 
-dirs <- c("data/delhi", "figures/delhi", "station_data")
-for (d in dirs) {
-  dir.create(file.path(vignettes_dir, d),
-    recursive = TRUE, showWarnings = FALSE
-  )
-}
-
-data_path <- function(f) file.path(vignettes_dir, "data/delhi", f)
-fig_path <- function(f) file.path(vignettes_dir, "figures/delhi", f)
-station_path <- function(f) file.path(vignettes_dir, "station_data", f)
+data_dir <- file.path(vignettes_dir, "data/delhi")
+fig_dir <- file.path(vignettes_dir, "figures/delhi")
+dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 ```
 
 ```{r nc-dir}
-nc_dir <- "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly"
+nc_dir <- file.path(vignettes_dir, "data/pm25")
 ```
 
 ---
@@ -112,36 +106,22 @@ delhi_shape <- sf::st_read(
 ```
 
 ```{r ground-data}
-if (!file.exists(data_path("delhi_aqi_2022.csv"))) {
-  cpcb_download_city_data(
-    city          = "Delhi",
-    year          = 2022,
-    save_location = data_path("delhi_aqi_2022.csv")
-  )
-}
-
-delhi_wide <- read.csv(data_path("delhi_aqi_2022.csv"))
-
-delhi_ground <- delhi_wide %>%
-  pivot_longer(cols = -Day, names_to = "Month_Name", values_to = "ground_pm25") %>%
-  mutate(month = match(Month_Name, month.name)) %>%
-  filter(!is.na(ground_pm25)) %>%
+delhi_ground <- cpcb_city_daily("Delhi", 2022, cache_dir = data_dir) %>%
   group_by(month) %>%
-  summarise(ground_pm25 = mean(ground_pm25, na.rm = TRUE), .groups = "drop")
+  summarise(ground_pm25 = mean(value, na.rm = TRUE), .groups = "drop")
 ```
 
 ```{r satellite-data}
-delhi_sat_df <- map_dfr(1:12, function(m) {
-  nc_file <- pm25_v5gl04_path(2022, m, base_dir = nc_dir)
-  tibble(month = m, sat_pm25 = pm25_read_netcdf_bbox(nc_file, delhi_shape))
-})
+delhi_sat_df <- pm25_monthly(delhi_shape, 2022, version = "V5GL04", region = "AS", cache_dir = nc_dir) %>%
+  rename(sat_pm25 = pm25)
 
 delhi_final <- inner_join(delhi_ground, delhi_sat_df, by = "month")
 ```
 
 ```{r raster-nov}
-r_nov <- pm25_load_netcdf_bbox(pm25_v5gl04_path(2022, 11, base_dir = nc_dir), delhi_shape)
-delhi_raster_mask <- terra::mask(r_nov, terra::vect(delhi_shape))
+nov_file <- pm25_download_netcdf(2022, 11, version = "V5GL04", region = "AS", cache_dir = nc_dir)
+r_nov <- pm25_load_netcdf_bbox(nov_file, delhi_shape)
+delhi_raster_mask <- pm25_load_netcdf_bbox(nov_file, delhi_shape, mask = TRUE)
 ```
 
 ```{r ward-pm25}
@@ -174,11 +154,8 @@ with full pollutant coverage and coordinates directly embedded, no geocoding
 required.
 
 ```{r oaq-stations}
-oaq_all <- oaq_get_stations_latest(session, "cpcb")
-
-oaq_delhi <- oaq_all$stations %>%
-  filter(city %in% c("Delhi", "New Delhi")) %>%
-  mutate(across(c(pm25, pm10, no2, co, o3, nox), as.numeric))
+oaq_delhi <- oaq_stations_table(session, "cpcb") %>%
+  filter(city %in% c("Delhi", "New Delhi"))
 
 cat(nrow(oaq_delhi), "OAQ CPCB stations in Delhi\n")
 cat("PM2.5 available for:", sum(!is.na(oaq_delhi$pm25)), "stations\n")
@@ -188,7 +165,6 @@ cat("O3   available for:", sum(!is.na(oaq_delhi$o3)), "stations\n")
 
 ```{r oaq-sf}
 oaq_delhi_sf <- oaq_delhi %>%
-  filter(!is.na(lat), !is.na(lon)) %>%
   sf::st_as_sf(coords = c("lon", "lat"), crs = 4326)
 ```
 
@@ -229,14 +205,12 @@ Nominatim as fallback. OAQ provides coordinates directly in its response.
 Here we compare the two networks to check for any discrepancies.
 
 ```{r cpcb-stations}
-if (file.exists(data_path("delhi_stations_with_coords.csv"))) {
-  delhi_station_list <- read.csv(data_path("delhi_stations_with_coords.csv"))
+station_file <- file.path(data_dir, "delhi_stations_with_coords.csv")
+if (file.exists(station_file)) {
+  delhi_station_list <- read.csv(station_file)
 } else {
-  delhi_station_list <- cpcb_get_station_list("Delhi")
-  delhi_station_list <- cpcb_add_coords(delhi_station_list)
-  write.csv(delhi_station_list, data_path("delhi_stations_with_coords.csv"),
-    row.names = FALSE
-  )
+  delhi_station_list <- cpcb_add_coords(cpcb_get_station_list("Delhi"))
+  write.csv(delhi_station_list, station_file, row.names = FALSE)
 }
 
 cpcb_sf <- delhi_station_list %>%
@@ -295,7 +269,7 @@ ggplot() +
     plot.subtitle    = element_text(size = 9.5, color = "grey40")
   )
 
-ggsave(fig_path("fig_oaq1_network_comparison.png"), width = 9, height = 7, dpi = 300)
+ggsave(file.path(fig_dir, "fig_oaq1_network_comparison.png"), width = 9, height = 7, dpi = 300)
 ```
 
 ---
@@ -365,7 +339,7 @@ ggplot() +
     barheight = unit(0.6, "lines")
   ))
 
-ggsave(fig_path("fig_oaq2_ward_pm25_live.png"), width = 9, height = 7, dpi = 300)
+ggsave(file.path(fig_dir, "fig_oaq2_ward_pm25_live.png"), width = 9, height = 7, dpi = 300)
 ```
 
 ---
@@ -424,7 +398,7 @@ ggplot(comparison_df, aes(x = oaq_pm25, y = sat_pm25)) +
     plot.subtitle    = element_text(size = 9.5, color = "grey40")
   )
 
-ggsave(fig_path("fig_oaq3_sat_vs_oaq.png"), width = 9, height = 5.5, dpi = 300)
+ggsave(file.path(fig_dir, "fig_oaq3_sat_vs_oaq.png"), width = 9, height = 5.5, dpi = 300)
 ```
 
 ---
@@ -521,7 +495,7 @@ ggplot() +
     barheight = unit(0.6, "lines")
   ))
 
-ggsave(fig_path("fig_oaq4_gap_map_oaq.png"), width = 9, height = 7.5, dpi = 300)
+ggsave(file.path(fig_dir, "fig_oaq4_gap_map_oaq.png"), width = 9, height = 7.5, dpi = 300)
 ```
 
 ## Priority map comparison
@@ -617,7 +591,7 @@ p_cpcb + p_oaq + patchwork::plot_layout(ncol = 2)
 # Multi-pollutant station profile
 
 One of the key advantages of OAQ over the historical CPCB CSVs is access to
-multiple co-located pollutants. Below we visualise the full pollutant profile
+multiple co-located pollutants. Below we visualize the full pollutant profile
 across active Delhi stations as a ranked bubble chart.
 
 ```{r pollutant-profile, fig.height=8, fig.cap="Multi-pollutant profile for Delhi CPCB stations via OAQ. Each row is a station, each column a pollutant. Circle size and colour reflect concentration. Grey = not measured or offline."}
@@ -694,7 +668,7 @@ ggplot(oaq_long, aes(x = pollutant, y = name_short)) +
     barheight = unit(0.5, "lines")
   ))
 
-ggsave(fig_path("fig_oaq5_pollutant_profile.png"), width = 10, height = 9, dpi = 300)
+ggsave(file.path(fig_dir, "fig_oaq5_pollutant_profile.png"), width = 10, height = 9, dpi = 300)
 ```
 
 ---

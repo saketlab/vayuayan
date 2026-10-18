@@ -1,12 +1,3 @@
-test_that("base64 encoding and decoding works correctly", {
-  test_string <- "Hello, World!"
-  encoded <- vayuayan:::.cpcb_encode_base64(test_string)
-  decoded <- vayuayan:::.cpcb_decode_base64(encoded)
-
-  expect_type(encoded, "character")
-  expect_equal(decoded, test_string)
-})
-
 test_that("get_state_list returns character vector", {
   skip_on_cran()
   skip_if_offline()
@@ -73,4 +64,47 @@ test_that("download functions require valid parameters", {
     cpcb_download_station_data("invalid_station", "2024", tempfile()),
     "not found"
   )
+})
+
+test_that("city data downloads from the CPCB repository", {
+  skip_on_cran()
+  skip_if_offline()
+
+  out <- tempfile(fileext = ".csv")
+  suppressMessages(cpcb_download_city_data("Mumbai", 2022, out))
+  df <- utils::read.csv(out)
+
+  expect_equal(nrow(df), 31)
+  expect_true(all(c("Day", "January", "December") %in% names(df)))
+  unlink(out)
+})
+
+test_that("station file paths resolve for a directory station", {
+  skip_on_cran()
+  skip_if_offline()
+
+  paths <- cpcb_get_file_path(
+    station_id = "site_5392",
+    frequency = "daily",
+    data_type = "stationLevel"
+  )
+  expect_gt(length(paths), 0)
+  expect_named(paths[[1]], c("filePath", "year", "month"))
+})
+
+test_that("live feed returns stations with coordinates and readings", {
+  skip_on_cran()
+  skip_if_offline()
+
+  cities <- cpcb_get_all_india()
+  df <- stations_to_dataframe(cities)
+
+  expect_gt(nrow(df), 100)
+  expect_true(any(!is.na(df$avg_aqi)))
+
+  nearest <- cpcb_get_nearest_station(c(19.076, 72.877))
+  expect_lt(nearest$distance_km, 20)
+
+  live <- suppressMessages(cpcb_get_live_aqi_data(station_id = nearest$station_id))
+  expect_true(is.data.frame(live$metrics))
 })

@@ -1,4 +1,4 @@
-url: https://vayuayanr.saketlab.org/
+url: https://vayuayan.saketlab.org/R/
 
 development:
   mode: release
@@ -18,9 +18,7 @@ template:
       <meta name="robots" content="index, follow">
       <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
       <meta name="description" content="R package to download and analyze air pollution data. Access CPCB monitoring stations and OAQ low-cost sensors for India, plus WUSTL ACAG satellite PM2.5 globally at 1 km resolution.">
-      <link rel="canonical" href="https://vayuayanr.saketlab.org/">
       <meta property="og:type" content="website">
-      <meta property="og:url" content="https://vayuayanr.saketlab.org/">
       <meta property="og:title" content="vayuayanR - Air Quality Data in R | CPCB, OAQ, WUSTL Satellite PM2.5">
       <meta property="og:description" content="R package for air quality data from CPCB and OAQ sensors (India) and WUSTL ACAG satellite PM2.5 (global, 1 km resolution).">
       <meta property="og:site_name" content="vayuayanR">
@@ -47,7 +45,7 @@ template:
           "name": "Saket Choudhary",
           "url": "https://saketlab.org"
         },
-        "url": "https://vayuayanr.saketlab.org/",
+        "url": "https://vayuayan.saketlab.org/R/",
         "downloadUrl": "https://github.com/saketlab/vayuayanR",
         "softwareVersion": "0.2.0",
         "programmingLanguage": "R",
@@ -59,8 +57,8 @@ template:
         "@context": "https://schema.org",
         "@type": "Dataset",
         "name": "Air Quality Data via vayuayanR",
-        "description": "Programmatic access to air pollution datasets: CPCB CAAQMS monitoring stations (India), OAQ low-cost sensor networks (India), and WUSTL ACAG satellite-derived PM2.5 at 1 km resolution globally (1998-2022).",
-        "url": "https://vayuayanr.saketlab.org/",
+        "description": "Programmatic access to air pollution datasets: CPCB CAAQMS monitoring stations (India), OAQ low-cost sensor networks (India), and WUSTL ACAG satellite-derived PM2.5 at 0.01 degree resolution globally (V6.GL.03, 1998-2024).",
+        "url": "https://vayuayan.saketlab.org/R/",
         "license": "https://opensource.org/licenses/MIT",
         "spatialCoverage": {
           "@type": "Place",
@@ -164,7 +162,7 @@ home:
 navbar:
   structure:
     left:  [intro, reference, articles, tutorials, news]
-    right: [search, github, lightswitch]
+    right: [search, python, github, lightswitch]
 
   components:
     reference:
@@ -193,6 +191,11 @@ navbar:
       text: Changelog
       href: news/index.html
 
+    python:
+      text: Python
+      href: https://vayuayan.saketlab.org/python/
+      aria-label: Python package documentation
+
     github:
       icon: fab fa-github fa-lg
       href: https://github.com/saketlab/vayuayanR
@@ -210,6 +213,21 @@ reference:
   - cpcb_get_file_path
   - cpcb_download_city_data
   - cpcb_download_station_data
+  - cpcb_tidy_daily
+  - cpcb_city_daily
+  - cpcb_station_daily
+  - cpcb_download_raw_station_data
+  - cpcb_download_hourly
+  - cpcb_raw_to_long
+  - cpcb_station_daily_aqi
+
+- title: "National AQI"
+  desc: "Compute the CPCB National Air Quality Index from pollutant concentrations"
+  contents:
+  - compute_aqi
+  - aqi_sub_index
+  - aqi_pollutant_name
+  - daily_aqi
 
 - title: "CPCB Real-Time AQI Data"
   desc: "Fetch live air quality index readings from CPCB CAAQMS monitoring stations across all Indian cities"
@@ -217,6 +235,7 @@ reference:
   - cpcb_get_system_location
   - cpcb_get_all_india
   - cpcb_get_nearest_station
+  - cpcb_get_nearest_stations
   - cpcb_get_live_aqi_data
   - cpcb_get_live_aqi_data_for_station
 
@@ -233,29 +252,37 @@ reference:
   - oaq_get_monthly
   - oaq_get_annual
   - oaq_fetch_monthly_stations
+  - oaq_stations_table
 
 - title: "Satellite PM2.5 Data (WUSTL ACAG)"
-  desc: "Download and analyze WUSTL ACAG satellite-derived PM2.5 estimates at 1 km resolution globally (1998-2022)"
+  desc: "Download and analyze WUSTL ACAG satellite-derived PM2.5 estimates at 1 km resolution globally (V6GL03, V6, V5 and V5GL04)"
   contents:
   - pm25_download_netcdf
   - pm25_get_stats
+  - pm25_get_stats_by_polygon
+  - pm25_get_point
   - pm25_list_cached_files
   - pm25_clear_cache
   - pm25_v5gl04_path
   - pm25_read_netcdf_bbox
   - pm25_load_netcdf_bbox
+  - pm25_monthly
+  - pm25_map
 
 - title: "Utility Functions"
   desc: "Helper functions for AQI categorization, station geolocation, spatial nearest-station matching, and data processing"
   contents:
   - stations_to_dataframe
+  - stations_to_city_summary
   - analyze_station_data
   - clean_station_name
   - get_aqi_category
   - get_aqi_categories
   - haversine_distance
   - nearest_stations
+  - india_boundary
   - vayuayan_welcome
+  - vayuayan_cache_dir
 
 - title: internal
   contents:

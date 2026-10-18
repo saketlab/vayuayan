@@ -126,21 +126,25 @@ library(scales)
 ```
 
 ```{r folder-setup}
-dirs <- c("data/mumbai", "figures/mumbai", "station_data_mumbai")
-for (d in dirs) dir.create(d, recursive = TRUE, showWarnings = FALSE)
+vignettes_dir <- here::here("vignettes")
+data_dir <- file.path(vignettes_dir, "data/mumbai")
+fig_dir <- file.path(vignettes_dir, "figures/mumbai")
+station_dir <- file.path(vignettes_dir, "station_data_mumbai")
 
-data_path <- function(f) file.path("data/mumbai", f)
-fig_path <- function(f) file.path("figures/mumbai", f)
-station_path <- function(f) file.path("station_data_mumbai", f)
+for (d in c(data_dir, fig_dir, station_dir)) {
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+}
 ```
 
 ## Satellite reads
 
-Satellite values use the package helpers `pm25_read_netcdf_bbox()` and
-`pm25_load_netcdf_bbox()`. `nc_dir` points to the monthly V5GL04 files.
+Satellite values come from WUSTL ACAG V5GL04 monthly files, downloaded once
+from the AWS Open Data registry (Asia subset) into `nc_dir`.
+`pm25_monthly()` gives the mean over a region's bounding box and
+`pm25_load_netcdf_bbox()` the cropped raster.
 
 ```{r nc-dir}
-nc_dir <- "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly"
+nc_dir <- file.path(vignettes_dir, "data/pm25")
 ```
 
 ---
@@ -152,25 +156,10 @@ nc_dir <- "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly"
 ### Ground data: city-level monthly PM2.5
 
 ```{r ground-data}
-# Cached to data/mumbai/ — re-runs skip download
-if (!file.exists(data_path("mumbai_aqi_2022.csv"))) {
-  cpcb_download_city_data(
-    city          = "Mumbai",
-    year          = 2022,
-    save_location = data_path("mumbai_aqi_2022.csv")
-  )
-}
-
-mumbai_wide <- read.csv(data_path("mumbai_aqi_2022.csv"))
-
-# Reshape wide → long and compute monthly mean
-# Mumbai city CSV uses "Day" as first column
-mumbai_ground <- mumbai_wide %>%
-  pivot_longer(cols = -Day, names_to = "Month_Name", values_to = "ground_pm25") %>%
-  mutate(month = match(Month_Name, month.name)) %>%
-  filter(!is.na(ground_pm25)) %>%
+# Cached to data/mumbai/, so re-runs skip the download
+mumbai_ground <- cpcb_city_daily("Mumbai", 2022, cache_dir = data_dir) %>%
   group_by(month) %>%
-  summarise(ground_pm25 = mean(ground_pm25, na.rm = TRUE), .groups = "drop")
+  summarise(ground_pm25 = mean(value), .groups = "drop")
 
 print(mumbai_ground)
 ```
@@ -183,10 +172,8 @@ mumbai_shape <- sf::st_read(
   quiet = TRUE
 ) %>% sf::st_make_valid()
 
-mumbai_sat_df <- map_dfr(1:12, function(m) {
-  nc_file <- pm25_v5gl04_path(2022, m, base_dir = nc_dir)
-  tibble(month = m, sat_pm25 = pm25_read_netcdf_bbox(nc_file, mumbai_shape))
-})
+mumbai_sat_df <- pm25_monthly(mumbai_shape, 2022, version = "V5GL04", region = "AS", cache_dir = nc_dir) %>%
+  rename(sat_pm25 = pm25)
 
 mumbai_final <- inner_join(mumbai_ground, mumbai_sat_df, by = "month")
 print(mumbai_final)
@@ -233,7 +220,7 @@ ggplot(mumbai_final, aes(x = month)) +
     legend.position    = "top"
   )
 
-ggsave(fig_path("fig1_mumbai_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
+ggsave(file.path(fig_dir, "fig1_mumbai_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
 ```
 
 > **Key finding:** Mumbai shows a clear seasonal cycle, PM2.5 peaks in
@@ -249,8 +236,9 @@ ggsave(fig_path("fig1_mumbai_seasonal_trend.png"), width = 9, height = 6, dpi = 
 ## Spatial heatmap
 
 ```{r heatmap-data}
-r_nov <- pm25_load_netcdf_bbox(pm25_v5gl04_path(2022, 11, base_dir = nc_dir), mumbai_shape)
-mumbai_raster_mask <- terra::mask(r_nov, terra::vect(suppressWarnings(sf::st_union(mumbai_shape))))
+nov_file <- pm25_download_netcdf(2022, 11, version = "V5GL04", region = "AS", cache_dir = nc_dir)
+r_nov <- pm25_load_netcdf_bbox(nov_file, mumbai_shape)
+mumbai_raster_mask <- pm25_load_netcdf_bbox(nov_file, mumbai_shape, mask = TRUE)
 mumbai_city_boundary <- suppressWarnings(sf::st_union(mumbai_shape))
 ```
 
@@ -287,7 +275,7 @@ ggplot() +
     barheight = unit(0.6, "lines")
   ))
 
-ggsave(fig_path("fig2_mumbai_heatmap_nov2022.png"), width = 9, height = 8, dpi = 300)
+ggsave(file.path(fig_dir, "fig2_mumbai_heatmap_nov2022.png"), width = 9, height = 8, dpi = 300)
 ```
 
 > **Key finding:** Pollution is higher in the northern suburbs (Kandivali,
@@ -303,16 +291,15 @@ ggsave(fig_path("fig2_mumbai_heatmap_nov2022.png"), width = 9, height = 8, dpi =
 
 ```{r station-coords}
 # Cached to data/mumbai/ — re-runs use cache
-if (file.exists(data_path("mumbai_stations_with_coords.csv"))) {
-  mumbai_station_list <- read.csv(data_path("mumbai_stations_with_coords.csv"))
+station_file <- file.path(data_dir, "mumbai_stations_with_coords.csv")
+if (file.exists(station_file)) {
+  mumbai_station_list <- read.csv(station_file)
 } else {
   mumbai_station_list <- cpcb_get_station_list("Mumbai")
   mumbai_station_list <- cpcb_add_coords(mumbai_station_list)
   # Remove site_5102 — Vasai West, outside Mumbai city limits (Palghar district)
   mumbai_station_list <- mumbai_station_list %>% filter(value != "site_5102")
-  write.csv(mumbai_station_list, data_path("mumbai_stations_with_coords.csv"),
-    row.names = FALSE
-  )
+  write.csv(mumbai_station_list, station_file, row.names = FALSE)
 }
 
 mumbai_full_sf <- mumbai_station_list %>%
@@ -372,7 +359,7 @@ ggplot() +
     barheight = unit(0.6, "lines")
   ))
 
-ggsave(fig_path("fig3_mumbai_choropleth_stations.png"), width = 9, height = 8, dpi = 300)
+ggsave(file.path(fig_dir, "fig3_mumbai_choropleth_stations.png"), width = 9, height = 8, dpi = 300)
 ```
 
 > **Key finding:** Stations are concentrated in south and central Mumbai.
@@ -386,46 +373,21 @@ ggsave(fig_path("fig3_mumbai_choropleth_stations.png"), width = 9, height = 8, d
 ### Per-station winter ground data
 
 ```{r winter-ground}
-# Download per-station data for winter months: Oct, Nov, Dec, Jan
+# Per-station 2022 data, averaged over winter months: Oct, Nov, Dec, Jan
 # Station CSVs cached to station_data_mumbai/
-# Note: station CSVs use "Date" as first column (not "Day" like city CSVs)
-
-station_raw <- lapply(seq_along(mumbai_station_list$value), function(i) {
-  id <- mumbai_station_list$value[i]
-  file <- station_path(paste0(id, ".csv"))
-
-  tryCatch(
-    {
-      if (!file.exists(file)) {
-        cpcb_download_station_data(
-          station_id    = id,
-          year          = 2022,
-          save_location = file
-        )
-      }
-      df <- read.csv(file)
-
-      # Station CSVs use "Date" as first column — different from city CSVs
-      df %>%
-        pivot_longer(cols = -Date, names_to = "Month_Name", values_to = "pm25") %>%
-        mutate(month = match(Month_Name, month.name)) %>%
-        filter(month %in% c(1, 10, 11, 12), !is.na(pm25)) %>%
-        summarise(ground_pm25 = mean(pm25, na.rm = TRUE)) %>%
-        mutate(value = id)
-    },
-    error = function(e) {
-      message("Skipped: ", id)
-      data.frame(value = id, ground_pm25 = NA)
-    }
-  )
-})
-
-station_ground <- do.call(rbind, station_raw)
+station_ground <- cpcb_station_daily(
+  mumbai_station_list$value, 2022,
+  cache_dir = station_dir
+) %>%
+  filter(month %in% c(1, 10, 11, 12)) %>%
+  group_by(station_id) %>%
+  summarise(ground_pm25 = mean(value), .groups = "drop")
 
 station_ground_sf <- station_ground %>%
-  filter(!is.na(ground_pm25)) %>%
-  left_join(mumbai_station_list %>% select(value, lat, lon), by = "value") %>%
-  filter(!is.na(lat), !is.na(lon), value != "site_5102") %>%
+  left_join(mumbai_station_list %>% select(value, lat, lon),
+    by = c("station_id" = "value")
+  ) %>%
+  filter(!is.na(lat), !is.na(lon), station_id != "site_5102") %>%
   sf::st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
 cat(nrow(station_ground_sf), "stations with valid winter PM2.5 (2022 data)\n")
@@ -528,7 +490,7 @@ ggplot() +
     barheight = unit(0.6, "lines")
   ))
 
-ggsave(fig_path("fig4_mumbai_monitoring_gap_map.png"), width = 9, height = 8, dpi = 300)
+ggsave(file.path(fig_dir, "fig4_mumbai_monitoring_gap_map.png"), width = 9, height = 8, dpi = 300)
 ```
 
 ### Priority map
@@ -571,7 +533,7 @@ ggplot() +
     plot.subtitle    = element_text(size = 9.5, color = "grey40")
   )
 
-ggsave(fig_path("fig5_mumbai_priority_map.png"), width = 9, height = 8, dpi = 300)
+ggsave(file.path(fig_dir, "fig5_mumbai_priority_map.png"), width = 9, height = 8, dpi = 300)
 ```
 
 ### Sensor distance vs disagreement
@@ -617,7 +579,7 @@ ggplot(
     legend.position = "right"
   )
 
-ggsave(fig_path("fig6_mumbai_distance_vs_disagreement.png"), width = 9, height = 5, dpi = 300)
+ggsave(file.path(fig_dir, "fig6_mumbai_distance_vs_disagreement.png"), width = 9, height = 5, dpi = 300)
 ```
 
 ---

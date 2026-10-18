@@ -2,8 +2,8 @@
 
 **vayuayan** is an R package for downloading and analyzing air quality data from multiple sources:
 
-- **WUSTL ACAG Satellite PM2.5**: Satellite-derived PM2.5 estimates at ~1 km resolution, global coverage (1998-2022)
-- **CPCB CAAQMS**: Historical and real-time PM2.5, PM10, AQI data from 400+ Central Pollution Control Board monitoring stations (India)
+- **WUSTL ACAG Satellite PM2.5**: Satellite-derived PM2.5 estimates at 0.01° (~1 km) resolution, global coverage (1998-2024, product V6.GL.03)
+- **CPCB CAAQMS**: Historical and real-time PM2.5, PM10, AQI data from 600+ Central Pollution Control Board monitoring stations (India)
 - **OAQ (Open Air Quality)**: Low-cost sensor network data from providers like Airnet (India)
 
 All three sources are accessible through a common R interface with tidy data output.
@@ -78,11 +78,13 @@ cpcb_download_station_data(
 ```r
 library(vayuayan)
 
-# Get mean PM2.5 statistics for a region from WUSTL ACAG NetCDF
+# Get mean PM2.5 statistics for a region from WUSTL ACAG NetCDF.
+# region = "AS" downloads the smaller Asia file.
 delhi_stats <- pm25_get_stats(
   geojson_file = "delhi_ncr.geojson",
-  year         = 2022,
-  month        = 11
+  year         = 2023,
+  month        = 11,
+  region       = "AS"
 )
 print(delhi_stats)
 # Returns: list(mean, std, min, max, count)
@@ -90,17 +92,19 @@ print(delhi_stats)
 # Get PM2.5 statistics grouped by a column in the GeoJSON
 state_stats <- pm25_get_stats(
   geojson_file = "india_districts.geojson",
-  year         = 2022,
+  year         = 2023,
   month        = 11,
+  region       = "AS",
   group_by     = "state_name"
 )
 print(state_stats)
 
-# Download a NetCDF file manually
+# Download a NetCDF file manually. Files are cached in
+# tools::R_user_dir("vayuayan", "cache") unless cache_dir is given.
 pm25_download_netcdf(
-  year      = 2022,
-  month     = 11,
-  cache_dir = "pm25_data"
+  year   = 2023,
+  month  = 11,
+  region = "AS"
 )
 ```
 
@@ -162,15 +166,7 @@ ggplot(stations_sf) +
 
 ---
 
-## Data Sources
 
-| Source | Coverage | Resolution | Period |
-|--------|----------|------------|--------|
-| WUSTL ACAG V5GL04 | Global satellite PM2.5 | ~1 km grid | 1998-2022 |
-| CPCB CAAQMS | 400+ stations in India | Daily/Hourly | 2015-present |
-| OAQ (Airnet, etc.) | Low-cost sensor networks in India | Daily/Monthly | Varies |
-
----
 
 ## Contributing
 

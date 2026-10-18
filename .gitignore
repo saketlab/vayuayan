@@ -44,3 +44,6 @@ Thumbs.db
 .vscode/
 /doc/
 /Meta/
+vignettes/articles/*_cache/
+vignettes/articles/*_files/
+vignettes/articles/*.html

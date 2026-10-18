@@ -1,23 +1,3 @@
-.pm25_aws_base_url <- "https://s3.us-west-2.amazonaws.com/v6.gl.02.04/V6.GL.02.04/GL/"
-
-.pm25_get_aws_filename <- function(year, month = NULL) {
-  if (is.null(month)) {
-    return(sprintf("V6GL02.04.CNNPM25.GL.%d01-%d12.nc", year, year))
-  }
-  return(sprintf(
-    "V6GL02.04.CNNPM25.GL.%d%02d-%d%02d.nc",
-    year, month, year, month
-  ))
-}
-
-.pm25_get_aws_url <- function(year, month = NULL) {
-  filename <- .pm25_get_aws_filename(year, month)
-  if (is.null(month)) {
-    return(paste0(.pm25_aws_base_url, "Annual/", filename))
-  }
-  return(paste0(.pm25_aws_base_url, "Monthly/", year, "/", filename))
-}
-
 .pm25_find_variable <- function(pm25_raster) {
   var_names <- names(pm25_raster)
   if ("PM25" %in% var_names) {
@@ -37,7 +17,7 @@
     stop("Bounding box contains invalid values.")
   }
 
-  pm25_raster <- terra::rast(nc_file)
+  pm25_raster <- .pm25_rast(nc_file)
   pm25_var <- .pm25_find_variable(pm25_raster)
   pm25_layer <- pm25_raster[[pm25_var]]
 
@@ -103,77 +83,81 @@
 #' Download PM2.5 NetCDF file
 #'
 #' @description
-#' Download a WUSTL ACAG V6GL02 NetCDF file from AWS S3 and cache it locally.
-#' If the file is already cached and complete (>1 MB), the cached version
-#' is returned without re-downloading.
+#' Download a WUSTL ACAG SatPM2.5 NetCDF file from the AWS Open Data registry
+#' and cache it locally. A cached file larger than 1 MB is reused without
+#' downloading it again.
 #'
-#' @param year Integer. Year for data (e.g. \code{2023}).
+#' Use \code{region = "AS"} for work within Asia, including India; its files
+#' are much smaller than the global ones.
+#'
+#' @param year Integer. Year for data, within the range of \code{version}.
 #' @param month Optional integer (1--12). If NULL, downloads the annual file.
-#' @param cache_dir Character. Directory to cache NetCDF files.
-#'   Default: \code{"pm25_data"}.
-#' @param force_download Logical. Force re-download even if file exists.
-#'   Default: \code{FALSE}.
+#' @param cache_dir Character. Directory to cache NetCDF files. \code{NULL}
+#'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()}, and also
+#'   reads files from the Python package's cache.
+#' @param force_download Logical. Download again even if the file is cached.
+#' @param region Character. Spatial subset: \code{"GL"} (global, default),
+#'   \code{"AS"} (Asia), \code{"EU"}, \code{"NA"}, or \code{"AF"} (V6GL03
+#'   only).
+#' @param version Character. Dataset version:
+#'   \describe{
+#'     \item{\code{"V6GL03"}}{V6.GL.03, CNN, 1998--2024 (default).}
+#'     \item{\code{"V6"}}{V6.GL.02.04, CNN, 1998--2023.}
+#'     \item{\code{"V5"}}{V5.GL.05.02, GWR, 1998--2023.}
+#'     \item{\code{"V5GL04"}}{V5.GL.04, GWR, 1998--2022.}
+#'   }
 #' @return Character. Path to the downloaded (or cached) NetCDF file.
-#' @examples
-#' \dontrun{
-#' # Download monthly data
-#' nc_path <- pm25_download_netcdf(year = 2023, month = 11)
+#' @source \url{https://www.satpm.org/v6-gl-03}
+#' @examplesIf interactive()
+#' # Monthly Asia subset
+#' nc_path <- pm25_download_netcdf(year = 2023, month = 11, region = "AS")
 #'
-#' # Download annual data
-#' nc_path <- pm25_download_netcdf(year = 2023)
-#' }
+#' # The older GWR product
+#' nc_path <- pm25_download_netcdf(2022, 11, region = "AS", version = "V5GL04")
 #' @export
 pm25_download_netcdf <- function(year, month = NULL,
-                                 cache_dir = "pm25_data",
-                                 force_download = FALSE) {
-  if (!dir.exists(cache_dir)) {
-    dir.create(cache_dir, recursive = TRUE)
-  }
+                                 cache_dir = NULL,
+                                 force_download = FALSE,
+                                 region = "GL",
+                                 version = "V6GL03") {
+  .pm25_check_args(year, month, region, version)
+  dirs <- if (is.null(cache_dir)) .pm25_default_dirs() else cache_dir
+  filename <- .pm25_get_aws_filename(year, month, region, version)
 
-  filename <- .pm25_get_aws_filename(year, month)
-  cached_path <- file.path(cache_dir, filename)
-
-  if (file.exists(cached_path) && !force_download) {
-    file_size <- file.info(cached_path)$size
-    if (file_size > 1024 * 1024) {
-      cli::cli_alert_info("Using cached file: {cached_path}")
-      return(cached_path)
-    } else {
-      cli::cli_alert_warning(
-        "Cached file appears incomplete, re-downloading..."
-      )
+  if (!force_download) {
+    cached <- .cache_lookup(dirs, filename, min_size = 1024 * 1024)
+    if (!is.null(cached)) {
+      cli::cli_alert_info("Using cached file: {cached}")
+      return(cached)
     }
   }
+  dir.create(dirs[1], recursive = TRUE, showWarnings = FALSE)
+  cached_path <- file.path(dirs[1], filename)
 
-  aws_url <- .pm25_get_aws_url(year, month)
-  cli::cli_alert_info("Downloading PM2.5 data from AWS...")
-  cli::cli_alert_info("Source: {aws_url}")
-  cli::cli_alert_info("Destination: {cached_path}")
+  aws_url <- .pm25_get_aws_url(year, month, region, version)
+  cli::cli_alert_info("Downloading {aws_url}")
 
-  tryCatch(
-    {
-      download.file(
-        aws_url,
-        cached_path,
-        method = "auto",
-        mode = "wb",
-        quiet = FALSE
-      )
-
-      final_size <- file.info(cached_path)$size / (1024 * 1024)
-      cli::cli_alert_success(
-        "Download complete: {round(final_size, 1)} MB"
-      )
-
-      return(cached_path)
-    },
+  # temp name so an interrupted transfer never looks cached
+  partial <- paste0(cached_path, ".part")
+  on.exit(unlink(partial), add = TRUE)
+  response <- tryCatch(
+    httr::GET(
+      aws_url,
+      httr::write_disk(partial, overwrite = TRUE),
+      if (interactive()) httr::progress()
+    ),
     error = function(e) {
-      if (file.exists(cached_path)) {
-        unlink(cached_path)
-      }
-      stop(sprintf("Failed to download NetCDF data: %s", e$message))
+      stop(sprintf("Failed to download NetCDF data: %s", conditionMessage(e)),
+        call. = FALSE
+      )
     }
   )
+  httr::stop_for_status(response, task = paste("download", aws_url))
+  file.rename(partial, cached_path)
+
+  size_mb <- file.info(cached_path)$size / (1024 * 1024)
+  cli::cli_alert_success("Download complete: {round(size_mb, 1)} MB")
+  cached_path
 }
 
 #' Get PM2.5 statistics for a region
@@ -189,19 +173,24 @@ pm25_download_netcdf <- function(year, month = NULL,
 #'   when \code{nc_file} is supplied.
 #' @param month Optional integer (1--12). If NULL, uses annual data. Ignored
 #'   when \code{nc_file} is supplied.
-#' @param cache_dir Character. Directory to cache NetCDF files.
-#'   Default: \code{"pm25_data"}.
+#' @param cache_dir Character. Directory to cache NetCDF files. \code{NULL}
+#'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()}, and also
+#'   reads files from the Python package's cache.
 #' @param group_by Optional character. Column name(s) in the GeoJSON to
 #'   group polygons by (comma-separated for multiple columns).
 #' @param nc_file Optional character. Path to a local NetCDF file to use
 #'   directly. When supplied, no download is attempted and \code{year}/
 #'   \code{month} are ignored. Useful for offline data (e.g. WUSTL V5GL04
 #'   files on a local mount).
+#' @param region Character. Spatial subset to download, passed to
+#'   \code{pm25_download_netcdf()}. \code{"AS"} covers India in a smaller
+#'   file.
+#' @param version Character. Dataset version, passed to
+#'   \code{pm25_download_netcdf()}.
 #' @return List (or data frame if \code{group_by} is specified) with
 #'   PM2.5 statistics: \code{mean}, \code{std}, \code{min}, \code{max},
 #'   \code{count}.
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' # Single region (remote BharatViz boundary)
 #' stats <- pm25_get_stats(
 #'   "https://geo.bharatviz.org/geojsons/cities/delhi.geojson",
@@ -222,11 +211,11 @@ pm25_download_netcdf <- function(year, month = NULL,
 #'   "https://geo.bharatviz.org/geojsons/cities/delhi.geojson",
 #'   nc_file = "V5GL04.HybridPM25.Global.202211-202211.nc"
 #' )
-#' }
 #' @export
 pm25_get_stats <- function(geojson_file, year = NULL, month = NULL,
-                           cache_dir = "pm25_data", group_by = NULL,
-                           nc_file = NULL) {
+                           cache_dir = NULL,
+                           group_by = NULL, nc_file = NULL, region = "GL",
+                           version = "V6GL03") {
   # geojson_file may be a local path or a remote URL (read directly by
   # sf::st_read via GDAL). Only validate existence for local paths.
   is_url <- grepl("^(https?|ftp)://", geojson_file)
@@ -240,7 +229,10 @@ pm25_get_stats <- function(geojson_file, year = NULL, month = NULL,
     if (is.null(year)) {
       stop("Either 'year' or 'nc_file' must be supplied.")
     }
-    nc_file <- pm25_download_netcdf(year, month, cache_dir = cache_dir)
+    nc_file <- pm25_download_netcdf(
+      year, month,
+      cache_dir = cache_dir, region = region, version = version
+    )
   } else if (!file.exists(nc_file)) {
     stop(sprintf("NetCDF file not found: %s", nc_file))
   }
@@ -271,7 +263,7 @@ pm25_get_stats <- function(geojson_file, year = NULL, month = NULL,
       sf::st_union(gdf)
     },
     error = function(e) {
-      cat("Union failed, attempting fallback...\n")
+      cli::cli_alert_warning("Union failed, retrying after a GeoJSON round trip.")
       tmp_geojson <- tempfile(fileext = ".geojson")
       on.exit(unlink(tmp_geojson), add = TRUE)
       sf::st_write(gdf, tmp_geojson, delete_dsn = TRUE, quiet = TRUE)
@@ -308,15 +300,14 @@ pm25_get_stats <- function(geojson_file, year = NULL, month = NULL,
 #' @description
 #' List all cached NetCDF files in the cache directory with file sizes.
 #'
-#' @param cache_dir Character. Directory containing cached files.
-#'   Default: \code{"pm25_data"}.
+#' @param cache_dir Character. Directory containing cached files. \code{NULL}
+#'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()}.
 #' @return Character vector of cached file paths.
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' files <- pm25_list_cached_files()
-#' }
 #' @export
-pm25_list_cached_files <- function(cache_dir = "pm25_data") {
+pm25_list_cached_files <- function(cache_dir = NULL) {
+  cache_dir <- cache_dir %||% file.path(vayuayan_cache_dir(), "pm25")
   if (!dir.exists(cache_dir)) {
     cli::cli_alert_info("Cache directory does not exist")
     return(character(0))
@@ -348,15 +339,14 @@ pm25_list_cached_files <- function(cache_dir = "pm25_data") {
 #' @description
 #' Delete all cached NetCDF files from the cache directory to free disk space.
 #'
-#' @param cache_dir Character. Directory containing cached files.
-#'   Default: \code{"pm25_data"}.
+#' @param cache_dir Character. Directory containing cached files. \code{NULL}
+#'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()}.
 #' @return Invisibly returns NULL.
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' pm25_clear_cache()
-#' }
 #' @export
-pm25_clear_cache <- function(cache_dir = "pm25_data") {
+pm25_clear_cache <- function(cache_dir = NULL) {
+  cache_dir <- cache_dir %||% file.path(vayuayan_cache_dir(), "pm25")
   if (!dir.exists(cache_dir)) {
     cli::cli_alert_info("Cache directory does not exist")
     return(invisible(NULL))
@@ -408,6 +398,12 @@ pm25_v5gl04_path <- function(year, month, base_dir) {
 
 # Read the bbox subset of a gridded NetCDF as a list(lons, lats, data).
 .pm25_read_bbox <- function(nc_path, shape, var, lon_name, lat_name) {
+  if (!requireNamespace("ncdf4", quietly = TRUE)) {
+    stop("Package 'ncdf4' is required to read NetCDF subsets. ",
+      "Install it with install.packages(\"ncdf4\").",
+      call. = FALSE
+    )
+  }
   bbox <- sf::st_bbox(shape)
   nc <- ncdf4::nc_open(nc_path)
   on.exit(ncdf4::nc_close(nc))
@@ -433,11 +429,9 @@ pm25_v5gl04_path <- function(year, month, base_dir) {
 #' @param var NetCDF variable name. Defaults to \code{"GWRPM25"} (WUSTL V5GL04).
 #' @param lon_name,lat_name Longitude/latitude dimension names.
 #' @return Numeric mean value over the bounding box.
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' shape <- sf::st_read("https://geo.bharatviz.org/geojsons/cities/delhi.geojson")
 #' pm25_read_netcdf_bbox(pm25_v5gl04_path(2022, 11, "."), shape)
-#' }
 #' @export
 pm25_read_netcdf_bbox <- function(nc_path, shape, var = "GWRPM25",
                                   lon_name = "lon", lat_name = "lat") {
@@ -454,15 +448,16 @@ pm25_read_netcdf_bbox <- function(nc_path, shape, var = "GWRPM25",
 #' @param shape An \code{sf} object defining the region.
 #' @param var NetCDF variable name. Defaults to \code{"GWRPM25"} (WUSTL V5GL04).
 #' @param lon_name,lat_name Longitude/latitude dimension names.
+#' @param mask Logical. If \code{TRUE}, set pixels outside \code{shape} to
+#'   \code{NA}.
 #' @return A \code{terra} \code{SpatRaster} cropped to the bounding box.
-#' @examples
-#' \dontrun{
+#' @examplesIf interactive()
 #' shape <- sf::st_read("https://geo.bharatviz.org/geojsons/cities/delhi.geojson")
 #' r <- pm25_load_netcdf_bbox(pm25_v5gl04_path(2022, 11, "."), shape)
-#' }
 #' @export
 pm25_load_netcdf_bbox <- function(nc_path, shape, var = "GWRPM25",
-                                  lon_name = "lon", lat_name = "lat") {
+                                  lon_name = "lon", lat_name = "lat",
+                                  mask = FALSE) {
   d <- .pm25_read_bbox(nc_path, shape, var, lon_name, lat_name)
   r <- terra::rast(
     nrows = length(d$lats), ncols = length(d$lons),
@@ -471,5 +466,8 @@ pm25_load_netcdf_bbox <- function(nc_path, shape, var = "GWRPM25",
     crs = "EPSG:4326"
   )
   terra::values(r) <- t(d$data)[nrow(t(d$data)):1, ]
+  if (mask) {
+    r <- terra::mask(r, terra::vect(sf::st_geometry(shape)))
+  }
   r
 }

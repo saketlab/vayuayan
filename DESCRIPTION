@@ -1,54 +1,52 @@
 Package: vayuayan
 Type: Package
-Title: Air Quality Data from CPCB, OAQ, and WUSTL Satellite PM2.5
-Version: 0.2.0.9001
+Title: Air Quality Data from Indian Monitoring Networks and Satellites
+Version: 0.3.0
 Authors@R: c(
-    person("Saket", "Choudhary", , "saketc@iitb.ac.in", role = c("aut", "cre")),
+    person("Saket", "Choudhary", , "saketc@iitb.ac.in", role = c("aut", "cre", "cph")),
     person("Mahesh Kumar", "Prajapat", , "22b0433@iitb.ac.in", role = "aut"),
-    person("Darakhshan", "Nehal", "darakhshannehal@gmail.com", role = "ctb")
+    person("Darakhshan", "Nehal", , "darakhshannehal@gmail.com", role = "ctb")
   )
 Description: Download and analyze air pollution data from three sources.
-    CPCB (Central Pollution Control Board) CAAQMS stations provide historical
-    and real-time PM2.5, PM10, and AQI readings across 400+ sites in India.
-    OAQ (Open Air Quality) aggregates low-cost sensor networks such as
-    Airnet, also in India. WUSTL ACAG V5GL04 provides satellite-derived
-    PM2.5 at 1 km resolution globally (1998-2022). Includes geospatial
-    station matching, AQI categorization, and NetCDF raster extraction
-    for arbitrary regions.
+    The Central Pollution Control Board (CPCB) of India publishes historical
+    and real-time particulate matter and air quality index readings from
+    more than 600 continuous ambient air quality monitoring stations
+    <https://airquality.cpcb.gov.in/ccr/>. Open Air Quality (OAQ) aggregates
+    low-cost sensor networks in India. The Atmospheric Composition Analysis
+    Group at Washington University in St. Louis provides satellite-derived
+    fine particulate matter (PM2.5) estimates at 0.01 degree resolution
+    for 1998-2024 <https://www.satpm.org>. Includes station lookup,
+    nearest-station matching, the CPCB National Air Quality Index computed
+    from pollutant concentrations, and regional PM2.5 summaries from
+    'NetCDF' rasters. An R port of the 'vayuayan' 'Python' package.
 License: MIT + file LICENSE
 Encoding: UTF-8
+Language: en-US
 Roxygen: list(markdown = TRUE)
 Depends:
     R (>= 4.0.0)
 Imports:
+    cli,
+    dplyr,
     httr,
     jsonlite,
-    dplyr,
-    sf,
-    terra,
-    geosphere,
     readxl,
-    lubridate,
-    cli,
-    glue
+    sf,
+    stats,
+    terra,
+    tools,
+    utils
 Suggests:
-    testthat (>= 3.0.0),
+    ggplot2,
     knitr,
-    rmarkdown,
-    tidyverse,
-    purrr,
-    exactextractr,
-    khroma,
     ncdf4,
-    scales,
-    tidyterra,
-    lwgeom,
-    stringr,
-    here,
-    ggrepel,
-    kableExtra,
-    patchwork
+    rmarkdown,
+    testthat (>= 3.1.7),
+    tidyterra
 VignetteBuilder: knitr
-URL: https://vayuayanr.saketlab.org/, https://github.com/saketlab/vayuayanR
+URL: https://vayuayan.saketlab.org/R/, https://github.com/saketlab/vayuayanR
 BugReports: https://github.com/saketlab/vayuayanR/issues
-Config/roxygen2/version: 8.0.0
+Config/testthat/edition: 3
+Config/Needs/website: exactextractr, ggrepel, here, kableExtra, khroma,
+    patchwork, purrr, scales, stringr, tidyverse, lwgeom
+Config/roxygen2/version: 8.1.1

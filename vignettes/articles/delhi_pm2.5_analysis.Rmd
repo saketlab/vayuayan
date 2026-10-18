@@ -115,28 +115,24 @@ library(here)
 
 ```{r folder-setup}
 vignettes_dir <- here::here("vignettes")
+data_dir <- file.path(vignettes_dir, "data/delhi")
+fig_dir <- file.path(vignettes_dir, "figures/delhi")
+station_dir <- file.path(vignettes_dir, "station_data")
 
-dirs <- c("data/delhi", "figures/delhi", "station_data")
-for (d in dirs) {
-  dir.create(file.path(vignettes_dir, d),
-    recursive = TRUE, showWarnings = FALSE
-  )
+for (d in c(data_dir, fig_dir, station_dir)) {
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
 }
-
-data_path <- function(f) file.path(vignettes_dir, "data/delhi", f)
-fig_path <- function(f) file.path(vignettes_dir, "figures/delhi", f)
-station_path <- function(f) file.path(vignettes_dir, "station_data", f)
 ```
 
-## Helper functions
+## Satellite reads
 
-Satellite reads use the package helpers `pm25_read_netcdf_bbox()` (mean over a
-region) and `pm25_load_netcdf_bbox()` (cropped raster), which read only the
-pixels covering the region's bounding box. `nc_dir` points to the directory of
-monthly V5GL04 files.
+Satellite values come from WUSTL ACAG V5GL04 monthly files, downloaded once
+from the AWS Open Data registry (Asia subset) into `nc_dir`.
+`pm25_monthly()` gives the mean over a region's bounding box and
+`pm25_load_netcdf_bbox()` the cropped raster.
 
 ```{r nc-dir}
-nc_dir <- "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly"
+nc_dir <- file.path(vignettes_dir, "data/pm25")
 ```
 
 ---
@@ -148,22 +144,9 @@ nc_dir <- "/NAS/climatehealth/WUSTL_PM2.5/V5GL04/Global/Monthly"
 ### Ground data: city-level monthly PM2.5
 
 ```{r ground-data}
-if (!file.exists(data_path("delhi_aqi_2022.csv"))) {
-  cpcb_download_city_data(
-    city          = "Delhi",
-    year          = 2022,
-    save_location = data_path("delhi_aqi_2022.csv")
-  )
-}
-
-delhi_wide <- read.csv(data_path("delhi_aqi_2022.csv"))
-
-delhi_ground <- delhi_wide %>%
-  pivot_longer(cols = -Day, names_to = "Month_Name", values_to = "ground_pm25") %>%
-  mutate(month = match(Month_Name, month.name)) %>%
-  filter(!is.na(ground_pm25)) %>%
+delhi_ground <- cpcb_city_daily("Delhi", 2022, cache_dir = data_dir) %>%
   group_by(month) %>%
-  summarise(ground_pm25 = mean(ground_pm25, na.rm = TRUE), .groups = "drop")
+  summarise(ground_pm25 = mean(value), .groups = "drop")
 
 print(delhi_ground)
 ```
@@ -176,10 +159,8 @@ delhi_shape <- sf::st_read(
   quiet = TRUE
 ) %>% sf::st_make_valid()
 
-delhi_sat_df <- map_dfr(1:12, function(m) {
-  nc_file <- pm25_v5gl04_path(2022, m, base_dir = nc_dir)
-  tibble(month = m, sat_pm25 = pm25_read_netcdf_bbox(nc_file, delhi_shape))
-})
+delhi_sat_df <- pm25_monthly(delhi_shape, 2022, version = "V5GL04", region = "AS", cache_dir = nc_dir) %>%
+  rename(sat_pm25 = pm25)
 
 delhi_final <- inner_join(delhi_ground, delhi_sat_df, by = "month")
 print(delhi_final)
@@ -226,7 +207,7 @@ ggplot(delhi_final, aes(x = month)) +
     legend.position    = "top"
   )
 
-ggsave(fig_path("fig1_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
+ggsave(file.path(fig_dir, "fig1_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
 ```
 
 > **Key finding:** Both sources agree on the seasonal pattern, PM2.5 peaks
@@ -242,8 +223,9 @@ ggsave(fig_path("fig1_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
 ## Spatial heatmap
 
 ```{r heatmap-data}
-r_nov <- pm25_load_netcdf_bbox(pm25_v5gl04_path(2022, 11, base_dir = nc_dir), delhi_shape)
-delhi_raster_mask <- terra::mask(r_nov, terra::vect(delhi_shape))
+nov_file <- pm25_download_netcdf(2022, 11, version = "V5GL04", region = "AS", cache_dir = nc_dir)
+r_nov <- pm25_load_netcdf_bbox(nov_file, delhi_shape)
+delhi_raster_mask <- pm25_load_netcdf_bbox(nov_file, delhi_shape, mask = TRUE)
 delhi_city_boundary <- sf::st_union(delhi_shape)
 ```
 
@@ -279,7 +261,7 @@ ggplot() +
     barheight = unit(0.6, "lines")
   ))
 
-ggsave(fig_path("fig2_heatmap_nov2022.png"), width = 8, height = 6, dpi = 300)
+ggsave(file.path(fig_dir, "fig2_heatmap_nov2022.png"), width = 8, height = 6, dpi = 300)
 ```
 
 > **Key finding:** Pollution is not uniform. Peripheral areas show elevated
@@ -293,14 +275,13 @@ ggsave(fig_path("fig2_heatmap_nov2022.png"), width = 8, height = 6, dpi = 300)
 ### Load and geocode station locations
 
 ```{r station-coords}
-if (file.exists(data_path("delhi_stations_with_coords.csv"))) {
-  delhi_station_list <- read.csv(data_path("delhi_stations_with_coords.csv"))
+station_file <- file.path(data_dir, "delhi_stations_with_coords.csv")
+if (file.exists(station_file)) {
+  delhi_station_list <- read.csv(station_file)
 } else {
   delhi_station_list <- cpcb_get_station_list("Delhi")
   delhi_station_list <- cpcb_add_coords(delhi_station_list)
-  write.csv(delhi_station_list, data_path("delhi_stations_with_coords.csv"),
-    row.names = FALSE
-  )
+  write.csv(delhi_station_list, station_file, row.names = FALSE)
 }
 
 delhi_full_sf <- delhi_station_list %>%
@@ -355,7 +336,7 @@ ggplot() +
     barheight = unit(0.6, "lines")
   ))
 
-ggsave(fig_path("fig3_choropleth_stations.png"), width = 9, height = 7, dpi = 300)
+ggsave(file.path(fig_dir, "fig3_choropleth_stations.png"), width = 9, height = 7, dpi = 300)
 ```
 
 > **Key finding:** Stations cluster in central and south Delhi. Several
@@ -382,45 +363,18 @@ For each of the **290 BharatViz wards** we:
 ### Per-station winter ground data
 
 ```{r winter-ground}
-station_raw <- lapply(seq_along(delhi_station_list$value), function(i) {
-  id <- delhi_station_list$value[i]
-  file <- station_path(paste0(id, ".csv"))
-
-  tryCatch(
-    {
-      if (!file.exists(file)) {
-        cpcb_download_station_data(
-          station_id    = id,
-          year          = 2022,
-          save_location = file
-        )
-      }
-      df <- read.csv(file)
-      day_col <- names(df)[1]
-
-      df %>%
-        pivot_longer(
-          cols = -all_of(day_col),
-          names_to = "Month_Name",
-          values_to = "pm25"
-        ) %>%
-        mutate(month = match(Month_Name, month.name)) %>%
-        filter(month %in% c(1, 10, 11, 12), !is.na(pm25)) %>%
-        summarise(ground_pm25 = mean(pm25, na.rm = TRUE)) %>%
-        mutate(value = id)
-    },
-    error = function(e) {
-      message("Skipped: ", id)
-      data.frame(value = id, ground_pm25 = NA)
-    }
-  )
-})
-
-station_ground <- do.call(rbind, station_raw)
+station_ground <- cpcb_station_daily(
+  delhi_station_list$value, 2022,
+  cache_dir = station_dir
+) %>%
+  filter(month %in% c(1, 10, 11, 12)) %>%
+  group_by(station_id) %>%
+  summarise(ground_pm25 = mean(value), .groups = "drop")
 
 station_ground_sf <- station_ground %>%
-  filter(!is.na(ground_pm25)) %>%
-  left_join(delhi_station_list %>% select(value, lat, lon), by = "value") %>%
+  left_join(delhi_station_list %>% select(value, lat, lon),
+    by = c("station_id" = "value")
+  ) %>%
   filter(!is.na(lat), !is.na(lon)) %>%
   sf::st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
@@ -520,7 +474,7 @@ ggplot() +
     barheight = unit(0.6, "lines")
   ))
 
-ggsave(fig_path("fig4_monitoring_gap_map.png"), width = 9, height = 7.5, dpi = 300)
+ggsave(file.path(fig_dir, "fig4_monitoring_gap_map.png"), width = 9, height = 7.5, dpi = 300)
 ```
 
 ### Priority map
@@ -559,7 +513,7 @@ ggplot() +
     plot.subtitle = element_text(size = 9.5, color = "grey40")
   )
 
-ggsave(fig_path("fig5_priority_map.png"), width = 9, height = 7, dpi = 300)
+ggsave(file.path(fig_dir, "fig5_priority_map.png"), width = 9, height = 7, dpi = 300)
 ```
 
 ### Sensor distance vs disagreement
@@ -615,7 +569,7 @@ ggplot(
     title.position = "top"
   ))
 
-ggsave(fig_path("fig6_distance_vs_disagreement.png"), width = 9, height = 5, dpi = 300)
+ggsave(file.path(fig_dir, "fig6_distance_vs_disagreement.png"), width = 9, height = 5, dpi = 300)
 ```
 
 ---

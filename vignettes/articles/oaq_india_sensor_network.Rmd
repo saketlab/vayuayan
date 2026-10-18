@@ -53,8 +53,8 @@ library(here)
 ```{r paths}
 india_geojson <- "https://geo.bharatviz.org/geojsons/districts/India_LGD_states.geojson"
 vignettes_dir <- here::here("vignettes")
-fig_path <- function(f) file.path(vignettes_dir, "figures/oaq_network", f)
-dir.create(fig_path(""), recursive = TRUE, showWarnings = FALSE)
+fig_dir <- file.path(vignettes_dir, "figures/oaq_network")
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 ```
 
 ---
@@ -64,23 +64,7 @@ dir.create(fig_path(""), recursive = TRUE, showWarnings = FALSE)
 ```{r fetch-stations, cache=TRUE}
 session <- oaq_session()
 
-fetch_provider <- function(provider) {
-  result <- oaq_get_stations_latest(session, provider)
-  result$stations |>
-    mutate(
-      provider = provider,
-      lat      = as.numeric(lat),
-      lon      = as.numeric(lon),
-      pm25     = as.numeric(pm25)
-    ) |>
-    filter(!is.na(lat), !is.na(lon))
-}
-
-all_stations <- bind_rows(
-  fetch_provider("cpcb"),
-  fetch_provider("airnet"),
-  fetch_provider("aurassure")
-) |>
+all_stations <- oaq_stations_table(session, c("cpcb", "airnet", "aurassure")) |>
   mutate(
     provider_label = recode(provider,
       cpcb      = "CPCB",
@@ -161,7 +145,7 @@ ggplot() +
     axis.text       = element_blank()
   )
 
-ggsave(fig_path("fig_oaq_india_network.png"), width = 13, height = 11, dpi = 300)
+ggsave(file.path(fig_dir, "fig_oaq_india_network.png"), width = 13, height = 11, dpi = 300)
 ```
 
 ---
@@ -207,7 +191,7 @@ ggplot() +
     axis.text = element_blank()
   )
 
-ggsave(fig_path("fig_oaq_india_faceted.png"), width = 14, height = 5, dpi = 300)
+ggsave(file.path(fig_dir, "fig_oaq_india_faceted.png"), width = 14, height = 5, dpi = 300)
 ```
 
 ---
@@ -273,15 +257,8 @@ reference monitors. The map uses ward-level boundaries for spatial context.
 
 ```{r blr-boundary}
 blr_geojson_url <- "https://geo.bharatviz.org/geojsons/cities/bengaluru.geojson"
-blr_boundary <- tryCatch(
-  {
-    sf::st_read(blr_geojson_url, quiet = TRUE) |> sf::st_transform(4326)
-  },
-  error = function(e) {
-    warning("Could not load Bengaluru GeoJSON: ", e$message)
-    NULL
-  }
-)
+blr_boundary <- sf::st_read(blr_geojson_url, quiet = TRUE) |>
+  sf::st_transform(4326)
 ```
 
 ```{r blr-stations}
@@ -337,14 +314,10 @@ blr_cpcb_matched <- blr_cpcb_matched |>
     stringr::str_trunc(30))
 
 ggplot() +
-  {
-    if (!is.null(blr_boundary)) {
-      geom_sf(
-        data = blr_boundary, fill = "#f7f7f7", color = "grey65",
-        linewidth = 0.3
-      )
-    }
-  } +
+  geom_sf(
+    data = blr_boundary, fill = "#f7f7f7", color = "grey65",
+    linewidth = 0.3
+  ) +
   # Background CPCB (unmatched)
   geom_point(
     data = blr_cpcb_bg,
@@ -416,7 +389,7 @@ ggplot() +
     axis.text       = element_blank()
   )
 
-ggsave(fig_path("fig_oaq_bengaluru.png"), width = 11, height = 10, dpi = 300)
+ggsave(file.path(fig_dir, "fig_oaq_bengaluru.png"), width = 11, height = 10, dpi = 300)
 ```
 
 ---

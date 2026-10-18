@@ -15,10 +15,8 @@
 #'   \code{Sys.getenv("OAQ_API_KEY")}.
 #' @return Named list with \code{base_url} and \code{sig_string} (the full
 #'   query-string to append to every data URL).
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
-#' }
 #' @export
 oaq_session <- function(api_key = Sys.getenv("OAQ_API_KEY")) {
   if (!nzchar(api_key)) {
@@ -85,12 +83,10 @@ oaq_session <- function(api_key = Sys.getenv("OAQ_API_KEY")) {
 #' @param session List returned by \code{oaq_session()}.
 #' @return List with a \code{providers} element containing id, name, and
 #'   attribution for each provider.
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
 #' providers <- oaq_list_providers(session)
 #' sapply(providers$providers, `[[`, "id")
-#' }
 #' @export
 oaq_list_providers <- function(session) {
   .oaq_get("meta/providers.json", session)
@@ -104,11 +100,9 @@ oaq_list_providers <- function(session) {
 #' @param session List returned by \code{oaq_session()}.
 #' @param provider Character. Provider name (e.g. \code{"AURASSURE"}).
 #' @return Parsed hierarchy list.
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
 #' hierarchy <- oaq_get_hierarchy(session, "AURASSURE")
-#' }
 #' @export
 oaq_get_hierarchy <- function(session, provider) {
   provider <- tolower(provider)
@@ -124,11 +118,9 @@ oaq_get_hierarchy <- function(session, provider) {
 #' @param provider Character. Provider name (e.g. \code{"AURASSURE"}).
 #' @param city Character. City name as it appears in the provider hierarchy.
 #' @return Parsed list of sensor readings for the city.
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
 #' latest <- oaq_get_city_latest(session, "AURASSURE", "Bengaluru")
-#' }
 #' @export
 oaq_get_city_latest <- function(session, provider, city) {
   provider <- tolower(provider)
@@ -146,11 +138,9 @@ oaq_get_city_latest <- function(session, provider, city) {
 #' @param session List returned by \code{oaq_session()}.
 #' @param provider Character. Provider name (e.g. \code{"AURASSURE"}).
 #' @return Parsed list of station-level latest readings.
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
 #' stations <- oaq_get_stations_latest(session, "AURASSURE")
-#' }
 #' @export
 oaq_get_stations_latest <- function(session, provider) {
   provider <- tolower(provider)
@@ -169,11 +159,9 @@ oaq_get_stations_latest <- function(session, provider) {
 #' @param provider Character. Provider name (e.g. \code{"AURASSURE"}).
 #' @param sensor_id Character. Sensor station ID.
 #' @return Parsed list of hourly readings.
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
 #' data <- oaq_get_station_24h(session, "AURASSURE", "sensor_001")
-#' }
 #' @export
 oaq_get_station_24h <- function(session, provider, sensor_id) {
   provider <- tolower(provider)
@@ -195,11 +183,9 @@ oaq_get_station_24h <- function(session, provider, sensor_id) {
 #' @param month Integer or character. Month (1--12).
 #' @param day Integer or character. Day of month (1--31).
 #' @return Parsed daily data record.
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
 #' daily <- oaq_get_daily(session, "AURASSURE", "sensor_001", 2024, 1, 15)
-#' }
 #' @export
 oaq_get_daily <- function(session, provider, sensor_id, year, month, day) {
   provider <- tolower(provider)
@@ -224,11 +210,9 @@ oaq_get_daily <- function(session, provider, sensor_id, year, month, day) {
 #' @param year Integer or character. Year (e.g. \code{2024}).
 #' @param month Integer or character. Month (1--12).
 #' @return Parsed monthly aggregate record.
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
 #' monthly <- oaq_get_monthly(session, "AURASSURE", "sensor_001", 2024, 1)
-#' }
 #' @export
 oaq_get_monthly <- function(session, provider, sensor_id, year, month) {
   provider <- tolower(provider)
@@ -252,11 +236,9 @@ oaq_get_monthly <- function(session, provider, sensor_id, year, month) {
 #' @param sensor_id Character. Sensor station ID.
 #' @param year Integer or character. Year (e.g. \code{2024}).
 #' @return Parsed annual aggregate record.
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
 #' annual <- oaq_get_annual(session, "AURASSURE", "sensor_001", 2024)
-#' }
 #' @export
 oaq_get_annual <- function(session, provider, sensor_id, year) {
   provider <- tolower(provider)
@@ -279,34 +261,43 @@ oaq_get_annual <- function(session, provider, sensor_id, year) {
 #' data for a month are skipped.
 #'
 #' @param session List returned by \code{\link{oaq_session}}.
-#' @param provider Character provider id (e.g. \code{"cpcb"}, \code{"airnet"}).
+#' @param provider Character vector of provider ids (e.g. \code{"cpcb"},
+#'   \code{"airnet"}).
 #' @param year Integer year (e.g. \code{2026}).
 #' @param months Character vector of zero-padded months (e.g.
 #'   \code{c("03", "04")}). Defaults to all twelve months.
 #' @param city Optional character vector of city names to keep (matched against
 #'   the station list's \code{city} column). \code{NULL} keeps every city.
-#' @return A data frame of daily records with \code{station_id}, \code{date},
-#'   the pollutant columns returned by the API, and \code{lat}/\code{lon}/
+#' @return A data frame of daily records with \code{provider},
+#'   \code{station_id}, \code{date} (class \code{Date}), the pollutant
+#'   columns returned by the API as numbers, and \code{lat}/\code{lon}/
 #'   \code{name} from the station list.
-#' @examples
-#' \dontrun{
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
 #' session <- oaq_session()
 #' blr <- oaq_fetch_monthly_stations(
-#'   session, "airnet",
+#'   session, c("cpcb", "airnet"),
 #'   year = 2026, months = c("03", "04"), city = "Bengaluru"
 #' )
-#' }
 #' @export
 oaq_fetch_monthly_stations <- function(session, provider, year,
                                        months = sprintf("%02d", 1:12),
                                        city = NULL) {
-  live <- oaq_get_stations_latest(session, provider)
-  meta <- live$stations
+  per_provider <- lapply(provider, function(p) {
+    .oaq_fetch_monthly(session, p, year, months, city)
+  })
+  out <- do.call(rbind, per_provider)
+  out <- utils::type.convert(out, as.is = TRUE)
+  if ("date" %in% names(out)) {
+    out$date <- as.Date(out$date)
+  }
+  out
+}
+
+.oaq_fetch_monthly <- function(session, provider, year, months, city) {
+  meta <- oaq_stations_table(session, provider)
   if (!is.null(city)) {
     meta <- meta[meta$city %in% city, , drop = FALSE]
   }
-  meta$lat <- as.numeric(meta$lat)
-  meta$lon <- as.numeric(meta$lon)
 
   records <- list()
   for (sid in meta$id) {
@@ -322,13 +313,37 @@ oaq_fetch_monthly_stations <- function(session, provider, year,
     }
   }
   if (length(records) == 0) {
-    return(meta[0, ])
+    return(NULL)
   }
 
   out <- do.call(rbind, records)
   meta_cols <- meta[, intersect(
-    c("id", "name", "lat", "lon", "city"), names(meta)
+    c("id", "name", "lat", "lon", "city", "provider"), names(meta)
   ), drop = FALSE]
   names(meta_cols)[names(meta_cols) == "id"] <- "station_id"
   merge(out, meta_cols, by = "station_id", all.x = TRUE)
+}
+
+#' Latest OAQ readings for one or more providers
+#'
+#' @description
+#' Combine \code{oaq_get_stations_latest()} across providers into one table
+#' with numeric columns, dropping stations without coordinates.
+#'
+#' @param session List returned by \code{\link{oaq_session}}.
+#' @param provider Character vector of provider ids.
+#' @return Data frame of stations with a \code{provider} column and numeric
+#'   \code{lat}, \code{lon} and pollutant columns.
+#' @examplesIf nzchar(Sys.getenv("OAQ_API_KEY"))
+#' session <- oaq_session()
+#' stations <- oaq_stations_table(session, c("cpcb", "airnet"))
+#' @export
+oaq_stations_table <- function(session, provider) {
+  per_provider <- lapply(provider, function(p) {
+    st <- oaq_get_stations_latest(session, p)$stations
+    st$provider <- rep(p, NROW(st))
+    st
+  })
+  out <- utils::type.convert(dplyr::bind_rows(per_provider), as.is = TRUE)
+  out[!is.na(out$lat) & !is.na(out$lon), , drop = FALSE]
 }
