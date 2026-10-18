@@ -49,10 +49,7 @@ test_that("get_complete_list returns list with expected structure", {
   expect_true("stations" %in% names(complete_list))
 })
 
-test_that("download functions require valid parameters", {
-  skip_on_cran()
-  skip_if_offline()
-
+cpcb_test_that("download functions require valid parameters", {
   # Test city data download with invalid city
   expect_error(
     cpcb_download_city_data("InvalidCity123", "2024", tempfile()),
@@ -66,10 +63,7 @@ test_that("download functions require valid parameters", {
   )
 })
 
-test_that("city data downloads from the CPCB repository", {
-  skip_on_cran()
-  skip_if_offline()
-
+cpcb_test_that("city data downloads from the CPCB repository", {
   out <- tempfile(fileext = ".csv")
   suppressMessages(cpcb_download_city_data("Mumbai", 2022, out))
   df <- utils::read.csv(out)
@@ -79,10 +73,7 @@ test_that("city data downloads from the CPCB repository", {
   unlink(out)
 })
 
-test_that("station file paths resolve for a directory station", {
-  skip_on_cran()
-  skip_if_offline()
-
+cpcb_test_that("station file paths resolve for a directory station", {
   paths <- cpcb_get_file_path(
     station_id = "site_5392",
     frequency = "daily",
@@ -92,10 +83,7 @@ test_that("station file paths resolve for a directory station", {
   expect_named(paths[[1]], c("filePath", "year", "month"))
 })
 
-test_that("live feed returns stations with coordinates and readings", {
-  skip_on_cran()
-  skip_if_offline()
-
+cpcb_test_that("live feed returns stations with coordinates and readings", {
   cities <- cpcb_get_all_india()
   df <- stations_to_dataframe(cities)
 
