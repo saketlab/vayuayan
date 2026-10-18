@@ -58,7 +58,7 @@ jobs:
             overwrite = TRUE
           )
           pkgdown::build_redirects(pkg)
-          pkgdown::build_sitemap(pkg)
+          pkgdown::build_search(pkg)
         shell: Rscript {0}
 
       - name: Upload the site
