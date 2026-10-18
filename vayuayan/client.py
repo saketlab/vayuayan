@@ -5,24 +5,31 @@ The CPCBClient class gets station data and raw data files from CPCB.
 It also finds the stations that are nearest to a location.
 """
 
+from __future__ import annotations
+
 import heapq
-import math
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union, cast
 
-import pandas as pd
-
-from .constants import ALL_STATION_URL, DOWNLOAD_URL, POST_HEADERS
+from .constants import (
+    ALL_STATION_URL,
+    DEFAULT_DOWNLOAD_DIR,
+    DOWNLOAD_URL,
+    PUBLIC_COOKIES,
+)
+from .cpcb_live import CPCBLive
 from .exceptions import CPCBError, NetworkError
 from .utils import (
+    _log_if_verbose,
     clean_station_name,
-    fetch_cpcb_rss_station_data,
-    haversine_distance,
     safe_get,
-    safe_post,
     sort_station_data,
+    station_distances,
     stations_to_dataframe,
 )
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class CPCBClient:
@@ -36,7 +43,7 @@ class CPCBClient:
                 compatibility.
         """
         self.station_url = ALL_STATION_URL
-        self.cookies = {"ccr_public": "A"}
+        self.cookies = dict(PUBLIC_COOKIES)
 
     def list_stations(
         self, as_dataframe: bool = False
@@ -52,29 +59,12 @@ class CPCBClient:
         Raises:
             CPCBError: If the client cannot get the station data.
         """
-        try:
-            data = "e30="
-            response = safe_post(
-                self.station_url, headers=POST_HEADERS, data=data, cookies=self.cookies
-            )
-            stations = response.get("stations", [])
-            sorted_stations = sort_station_data(stations)
-        except Exception:
-            sorted_stations = fetch_cpcb_rss_station_data()
+        # Same source as CPCBLive: the dashboard list, else the RSS feed
+        sorted_stations = sort_station_data(CPCBLive().get_all_india())
 
         if as_dataframe:
             return stations_to_dataframe(sorted_stations)
         return sorted_stations
-
-    def _log_if_verbose(self, message: str, verbose: bool) -> None:
-        """Print the message only if verbose mode is on.
-
-        Args:
-            message: Message to print.
-            verbose: If True, verbose mode is on.
-        """
-        if verbose:
-            print(message)
 
     def _generate_filename(
         self,
@@ -125,7 +115,7 @@ class CPCBClient:
         station_name: Optional[str] = None,
         time_period: Optional[str] = "15Min",
         year: Optional[str] = None,
-        output_dir: str = "downloads",
+        output_dir: str = DEFAULT_DOWNLOAD_DIR,
         filename: Optional[str] = None,
         return_dataframe: bool = False,
         verbose: bool = False,
@@ -183,13 +173,13 @@ class CPCBClient:
             cleaned_station_name = clean_station_name(station_name_str)
             csv_filename = f"{site_id_str}_{cleaned_station_name}_{time_period_str}.csv"
             url = f"{DOWNLOAD_URL}/{time_period_str}/{year_str}/{csv_filename}"
-            self._log_if_verbose(f"Constructed URL: {url}", verbose)
+            _log_if_verbose(f"Constructed URL: {url}", verbose)
 
-        self._log_if_verbose(f"Downloading CSV from: {url}", verbose)
+        _log_if_verbose(f"Downloading CSV from: {url}", verbose)
 
         try:
             # Send the request with a longer timeout for file downloads
-            response = safe_get(url, timeout=60, max_retries=3)
+            response = safe_get(url, timeout=60, max_retries=3, allow_ssl_fallback=True)
 
             # Examine the content type
             content_type = response.headers.get("content-type", "").lower()
@@ -197,7 +187,7 @@ class CPCBClient:
                 "text/csv" not in content_type
                 and "application/octet-stream" not in content_type
             ):
-                self._log_if_verbose(
+                _log_if_verbose(
                     f"Warning: Unexpected content type: {content_type}", verbose
                 )
 
@@ -211,26 +201,26 @@ class CPCBClient:
             file_path = Path(output_dir) / generated_filename
 
             # Write file
-            self._log_if_verbose(f"Saving to: {file_path}", verbose)
+            _log_if_verbose(f"Saving to: {file_path}", verbose)
             with open(file_path, "wb") as f:
                 f.write(response.content)
 
-            self._log_if_verbose(f"Successfully downloaded: {file_path}", verbose)
+            _log_if_verbose(f"Successfully downloaded: {file_path}", verbose)
 
             # Return a DataFrame if the caller asked for one
             if return_dataframe:
+                import pandas as pd
+
                 try:
                     df = pd.read_csv(file_path)
-                    self._log_if_verbose(
-                        f"Loaded DataFrame with shape: {df.shape}", verbose
-                    )
+                    _log_if_verbose(f"Loaded DataFrame with shape: {df.shape}", verbose)
                     return df
                 except Exception as e:
-                    self._log_if_verbose(
-                        f"Failed to load CSV as DataFrame: {e}", verbose
+                    _log_if_verbose(
+                        f"Failed to load CSV as DataFrame: {e}; file saved at "
+                        f"{file_path}",
+                        verbose,
                     )
-                    if verbose:
-                        print(f"File saved at: {file_path}")
                     return None
 
             return str(file_path)
@@ -239,6 +229,14 @@ class CPCBClient:
             raise
         except Exception as e:
             raise CPCBError(f"Failed to download CSV: {str(e)}") from e
+
+    def _station_distances(self, lat: float, lon: float) -> List[Tuple[Dict, float]]:
+        """All stations with valid coordinates and their haversine distance in km.
+
+        Raises:
+            CPCBError: If the client cannot get the station data.
+        """
+        return station_distances(cast(List[Dict], self.list_stations()), lat, lon)
 
     def get_nearest_station(
         self, lat: float, lon: float, return_distance: bool = False
@@ -258,47 +256,17 @@ class CPCBClient:
             CPCBError: If the client cannot get the station data, or there are no
                 stations.
         """
-        try:
-            cities = self.list_stations()
-        except Exception as e:
-            raise CPCBError(f"Failed to fetch station data: {str(e)}") from e
-
-        if not cities:
-            raise CPCBError("No stations available")
-
-        target_lat, target_lon = float(lat), float(lon)
-        min_distance = float("inf")
-        nearest_station_id: Optional[str] = None
-
-        # Examine all stations one time
-        for city in cities:
-            for station in city.get("stationsInCity", []):
-                try:
-                    station_lat = float(station["latitude"])
-                    station_lon = float(station["longitude"])
-
-                    # Use the haversine distance, because it is accurate on the globe
-                    distance = haversine_distance(
-                        target_lat, target_lon, station_lat, station_lon
-                    )
-
-                    if distance < min_distance:
-                        candidate_id = station.get("id")
-                        if candidate_id is None:
-                            continue
-                        min_distance = distance
-                        nearest_station_id = str(candidate_id)
-
-                except (ValueError, KeyError, TypeError):
-                    # Ignore stations that have invalid coordinates
-                    continue
-
-        if nearest_station_id is None:
+        candidates = [
+            (station, distance)
+            for station, distance in self._station_distances(lat, lon)
+            if station.get("id") is not None
+        ]
+        if not candidates:
             raise CPCBError("No valid stations found")
-
+        station, distance = min(candidates, key=lambda c: c[1])
         if return_distance:
-            return (nearest_station_id, min_distance)
-        return nearest_station_id
+            return (str(station["id"]), distance)
+        return str(station["id"])
 
     def get_k_nearest_stations(
         self, lat: float, lon: float, k: int = 5
@@ -316,51 +284,9 @@ class CPCBClient:
             live, avg, cityID, and stateID.
 
         Raises:
-            CPCBError: If the client cannot get the station data, or there are no
-                stations.
+            CPCBError: If the client cannot get the station data.
         """
-        try:
-            cities = self.list_stations()
-        except Exception as e:
-            raise CPCBError(f"Failed to fetch station data: {str(e)}") from e
-
-        if not cities:
-            raise CPCBError("No stations available")
-
-        target_lat, target_lon = float(lat), float(lon)
-
-        # A min-heap keeps the k nearest stations
-        heap: List[Tuple[float, str, float, Dict[str, Any]]] = []
-
-        for city in cities:
-            for station in city.get("stationsInCity", []):
-                try:
-                    station_lat = float(station["latitude"])
-                    station_lon = float(station["longitude"])
-
-                    distance = haversine_distance(
-                        target_lat, target_lon, station_lat, station_lon
-                    )
-
-                    station_id = str(station.get("id", ""))
-
-                    if len(heap) < k:
-                        # The heap is not full, so add the station
-                        heapq.heappush(heap, (-distance, station_id, distance, station))
-                    elif distance < -heap[0][0]:
-                        # This station is nearer, so replace the farthest station
-                        heapq.heapreplace(
-                            heap, (-distance, station_id, distance, station)
-                        )
-
-                except (ValueError, KeyError, TypeError):
-                    continue
-
-        # Get the results and sort them by distance (nearest first)
-        results: List[Tuple[Dict[str, Any], float]] = [
-            (station_info, distance) for _, _, distance, station_info in heap
-        ]
-        return sorted(results, key=lambda x: x[1])
+        return heapq.nsmallest(k, self._station_distances(lat, lon), key=lambda c: c[1])
 
     def get_nearest_station_within_radius(
         self, lat: float, lon: float, max_distance_km: float = 100
@@ -378,49 +304,9 @@ class CPCBClient:
         Raises:
             CPCBError: If the client cannot get the station data.
         """
-        try:
-            cities = self.list_stations()
-        except Exception as e:
-            raise CPCBError(f"Failed to fetch station data: {str(e)}") from e
-
-        target_lat, target_lon = float(lat), float(lon)
-
-        # Calculate a bounding box to make the search faster
-        # 1 degree latitude ≈ 111 km
-        # 1 degree longitude ≈ 111 km * cos(latitude)
-        lat_delta = max_distance_km / 111.0
-        lon_delta = max_distance_km / (111.0 * math.cos(math.radians(target_lat)))
-
-        min_lat = target_lat - lat_delta
-        max_lat = target_lat + lat_delta
-        min_lon = target_lon - lon_delta
-        max_lon = target_lon + lon_delta
-
-        min_distance = float("inf")
-        nearest_station = None
-
-        for city in cities:
-            for station in city.get("stationsInCity", []):
-                try:
-                    station_lat = float(station["latitude"])
-                    station_lon = float(station["longitude"])
-
-                    # Fast bounding box test, to ignore stations that are far away
-                    if not (
-                        min_lat <= station_lat <= max_lat
-                        and min_lon <= station_lon <= max_lon
-                    ):
-                        continue
-
-                    distance = haversine_distance(
-                        target_lat, target_lon, station_lat, station_lon
-                    )
-
-                    if distance <= max_distance_km and distance < min_distance:
-                        min_distance = distance
-                        nearest_station = (station["id"], distance)
-
-                except (ValueError, KeyError, TypeError):
-                    continue
-
-        return nearest_station
+        in_radius = [
+            (station["id"], distance)
+            for station, distance in self._station_distances(lat, lon)
+            if distance <= max_distance_km and station.get("id") is not None
+        ]
+        return min(in_radius, key=lambda c: c[1]) if in_radius else None

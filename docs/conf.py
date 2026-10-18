@@ -84,7 +84,7 @@ intersphinx_mapping = {
 html_theme = "furo"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
-html_baseurl = "https://vayuayan.saketlab.org/"
+html_baseurl = "https://vayuayan.saketlab.org/python/"
 
 html_logo = "assets/vayuayan.png"
 
@@ -96,7 +96,6 @@ ogp_custom_meta_tags = [
     '<meta name="twitter:card" content="summary_large_image">',
 ]
 sitemap_url_scheme = "{link}"
-html_extra_path = ["robots.txt"]
 
 html_sidebars = {
     "**": [
@@ -112,7 +111,6 @@ html_sidebars = {
 html_theme_options = {
     "navigation_with_keys": True,
     "sidebar_hide_name": False,  # Show the name next to the logo
-    "default_mode": "dark",  # Make the dark theme the default for Furo
     "light_css_variables": {
         "color-brand-primary": "#1b1b1f",
         "color-brand-content": "#1b1b1f",

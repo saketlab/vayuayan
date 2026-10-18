@@ -6,12 +6,12 @@ values.
 """
 
 import os
+import platform
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional, Tuple
 
 # Base URLs
 BASE_URL = "https://airquality.cpcb.gov.in"
-RSS_URL = f"{BASE_URL}/caaqms/rss_feed"
 RSS_URL_WITH_COORDINATES = f"{BASE_URL}/caaqms/iit_rss_feed_with_coordinates"
 
 # API Endpoints
@@ -32,58 +32,22 @@ DEFAULT_HEADERS: Dict[str, str] = {
     )
 }
 
-POST_HEADERS: Dict[str, str] = {
+# Headers and cookie of the old base64 form endpoints (dataRepository, dashboard)
+LEGACY_FORM_HEADERS: Dict[str, str] = {
     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "Accept": "q=0.8;application/json;q=0.9",
+}
+PUBLIC_COOKIES: Dict[str, str] = {"ccr_public": "A"}
+
+# WUSTL ACAG satellite PM2.5 archive (anonymous S3 over HTTPS)
+SATPM_BASE_URL = "https://satpmdata.s3.amazonaws.com/"
+
+# The same form headers with a Referer instead of Accept (used by CPCBClient
+# before it moved to CPCBLive; kept for code that imports it)
+POST_HEADERS: Dict[str, str] = {
+    "Content-Type": LEGACY_FORM_HEADERS["Content-Type"],
     "Referer": BASE_URL,
 }
-
-# Date Parsing Formats
-DATE_FORMATS: List[str] = [
-    "%B %d, %Y",  # May 27, 2025
-    "%b %d, %Y",  # May 27, 2025
-    "%d %B %Y",  # 27 May 2025
-    "%d %b %Y",  # 27 May 2025
-    "%d-%m-%Y",  # 27-05-2025
-    "%d/%m/%Y",  # 27/05/2025
-    "%m/%d/%Y",  # 05/27/2025
-    "%Y-%m-%d",  # 2025-05-27
-    "%d-%m-%y",  # 27-05-25
-    "%d/%m/%y",  # 27/05/25
-    "%d %b %y",  # 27 May 25
-    "%b %d %Y",  # May 27 2025
-]
-
-# Month abbreviations
-MONTH_ABBREV: Dict[str, str] = {
-    "jan": "01",
-    "feb": "02",
-    "mar": "03",
-    "apr": "04",
-    "may": "05",
-    "jun": "06",
-    "jul": "07",
-    "aug": "08",
-    "sep": "09",
-    "oct": "10",
-    "nov": "11",
-    "dec": "12",
-}
-
-# Full Month Names
-MONTHS: List[str] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-]
 
 # AQI Category Thresholds
 AQI_CATEGORIES: Dict[str, Dict[str, int]] = {
@@ -95,11 +59,16 @@ AQI_CATEGORIES: Dict[str, Dict[str, int]] = {
     "Severe": {"min": 401, "max": 500},
 }
 
-# File Extensions
-SUPPORTED_FILE_EXTENSIONS: List[str] = [".csv", ".xlsx", ".xls", ".json"]
-
 # Default File Paths
 DEFAULT_DOWNLOAD_DIR: str = "downloads"
+
+
+def _user_dir(xdg_var: str, default: str, windows_parts: Tuple[str, ...]) -> Path:
+    """The vayuayan folder in a per-user base directory of the platform."""
+    home = Path.home()
+    if platform.system() == "Windows":
+        return home.joinpath("AppData", "Local", "vayuayan", *windows_parts)
+    return Path(os.environ.get(xdg_var, home / default)) / "vayuayan"
 
 
 def get_config_dir() -> Path:
@@ -110,19 +79,22 @@ def get_config_dir() -> Path:
             - Linux/macOS: ~/.config/vayuayan
             - Windows: ~/AppData/Local/vayuayan
     """
-    import platform
-
-    home = Path.home()
-
-    if platform.system() == "Windows":
-        config_base = home / "AppData" / "Local"
-    else:
-        config_base = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
-
-    config_dir = config_base / "vayuayan"
+    config_dir = _user_dir("XDG_CONFIG_HOME", ".config", ())
     config_dir.mkdir(parents=True, exist_ok=True)
-
     return config_dir
+
+
+def get_cache_dir() -> Path:
+    """Get the cache directory of vayuayan (not created here).
+
+    Returns:
+        Path: $VAYUAYAN_CACHE_DIR if it is set, else
+            - Linux/macOS: $XDG_CACHE_HOME/vayuayan or ~/.cache/vayuayan
+            - Windows: ~/AppData/Local/vayuayan/cache
+    """
+    if os.environ.get("VAYUAYAN_CACHE_DIR"):
+        return Path(os.environ["VAYUAYAN_CACHE_DIR"])
+    return _user_dir("XDG_CACHE_HOME", ".cache", ("cache",))
 
 
 def get_gee_project_file() -> Path:

@@ -105,7 +105,9 @@ def test_parse_cpcb_rss_station_data_normalizes_live_feed():
                                 "pollutants": [
                                     {"indexId": "PM2.5", "avg": "42"},
                                 ],
-                                "airQualityIndex": {"value": "88"},
+                                # the shape of the live feed in October 2026
+                                "airQualityIndexValue": "88",
+                                "predominantParameter": "PM2.5",
                             }
                         ],
                     }
@@ -122,6 +124,7 @@ def test_parse_cpcb_rss_station_data_normalizes_live_feed():
     assert station["id"] == "site_123"
     assert station["name"] == "ITO, Delhi - CPCB"
     assert station["avg"] == "88"
+    assert station["airQualityIndex"] == {"value": "88"}
     assert station["live"] is True
     assert station["pollutants"][0]["indexId"] == "PM2.5"
 

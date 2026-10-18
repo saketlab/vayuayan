@@ -9,6 +9,8 @@
 - **WUSTL ACAG**: [Washington University satellite PM2.5 data](https://sites.wustl.edu/acag/datasets/surface-pm2-5/) (Global)
 - **CPCB India**: [Central Pollution Control Board](https://cpcb.nic.in/) monitoring network (India only)
 
+It also computes the Indian National Air Quality Index (NAQI) from pollutant concentrations, with the CPCB breakpoints and rules, and turns CPCB data into tidy (long) tables. Downloaded CPCB files of past years are cached in `~/.cache/vayuayan` (set `VAYUAYAN_CACHE_DIR` to move it).
+
 ## Installation
 
 Install from PyPI (recommended):
@@ -51,6 +53,9 @@ vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_aqi_2024.csv"
 # Download historical station-level data
 vayuayan station_data --station_id "site_5964" --year 2024 --path "station_data_2024.csv"
 
+# Compute the daily National AQI of a station from its raw 15-minute data
+vayuayan daily_aqi --station_id "site_301" --year 2024 --path "daily_aqi.csv"
+
 # Get your current location (IP-based)
 vayuayan locate_me
 
@@ -86,8 +91,22 @@ location = live.get_system_location()
 nearest_station = live.get_nearest_station(location)
 current_aqi = live.get_live_aqi_data()
 
-# Satellite PM2.5 analysis
+# National AQI from concentrations (24-hour averages; 8-hour for CO and O3)
+from vayuayan import compute_aqi
+
+compute_aqi({"PM2.5": 45, "PM10": 80, "NO2": 30})  # AQI 80, Satisfactory, PM10
+
+# Daily AQI and tidy rows from raw CPCB data
+daily = historical.daily_aqi("site_301", "2024")
+rows = historical.download_raw_aqi_data_station_level("site_301", "2024", "", tidy=True)
+
+# Satellite PM2.5 analysis (V6.GL.03 by default)
 pm25 = PM25Client()
+# Monthly statistics, and state statistics as a GeoDataFrame for a map
+monthly = pm25.get_pm25_monthly_stats("delhi_ncr.geojson", 2023)
+state_map = pm25.get_pm25_stats(
+    "india_districts.geojson", 2023, 11, group_by="state_name", geometry=True
+)
 # Combined stats for entire region
 delhi_stats = pm25.get_pm25_stats("delhi_ncr.geojson", 2023, 11)
 # Stats grouped by state

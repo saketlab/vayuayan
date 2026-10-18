@@ -16,6 +16,10 @@ jobs:
     concurrency:
       group: docs-hostinger-${{ github.ref }}
       cancel-in-progress: true
+    env:
+      # vayuayan.saketlab.org serves this folder; the R docs (saketlab/vayuayanR)
+      # deploy to its R/ folder
+      SITE_ROOT: /var/www/r-pkgdown/vayuayan/docs
 
     steps:
       - uses: actions/checkout@v4
@@ -34,12 +38,37 @@ jobs:
           SPHINX_BUILD: "true"
         run: sphinx-build -b html docs docs/_build/html
 
-      - name: Deploy to Hostinger
+      # The Python docs used to be at the root: send each old page to /python/
+      - name: Build the site root
+        run: |
+          root=docs/_build/root
+          cp -r docs/site_root "$root"
+          cd docs/_build/html
+          find . -name '*.html' ! -path ./index.html | while read -r page; do
+            page=${page#./}
+            mkdir -p "../root/$(dirname "$page")"
+            url="/python/$page"
+            printf '<!doctype html><meta charset="utf-8"><title>Moved</title><link rel="canonical" href="https://vayuayan.saketlab.org%s"><meta http-equiv="refresh" content="0; url=%s"><a href="%s">Moved to %s</a>\n' \
+              "$url" "$url" "$url" "$url" > "../root/$page"
+          done
+
+      - name: Upload the Python docs
         uses: burnett01/rsync-deployments@7.0.1
         with:
-          switches: -avzr --delete
+          switches: -avzr --delete --rsync-path="mkdir -p ${{ env.SITE_ROOT }}/python && rsync"
           path: docs/_build/html/
-          remote_path: /var/www/r-pkgdown/${{ github.event.repository.name }}/docs/
+          remote_path: ${{ env.SITE_ROOT }}/python/
+          remote_host: ${{ secrets.HOSTINGER_HOST }}
+          remote_port: ${{ secrets.HOSTINGER_PORT }}
+          remote_user: ${{ secrets.HOSTINGER_USER }}
+          remote_key: ${{ secrets.HOSTINGER_SSH_KEY }}
+
+      - name: Upload the site root
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avzr --delete --exclude=/python/ --exclude=/R/
+          path: docs/_build/root/
+          remote_path: ${{ env.SITE_ROOT }}/
           remote_host: ${{ secrets.HOSTINGER_HOST }}
           remote_port: ${{ secrets.HOSTINGER_PORT }}
           remote_user: ${{ secrets.HOSTINGER_USER }}

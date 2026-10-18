@@ -10,6 +10,11 @@ Main Classes:
     - CPCBLive: Client for live air quality data
     - PM25Client: Client for satellite PM2.5 data
 
+National AQI and tidy data:
+    - compute_aqi, sub_index: CPCB National AQI from concentrations
+    - daily_aqi: daily AQI of stations from tidy (long) data
+    - cpcb_raw_to_long: raw CPCB station data to tidy rows (TIDY_COLUMNS)
+
 Usage:
     >>> from vayuayan import CPCBHistorical, CPCBLive
     >>> historical = CPCBHistorical()
@@ -28,11 +33,22 @@ __description__ = (
 __url__ = "https://github.com/saketlab/vayuayan"
 
 # Client classes
-from .air_quality_client import CPCBHistorical, CPCBLive, PM25Client, setup_earth_engine
+from .aqi import (
+    HEALTH_IMPACTS,
+    WHO_PM25_GUIDELINES,
+    AQIResult,
+    compute_aqi,
+    daily_aqi,
+    health_impact,
+    pollutant_category,
+    sub_index,
+)
 from .client import CPCBClient
 
 # Configuration functions
 from .constants import get_config_dir, get_gee_project_file
+from .cpcb_historical import CPCBHistorical
+from .cpcb_live import CPCBLive
 
 # Exceptions
 from .exceptions import (
@@ -40,12 +56,22 @@ from .exceptions import (
     CityNotFoundError,
     ConfigurationError,
     CPCBError,
+    DataNotFoundError,
     DataParsingError,
     DataProcessingError,
     InvalidDataError,
     NetworkError,
     RateLimitError,
     StationNotFoundError,
+)
+from .gee import setup_earth_engine
+from .pm25 import PM25Client
+from .tidy import (
+    TIDY_COLUMNS,
+    cpcb_raw_to_long,
+    daily_aqi_workbook_to_long,
+    live_metrics,
+    live_to_long,
 )
 
 # Utility functions for users
@@ -65,6 +91,20 @@ __all__ = [
     "CPCBHistorical",
     "CPCBLive",
     "PM25Client",
+    # National AQI and tidy data
+    "AQIResult",
+    "compute_aqi",
+    "sub_index",
+    "daily_aqi",
+    "health_impact",
+    "pollutant_category",
+    "HEALTH_IMPACTS",
+    "WHO_PM25_GUIDELINES",
+    "TIDY_COLUMNS",
+    "live_to_long",
+    "live_metrics",
+    "cpcb_raw_to_long",
+    "daily_aqi_workbook_to_long",
     # Setup functions
     "setup_earth_engine",
     "get_config_dir",
@@ -72,6 +112,7 @@ __all__ = [
     # Exceptions
     "CPCBError",
     "NetworkError",
+    "DataNotFoundError",
     "DataParsingError",
     "DataProcessingError",
     "CityNotFoundError",
@@ -88,42 +129,3 @@ __all__ = [
     "get_aqi_category",
     "haversine_distance",
 ]
-
-
-def get_version() -> str:
-    """Get the package version.
-
-    Returns:
-        Package version string.
-    """
-    return __version__
-
-
-def get_package_info() -> dict:
-    """Get the package information.
-
-    Returns:
-        Dictionary with the package metadata.
-    """
-    return {
-        "name": "vayuayan",
-        "version": __version__,
-        "author": __author__,
-        "email": __email__,
-        "description": __description__,
-        "url": __url__,
-        "classes": [
-            "CPCBClient - Low-level client for air quality web services",
-            "CPCBHistorical - Historical air quality data analysis",
-            "CPCBLive - Real-time air quality monitoring",
-            "PM25Client - Satellite PM2.5 data processing and analysis",
-        ],
-        "key_features": [
-            "Multi-source air quality data fetching",
-            "Historical and real-time AQI monitoring",
-            "Satellite PM2.5 data analysis with GeoJSON",
-            "Geospatial station location services",
-            "Automated data caching and processing",
-            "Comprehensive CLI and Python API",
-        ],
-    }

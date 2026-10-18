@@ -31,7 +31,7 @@ List all the states that have AQI data.
 list_cities
 ~~~~~~~~~~~
 
-List the cities in a state.
+List the cities in a state. The state is a name or a code, in any case.
 
 .. code-block:: bash
 
@@ -40,7 +40,9 @@ List the cities in a state.
 list_stations
 ~~~~~~~~~~~~~
 
-List the monitoring stations in a city.
+List the monitoring stations in a city, with their station IDs. The city is a
+name or a code, in any case. The list has offline stations too, and stations
+that are newer than the bundled station directory.
 
 .. code-block:: bash
 
@@ -78,6 +80,23 @@ Download the AQI data of a monitoring station for one year.
 - ``--station_id``: ID of the monitoring station (necessary)
 - ``--year``: Year of the data (necessary)
 - ``--path``: Output file path (necessary)
+
+daily_aqi
+~~~~~~~~~
+
+Compute the daily National AQI of a station from its raw 15-minute data,
+with the CPCB breakpoints and rules (see ``vayuayan.aqi``).
+
+.. code-block:: bash
+
+   vayuayan daily_aqi --station_id "site_301" --year 2024 --path "daily_aqi.csv"
+
+**Parameters:**
+
+- ``--station_id``: ID of the monitoring station (necessary)
+- ``--year``: Year of the data (optional. The default is the current year.)
+- ``--path``: CSV file for the daily table, with the sub-index of each pollutant (optional)
+- ``--bulletin``: Use the 24 hours that end at 4 PM, like CPCB's daily bulletin. The default is calendar days. CPCB validates its data before it publishes, so the values can differ from the published daily AQI.
 
 Live Data Commands
 ------------------
@@ -163,7 +182,7 @@ Get PM2.5 data for the geographic regions in a GeoJSON file.
 - ``--year``: Year of the data (necessary)
 - ``--month``: Month (1-12) (optional. If you do not give it, the CLI uses annual data.)
 - ``--group_by``: One column or comma-separated columns for the polygon groups (optional)
-- ``--version``: Dataset version, ``V5`` or ``V6`` (optional. The default is ``V6``.)
+- ``--version``: Dataset version, ``V5`` (V5.GL.05.02, 1998-2023), ``V6`` (V6.GL.02.04, 1998-2023) or ``V6GL03`` (V6.GL.03, 1998-2024). Optional. The default is ``V6GL03``. Only ``V6`` has the Google Earth Engine fallback.
 
 Help and Information
 --------------------

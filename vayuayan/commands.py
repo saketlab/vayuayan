@@ -4,9 +4,12 @@ Command functions of the vayuayan CLI.
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Callable, List, Optional
 
-from .air_quality_client import CPCBHistorical, CPCBLive, PM25Client
+from .cpcb_historical import CPCBHistorical
+from .cpcb_live import CPCBLive
+from .pm25 import PM25Client
+from .tidy import live_metrics
 
 
 def _print_error(message: str) -> None:
@@ -30,6 +33,32 @@ def _print_list_items(title: str, items: list) -> None:
         print(f" - {item}")
 
 
+def _show_list(
+    title: str, fetch: Callable[[], List[str]], missing: str, what: str
+) -> bool:
+    """Print the items that fetch returns, or the missing message if none.
+
+    Args:
+        title: The title above the list.
+        fetch: Returns the items to print.
+        missing: The error message when there are no items.
+        what: What the list is, for the error message of a failure.
+
+    Returns:
+        True if there were items, False otherwise.
+    """
+    try:
+        items = fetch()
+    except Exception as e:
+        _print_error(f"Error fetching {what}: {e}")
+        return False
+    if not items:
+        _print_error(missing)
+        return False
+    _print_list_items(title, items)
+    return True
+
+
 def get_state_list(client: CPCBHistorical) -> bool:
     """Show the list of states that have AQI data.
 
@@ -39,14 +68,12 @@ def get_state_list(client: CPCBHistorical) -> bool:
     Returns:
         True if successful, False otherwise.
     """
-    try:
-        complete_list = client.get_complete_list()
-        states = list(sorted(complete_list.get("cities", {}).keys()))
-        _print_list_items("Available states for AQI data", states)
-        return True
-    except Exception as e:
-        _print_error(f"Error fetching state list: {e}")
-        return False
+    return _show_list(
+        "Available states for AQI data",
+        client.get_state_list,
+        "No states found",
+        "state list",
+    )
 
 
 def get_city_list(client: CPCBHistorical, state: str) -> bool:
@@ -54,25 +81,17 @@ def get_city_list(client: CPCBHistorical, state: str) -> bool:
 
     Args:
         client: The AQI client instance.
-        state: The state name.
+        state: The state name or code (any case).
 
     Returns:
         True if successful, False otherwise.
     """
-    try:
-        complete_list = client.get_complete_list()
-        cities_data = complete_list.get("cities", {})
-
-        if state not in cities_data:
-            _print_error(f"State '{state}' not found")
-            return False
-
-        cities = sorted([city["value"] for city in cities_data[state]])
-        _print_list_items(f"Available cities in {state}", cities)
-        return True
-    except Exception as e:
-        _print_error(f"Error fetching city list: {e}")
-        return False
+    return _show_list(
+        f"Available cities in {state}",
+        lambda: client.get_city_list(state),
+        f"State '{state}' not found",
+        "city list",
+    )
 
 
 def get_station_list(client: CPCBHistorical, city: str) -> bool:
@@ -80,30 +99,17 @@ def get_station_list(client: CPCBHistorical, city: str) -> bool:
 
     Args:
         client: The AQI client instance.
-        city: The city name.
+        city: The city name or code (any case).
 
     Returns:
         True if successful, False otherwise.
     """
-    try:
-        complete_list = client.get_complete_list()
-        stations_data = complete_list.get("stations", {})
-
-        if city not in stations_data:
-            _print_error(f"City '{city}' not found")
-            return False
-
-        stations = sorted(
-            [
-                f"{station['value']}({station['label']})"
-                for station in stations_data[city]
-            ]
-        )
-        _print_list_items(f"Available stations in {city}", stations)
-        return True
-    except Exception as e:
-        _print_error(f"Error fetching station list: {e}")
-        return False
+    return _show_list(
+        f"Available stations in {city}",
+        lambda: [f"{s['value']}({s['label']})" for s in client.get_station_list(city)],
+        f"City '{city}' not found",
+        "station list",
+    )
 
 
 def get_city_data(client: CPCBHistorical, city: str, year: int, path: str) -> bool:
@@ -120,8 +126,6 @@ def get_city_data(client: CPCBHistorical, city: str, year: int, path: str) -> bo
     """
     try:
         data = client.download_past_year_aqi_data_city_level(city, str(year), path)
-        if isinstance(data, Exception):
-            raise data
 
         print("City-level AQI data overview:")
         print(data)
@@ -150,8 +154,6 @@ def get_station_data(
         data = client.download_past_year_aqi_data_station_level(
             station_id, str(year), path
         )
-        if isinstance(data, Exception):
-            raise data
 
         print("Station-level AQI data overview:")
         print(data)
@@ -213,15 +215,8 @@ def _format_aqi_metrics(metrics: list) -> None:
         metrics: List of metric dictionaries with pollutant data.
     """
     print("Live AQI data:")
-    print("Pollutant   Avg   Min   Max   Period")
-    print("-" * 40)
-    for metric in metrics:
-        name = metric.get("name", "N/A")[:10]
-        avg = str(metric.get("avg", "N/A"))[:5]
-        min_val = str(metric.get("min", "N/A"))[:5]
-        max_val = str(metric.get("max", "N/A"))[:5]
-        period = metric.get("avgDesc", "N/A")
-        print(f"{name:<10} {avg:<5} {min_val:<5} {max_val:<5} {period}")
+    table = live_metrics({"metrics": metrics})
+    print(table.to_string(index=False, na_rep="NA"))
 
 
 def get_live_aqi(
@@ -302,4 +297,40 @@ def get_pm25_data(
         return True
     except Exception as e:
         _print_error(f"Error fetching PM2.5 data: {e}")
+        return False
+
+
+def get_daily_aqi(
+    client: CPCBHistorical,
+    station_id: str,
+    year: int,
+    path: Optional[str] = None,
+    bulletin: bool = False,
+) -> bool:
+    """Compute and show the daily National AQI of a station from raw data.
+
+    Args:
+        client: The AQI client instance.
+        station_id: The station ID.
+        year: The year of the data.
+        path: Optional CSV file for the daily table.
+        bulletin: If True, use the 24 hours that end at 4 PM, like CPCB's
+            daily bulletin; else calendar days.
+
+    Returns:
+        True if successful, False otherwise.
+    """
+    try:
+        daily = client.daily_aqi(
+            station_id, str(year), day_ends_at=16 if bulletin else 24
+        )
+        print(f"Daily AQI of {station_id} in {year}:")
+        table = daily[["date", "aqi", "category", "dominant_pollutant"]]
+        print(table.astype("string").fillna("-").to_string(index=False))
+        if path:
+            daily.to_csv(path, index=False)
+            print(f"File saved to {path}")
+        return True
+    except Exception as e:
+        _print_error(f"Error computing daily AQI: {e}")
         return False

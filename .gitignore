@@ -175,3 +175,6 @@ pm25_data/
 *.duckdb
 *.duckdb.wal
 *.parquet.tmp
+
+# Claude Code session logs
+.claude/logs/

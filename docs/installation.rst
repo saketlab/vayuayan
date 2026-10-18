@@ -7,11 +7,10 @@ Requirements
 vayuayan needs Python 3.9 or higher and these packages:
 
 - requests>=2.25.0
-- pandas>=1.3.0
+- pandas>=2.0
 - openpyxl==3.1.5
 - urllib3>=1.26.0
 - geopandas>=1.1.1
-- geopy>=2.4.1
 - rioxarray>=0.19.0
 - xarray>=2025.9.0
 - netCDF4>=1.7.2
@@ -47,7 +46,6 @@ These commands install vayuayan in development mode with the development depende
 - pytest (for tests)
 - ruff (to format and lint the code)
 - mypy (to do a type check)
-- pre-commit (for git hooks)
 
 Verification
 ------------

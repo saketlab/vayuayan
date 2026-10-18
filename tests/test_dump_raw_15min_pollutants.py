@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[1] / "scripts" / "dump_raw_15min_pollutants.py"
@@ -64,10 +65,7 @@ def test_dump_station_year_uses_date_range_in_cache_and_rows(tmp_path):
     )
 
     class FakeClient:
-        def get_file_path(self, **kwargs):
-            return [{"filepath": "/Raw_data/15Min/2025/fake.csv"}]
-
-        def _read_repository_csv(self, filepath):
+        def download_raw_aqi_data_station_level(self, *args, **kwargs):
             return raw
 
     station = {
@@ -219,3 +217,18 @@ def test_finalize_sorted_parquet_orders_flat_station_files(tmp_path):
             "pollutant_name": "PM10",
         },
     ]
+
+
+def test_dump_station_year_does_not_mark_empty_on_outage(tmp_path):
+    from vayuayan.exceptions import NetworkError
+
+    class DownClient:
+        def download_raw_aqi_data_station_level(self, *args, **kwargs):
+            raise NetworkError("CPCB file-path endpoints are unavailable")
+
+    station = {"station_id": "site_1", "station_name": "S", "city": "C", "state": "X"}
+    with pytest.raises(NetworkError):
+        dump_raw_15min_pollutants.dump_station_year(
+            DownClient(), station, 2025, tmp_path
+        )
+    assert not list(tmp_path.rglob("*.empty"))

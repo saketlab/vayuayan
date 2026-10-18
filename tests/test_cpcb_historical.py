@@ -1,36 +1,17 @@
 """Tests for the CPCB historical API code."""
 
 import io
+from datetime import date
 
 import pandas as pd
 import pytest
+import requests
 
-import vayuayan.air_quality_client as aqc
-from vayuayan.air_quality_client import CPCBHistorical
-from vayuayan.constants import CPCB_CREDENTIAL_ENV
+import vayuayan.cpcb_common as cpcb_common
+from vayuayan import CPCBHistorical
+from vayuayan.exceptions import NetworkError, StationNotFoundError
 
-
-@pytest.fixture(autouse=True)
-def _no_cpcb_credentials(monkeypatch):
-    for var in CPCB_CREDENTIAL_ENV.values():
-        monkeypatch.delenv(var, raising=False)
-
-
-def _set_cpcb_credentials(monkeypatch):
-    for var in CPCB_CREDENTIAL_ENV.values():
-        monkeypatch.setenv(var, "x")
-
-
-class _FakeResponse:
-    def __init__(self, content=b"", json_data=None):
-        self.content = content
-        self._json_data = json_data or {}
-
-    def json(self):
-        return self._json_data
-
-    def raise_for_status(self):
-        return None
+from .fakes import FakeResponse, raise_connection_error
 
 
 def test_normalize_frequency_preserves_package_compatibility():
@@ -144,9 +125,9 @@ def test_read_repository_excel_uses_authenticated_download_endpoint(monkeypatch)
 
     def fake_request(method, url, **kwargs):
         calls.append((method, url, kwargs))
-        return _FakeResponse(content=workbook.getvalue())
+        return FakeResponse(content=workbook.getvalue())
 
-    monkeypatch.setattr(aqc, "_request_with_ssl_fallback", fake_request)
+    monkeypatch.setattr(cpcb_common, "send", fake_request)
 
     df = client._read_repository_excel(
         "/AQI_daily/city_level/delhi/2025/delhi_2025.xlsx"
@@ -165,24 +146,21 @@ def test_custom_query_treats_empty_204_body_as_no_rows(monkeypatch):
     client = CPCBHistorical()
     monkeypatch.setattr(client, "_new_api_headers", lambda auth=False: {})
 
-    class _EmptyResponse(_FakeResponse):
+    class _EmptyResponse(FakeResponse):
         def json(self):
             raise ValueError("Expecting value")
 
-    monkeypatch.setattr(
-        aqc, "_request_with_ssl_fallback", lambda *a, **k: _EmptyResponse()
-    )
+    monkeypatch.setattr(cpcb_common, "send", lambda *a, **k: _EmptyResponse())
 
     assert client._custom_query("get-city-master-list", "state_code IS 'ST-11'") == []
 
 
-def test_get_access_token_requires_token(monkeypatch):
-    _set_cpcb_credentials(monkeypatch)
+def test_get_access_token_requires_token(monkeypatch, cpcb_credentials):
     client = CPCBHistorical()
     monkeypatch.setattr(
-        aqc,
-        "_request_with_ssl_fallback",
-        lambda *args, **kwargs: _FakeResponse(json_data={}),
+        cpcb_common,
+        "send",
+        lambda *args, **kwargs: FakeResponse(json_data={}),
     )
 
     with pytest.raises(Exception, match="access_token"):
@@ -295,7 +273,7 @@ def _fail_request(*args, **kwargs):
 
 
 def test_station_lookup_uses_bundled_directory_without_credentials(monkeypatch):
-    monkeypatch.setattr(aqc, "_request_with_ssl_fallback", _fail_request)
+    monkeypatch.setattr(cpcb_common, "send", _fail_request)
     client = CPCBHistorical()
 
     state, city, station = client._resolve_station("site_301")
@@ -306,17 +284,29 @@ def test_station_lookup_uses_bundled_directory_without_credentials(monkeypatch):
     assert "Authorization" not in client._new_api_headers()
 
 
-def test_token_is_sent_only_to_directory_queries(monkeypatch):
-    _set_cpcb_credentials(monkeypatch)
+def test_station_lookup_by_name_or_part_of_a_name(monkeypatch, rss_feed):
+    monkeypatch.setattr(cpcb_common, "send", _fail_request)
+    rss_feed([])
+    client = CPCBHistorical()
+
+    for query in ("Anand Vihar, Delhi - DPCC", "anand vihar, delhi"):
+        _, _, station = client._resolve_station(query)
+        assert station["station_id"] == "site_301"
+    assert client._resolve_station("no such station") == (None, None, None)
+    with pytest.raises(StationNotFoundError, match="more than one station"):
+        client._resolve_station("Delhi - DPCC")
+
+
+def test_token_is_sent_only_to_directory_queries(monkeypatch, cpcb_credentials):
     client = CPCBHistorical()
     monkeypatch.setattr(client, "_get_access_token", lambda: "token")
     sent = []
 
     def fake_request(method, url, **kwargs):
         sent.append(kwargs["headers"].get("Authorization"))
-        return _FakeResponse(content=b"[]", json_data=[])
+        return FakeResponse(content=b"[]", json_data=[])
 
-    monkeypatch.setattr(aqc, "_request_with_ssl_fallback", fake_request)
+    monkeypatch.setattr(cpcb_common, "send", fake_request)
 
     client._custom_query("get-state-master-list-data")
     client._download_repository_file("/AQI_daily/2024/x.xlsx")
@@ -324,12 +314,11 @@ def test_token_is_sent_only_to_directory_queries(monkeypatch):
     assert sent == ["token", None]
 
 
-def test_live_directory_failure_falls_back_to_snapshot(monkeypatch):
-    _set_cpcb_credentials(monkeypatch)
+def test_live_directory_failure_falls_back_to_snapshot(monkeypatch, cpcb_credentials):
     client = CPCBHistorical()
 
     def unauthorized(*args, **kwargs):
-        raise aqc.requests.HTTPError("401")
+        raise requests.HTTPError("401")
 
     monkeypatch.setattr(client, "_custom_query", unauthorized)
 
@@ -337,17 +326,15 @@ def test_live_directory_failure_falls_back_to_snapshot(monkeypatch):
     assert client._live_directory is False
 
 
-def test_unknown_station_resolves_from_rss_feed(monkeypatch):
-    monkeypatch.setattr(
-        aqc,
-        "fetch_cpcb_rss_station_data",
-        lambda timeout: [
+def test_unknown_station_resolves_from_rss_feed(rss_feed):
+    rss_feed(
+        [
             {
                 "stateID": "Delhi",
                 "cityName": "Delhi",
                 "stationsInCity": [{"id": "site_new", "name": "New Station"}],
             }
-        ],
+        ]
     )
     client = CPCBHistorical()
 
@@ -355,3 +342,44 @@ def test_unknown_station_resolves_from_rss_feed(monkeypatch):
 
     assert (state["state_name"], city["city_name"]) == ("Delhi", "Delhi")
     assert station["station_name"] == "New Station"
+
+
+def test_get_file_path_raises_when_no_endpoint_answers(monkeypatch):
+    client = CPCBHistorical()
+
+    monkeypatch.setattr(cpcb_common, "send", raise_connection_error)
+
+    with pytest.raises(NetworkError):
+        client.get_file_path("", "", "Delhi", "Delhi", "2024", "daily", "cityLevel")
+
+
+def test_get_file_path_is_empty_when_cpcb_answers_without_files(monkeypatch):
+    client = CPCBHistorical()
+    monkeypatch.setattr(
+        client, "_new_api_json", lambda *a, **k: {"status": "success", "data": []}
+    )
+
+    assert client.get_file_path("", "", "", "Delhi", "2024", "daily", "cityLevel") == []
+
+
+def test_repository_files_of_past_years_are_cached(monkeypatch, tmp_path):
+    client = CPCBHistorical(cache_dir=str(tmp_path))
+    calls = []
+
+    def fake_send(method, url, **kwargs):
+        calls.append(kwargs["params"]["file_name"])
+        return FakeResponse(content=b"Day,January\n1,42\n")
+
+    monkeypatch.setattr(cpcb_common, "send", fake_send)
+    past = "/AQI_daily/city_level/delhi/2020/delhi_2020.csv"
+    current = f"/AQI_daily/city_level/delhi/{date.today().year}/delhi.csv"
+
+    for _ in range(2):
+        assert client._read_repository_csv(past)["January"].tolist() == [42]
+        client._read_repository_csv(current)
+
+    assert calls == [past, current, current]
+    assert (tmp_path / "AQI_daily/city_level/delhi/2020/delhi_2020.csv").exists()
+
+    CPCBHistorical(use_cache=False)._read_repository_csv(past)
+    assert len(calls) == 4

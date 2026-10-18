@@ -50,17 +50,15 @@ classifiers = [
 requires-python = ">=3.9"
 dependencies = [
     "requests>=2.25.0",
-    "pandas>=1.3.0",
+    "pandas>=2.0",
     "openpyxl>=3.1.0",
     "urllib3>=1.26.0",
     "geopandas>=1.0.1",
-    "geopy>=2.4.1",
     "rioxarray>=0.15.0",
     "xarray>=2024.7.0",
     "netCDF4>=1.7.2",
     "tqdm>=4.62.0",
     "earthengine-api>=0.1.384",
-    "boto3>=1.26.0"
 ]
 
 [project.optional-dependencies]
@@ -72,7 +70,6 @@ dev = [
     "pyarrow",
     "ruff",
     "mypy",
-    "pre-commit",
 ]
 docs = [
     "myst-nb>=1.3.0",
@@ -91,9 +88,9 @@ notebooks = [
 [project.urls]
 Homepage = "https://github.com/saketlab/vayuayan"
 Repository = "https://github.com/saketlab/vayuayan.git"
-Documentation = "https://vayuayan.saketlab.org"
+Documentation = "https://vayuayan.saketlab.org/python/"
 "Bug Tracker" = "https://github.com/saketlab/vayuayan/issues"
-Changelog = "https://vayuayan.saketlab.org/history.html"
+Changelog = "https://vayuayan.saketlab.org/python/history.html"
 
 [project.scripts]
 vayuayan = "vayuayan.cli:main"
@@ -144,8 +141,6 @@ strict_equality = true
 
 [[tool.mypy.overrides]]
 module = [
-    "boto3.*",
-    "botocore.*",
     "ee.*",
     "pandas.*",
 ]
@@ -154,7 +149,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = [
     "geopandas.*",
-    "geopy.*",
     "requests.*",
     "tqdm.*",
     "urllib3.*",

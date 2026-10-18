@@ -2,14 +2,12 @@
 # exists for `pip install -r requirements.txt`. Dev/docs deps live in the
 # [dev] / [docs] extras (used by CI), not here.
 requests>=2.25.0
-pandas>=1.3.0
+pandas>=2.0
 openpyxl>=3.1.0
 urllib3>=1.26.0
 geopandas>=1.0.1
-geopy>=2.4.1
 rioxarray>=0.15.0
 xarray>=2024.7.0
 netCDF4>=1.7.2
 tqdm>=4.62.0
 earthengine-api>=0.1.384
-boto3>=1.26.0

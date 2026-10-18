@@ -19,6 +19,9 @@ A Python package that gets and analyzes air quality data from many sources:
    :target: https://github.com/saketlab/vayuayan/blob/master/LICENSE
    :alt: License
 
+An R package with the same functions is documented at
+`vayuayan.saketlab.org/R <https://vayuayan.saketlab.org/R/>`_.
+
 Overview
 --------
 

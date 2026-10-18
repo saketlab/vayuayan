@@ -45,10 +45,11 @@ from typing import Iterable
 
 import duckdb
 import pandas as pd
-import pyarrow as pa
 import pyarrow.parquet as pq
 
 from vayuayan import CPCBHistorical
+from vayuayan.exceptions import DataNotFoundError
+from vayuayan.tidy import cpcb_raw_to_long
 
 SORT_COLUMNS = [
     "year",
@@ -74,18 +75,9 @@ OUTPUT_COLUMNS = [
     "value",
 ]
 
-POLLUTANT_RE = re.compile(r"^\s*(.*?)\s*(?:\((.*?)\))?\s*$")
-
 
 def safe_name(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)).strip("_") or "unknown"
-
-
-def parse_pollutant_column(column: str) -> tuple[str, str]:
-    match = POLLUTANT_RE.match(column)
-    if not match:
-        return column.strip(), ""
-    return (match.group(1) or column).strip(), (match.group(2) or "").strip()
 
 
 def normalize_raw_csv(
@@ -95,47 +87,23 @@ def normalize_raw_csv(
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> pd.DataFrame:
-    if "Timestamp" not in df.columns:
-        raise ValueError("Raw CPCB CSV did not contain a Timestamp column")
-
-    wide = df.assign(timestamp=pd.to_datetime(df["Timestamp"], errors="coerce"))
-    wide = wide.dropna(subset=["timestamp"])
-    if wide.empty:
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
-
-    pollutant_columns = [c for c in wide.columns if c not in {"Timestamp", "timestamp"}]
-    long = wide.melt(
-        id_vars=["timestamp"],
-        value_vars=pollutant_columns,
-        var_name="pollutant_raw",
-        value_name="value",
-    )
-    long["value"] = pd.to_numeric(long["value"], errors="coerce")
-    long = long.dropna(subset=["value"])
-    if long.empty:
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
-
     # Keep only the requested calendar year. Some files have rows of the next year.
+    first, last = date(requested_year, 1, 1), date(requested_year, 12, 31)
+    long = cpcb_raw_to_long(
+        df,
+        station,
+        max(start_date, first) if start_date else first,
+        min(end_date, last) if end_date else last,
+    )
     ts = long["timestamp"]
-    keep = ts.dt.year == requested_year
-    if start_date is not None:
-        keep &= ts >= pd.Timestamp(start_date)
-    if end_date is not None:
-        keep &= ts < pd.Timestamp(end_date) + pd.Timedelta(days=1)
-    long = long[keep]
-
-    parsed = {col: parse_pollutant_column(col) for col in pollutant_columns}
-    ts = long["timestamp"]
-    long = long.assign(
-        pollutant_name=long["pollutant_raw"].map({c: p[0] for c, p in parsed.items()}),
-        pollutant_unit=long["pollutant_raw"].map({c: p[1] for c, p in parsed.items()}),
+    # Each timestamp repeats once per pollutant, so format only the unique ones
+    uniq = ts.drop_duplicates()
+    long = long.rename(
+        columns={"pollutant": "pollutant_name", "unit": "pollutant_unit"}
+    ).assign(
         year=ts.dt.year.astype("int16"),
         date=ts.dt.date,
-        time=ts.dt.strftime("%H:%M:%S"),
-        station_name=station.get("station_name", ""),
-        station_id=station.get("station_id", ""),
-        city=station.get("city", ""),
-        state=station.get("state", ""),
+        time=ts.map(dict(zip(uniq, uniq.dt.strftime("%H:%M:%S")))),
     )[OUTPUT_COLUMNS]
     return long.sort_values(SORT_COLUMNS, kind="stable").reset_index(drop=True)
 
@@ -146,15 +114,11 @@ def iter_master_stations(
     city_filter: str | None = None,
     station_ids: set[str] | None = None,
 ) -> Iterable[dict]:
-    city_filter_l = city_filter.lower() if city_filter else None
-    for state, city, station in client.iter_stations(state=state_filter or ""):
+    for state, city, station in client.iter_stations(
+        state=state_filter or "", city=city_filter or ""
+    ):
         city_name = str(city.get("city_name", ""))
         city_code = str(city.get("city_code", ""))
-        if city_filter_l and city_filter_l not in {
-            city_name.lower(),
-            city_code.lower(),
-        }:
-            continue
         station_id = str(station.get("station_id", ""))
         if station_ids and station_id not in station_ids:
             continue
@@ -204,21 +168,20 @@ def dump_station_year(
         return "empty-cached"
 
     shard.parent.mkdir(parents=True, exist_ok=True)
-    paths = client.get_file_path(
-        station_id=station["station_id"],
-        station_name=station["station_name"],
-        state=station["state"],
-        city=station["city"],
-        year=str(year),
-        frequency="15_minute",
-        data_type="raw",
-    )
-    filepath = paths[0].get("filepath") if paths else None
-    if not filepath:
+    # A NetworkError propagates, so an outage never writes an .empty marker
+    try:
+        raw = client.download_raw_aqi_data_station_level(
+            station["station_id"],
+            str(year),
+            "",
+            frequency="15_minute",
+            station_name=station["station_name"],
+            city=station["city"],
+            state=station["state"],
+        )
+    except DataNotFoundError:
         empty_marker.touch()
         return "empty"
-
-    raw = client._read_repository_csv(str(filepath))
     long = normalize_raw_csv(raw, station, year, start_date, end_date)
     if long.empty:
         empty_marker.touch()
@@ -251,6 +214,8 @@ def _register_raw_view(
     memory_limit: str | None,
 ) -> None:
     con.execute("SET preserve_insertion_order=false")
+    # The merge queries the same files once per month; keep their footers cached
+    con.execute("SET parquet_metadata_cache=true")
     if temp_dir is not None:
         temp_dir.mkdir(parents=True, exist_ok=True)
         con.execute("SET temp_directory=$1", [str(temp_dir)])
@@ -286,7 +251,7 @@ def write_sorted_parquet(
     tmp_out.replace(out)
 
 
-def write_sorted_parquet_by_date(
+def write_sorted_parquet_by_month(
     inputs: list[str],
     out: Path,
     temp_dir: Path | None = None,
@@ -298,24 +263,27 @@ def write_sorted_parquet_by_date(
     writer: pq.ParquetWriter | None = None
     try:
         _register_raw_view(con, inputs, temp_dir, memory_limit)
-        days = con.execute(
-            "SELECT DISTINCT year, date FROM raw_15min ORDER BY year, date"
+        # One sort per month keeps each sort small without one query per day
+        months = con.execute(
+            "SELECT DISTINCT year, month(date) AS m FROM raw_15min ORDER BY year, m"
         ).fetchall()
-        for year, day in days:
+        for year, month in months:
+            start = date(int(year), int(month), 1)
+            end = date(start.year + start.month // 12, start.month % 12 + 1, 1)
+            # A date range, not month(date), so DuckDB skips row groups by date
             reader = con.execute(
                 f"""
                 SELECT {", ".join(OUTPUT_COLUMNS)}
                 FROM raw_15min
-                WHERE year = $1 AND date = $2
+                WHERE date >= $1 AND date < $2
                 ORDER BY {", ".join(SORT_COLUMNS)}
                 """,
-                [int(year), day],
+                [start, end],
             ).fetch_record_batch(rows_per_batch=131072)
             for batch in reader:
-                table = pa.Table.from_batches([batch])
                 if writer is None:
-                    writer = pq.ParquetWriter(tmp_out, table.schema, compression="zstd")
-                writer.write_table(table)
+                    writer = pq.ParquetWriter(tmp_out, batch.schema, compression="zstd")
+                writer.write_batch(batch)
     finally:
         if writer is not None:
             writer.close()
@@ -356,13 +324,13 @@ def finalize_sorted_parquet(
     out: Path,
     temp_dir: Path | None = None,
     memory_limit: str | None = None,
-    by_date: bool = True,
+    by_month: bool = True,
 ) -> None:
     shards = collect_parquet_files(input_dir)
     if not shards:
         raise RuntimeError(f"No parquet files found under {input_dir}")
-    if by_date:
-        write_sorted_parquet_by_date(shards, out, temp_dir, memory_limit)
+    if by_month:
+        write_sorted_parquet_by_month(shards, out, temp_dir, memory_limit)
     else:
         write_sorted_parquet(shards, out, temp_dir, memory_limit)
 
@@ -398,7 +366,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--global-final-sort",
         action="store_true",
-        help="Use one global sort for final merge instead of lower-spill date-by-date merge",
+        help="Use one global sort for final merge instead of lower-spill month-by-month merge",
     )
     parser.add_argument("--start-year", type=int, default=2000)
     parser.add_argument("--end-year", type=int, default=date.today().year)
@@ -447,7 +415,8 @@ def main() -> None:
     station_out_dir = Path(args.station_out_dir)
     duckdb_temp_dir = Path(args.duckdb_temp_dir) if args.duckdb_temp_dir else None
     out = Path(args.out)
-    client = CPCBHistorical()
+    # The parquet shards are the cache of this script; do not fill ~/.cache too
+    client = CPCBHistorical(use_cache=False)
 
     if args.start_year > args.end_year:
         raise SystemExit("--start-year must be <= --end-year")
@@ -488,8 +457,6 @@ def main() -> None:
                         args.end_date,
                     )
                     print(f"{prefix}: {status}", flush=True)
-                except KeyboardInterrupt:
-                    raise
                 except Exception as exc:
                     print(f"{prefix}: failed: {exc}", file=sys.stderr, flush=True)
                 if status not in {"cached", "empty-cached"}:
@@ -506,8 +473,6 @@ def main() -> None:
                     args.duckdb_memory_limit,
                 )
                 print(f"station {station['station_id']}: {status}", flush=True)
-            except KeyboardInterrupt:
-                raise
             except Exception as exc:
                 print(
                     f"station {station['station_id']}: failed: {exc}",
@@ -532,7 +497,7 @@ def main() -> None:
             out,
             duckdb_temp_dir,
             args.duckdb_memory_limit,
-            by_date=not args.global_final_sort,
+            by_month=not args.global_final_sort,
         )
         print(f"wrote {out}", flush=True)
 

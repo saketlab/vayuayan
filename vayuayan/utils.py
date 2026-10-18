@@ -1,42 +1,47 @@
 """
 Utility functions for CPCB data.
 
-The functions clean data, send network requests, parse dates, convert station
-data, and analyze station data.
+The functions clean data, send network requests, encode the base64 JSON of the
+old CPCB endpoints, convert station data, and analyze station data.
 """
 
+from __future__ import annotations
+
 import json
+import logging
 import math
 import re
-import time
 from base64 import b64decode, b64encode
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+)
 
-import numpy as np
-import pandas as pd
 import requests
-import urllib3
 
+from . import http_client
 from .constants import (
-    DATE_FORMATS,
-    DEFAULT_BACKOFF_FACTOR,
+    AQI_CATEGORIES,
     DEFAULT_HEADERS,
     DEFAULT_MAX_RETRIES,
     DEFAULT_TIMEOUT,
-    MONTH_ABBREV,
     RSS_URL_WITH_COORDINATES,
 )
-from .exceptions import NetworkError
+from .exceptions import DataProcessingError, NetworkError, StationNotFoundError
 
-# Disable SSL warnings
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+if TYPE_CHECKING:
+    import pandas as pd
 
-
-class DataProcessingError(Exception):
-    """Error when the client cannot process the data."""
-
-    pass
+logger = logging.getLogger(__name__)
 
 
 def clean_station_name(station_name: str) -> str:
@@ -138,8 +143,17 @@ def parse_cpcb_rss_station_data(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         for city in state.get("citiesInState", []):
             stations = []
             for station in city.get("stationsInCity", []):
+                # The live feed has a flat airQualityIndexValue; older feeds had
+                # an airQualityIndex object with a value
                 aqi = station.get("airQualityIndex") or {}
-                avg = aqi.get("value") or aqi.get("Value") or ""
+                avg = (
+                    station.get("airQualityIndexValue")
+                    or aqi.get("value")
+                    or aqi.get("Value")
+                    or ""
+                )
+                if not aqi and avg:
+                    aqi = {"value": avg}
                 station_id = station.get("siteId") or station.get("stationName", "")
                 station_name = station.get("stationName", "")
 
@@ -209,6 +223,68 @@ def fetch_cpcb_rss_station_data(timeout: int = DEFAULT_TIMEOUT) -> List[Dict[str
     return parse_cpcb_rss_station_data(data)
 
 
+def iter_city_stations(
+    cities: List[Dict[str, Any]],
+) -> Iterator[Tuple[Dict[str, Any], Dict[str, Any]]]:
+    """Yield (city, station) pairs from station data grouped by city."""
+    for city in cities:
+        for station in city.get("stationsInCity", []):
+            yield city, station
+
+
+def iter_station_coords(
+    cities: List[Dict[str, Any]],
+) -> Iterator[Tuple[Dict[str, Any], float, float]]:
+    """Yield (station, latitude, longitude), skipping stations without coordinates."""
+    for _, station in iter_city_stations(cities):
+        try:
+            yield station, float(station["latitude"]), float(station["longitude"])
+        except (KeyError, TypeError, ValueError):
+            continue
+
+
+T = TypeVar("T")
+
+
+def find_station(query: str, stations: Iterable[Tuple[str, str, T]]) -> Optional[T]:
+    """The station whose ID or name is query, else the one whose name contains it.
+
+    Args:
+        query: Station ID, name, or part of a name. Case does not matter.
+        stations: (station_id, station_name, item) for each station.
+
+    Returns:
+        The item of the matching station, or None if no station matches.
+
+    Raises:
+        StationNotFoundError: If query is part of the names of more than one station.
+    """
+    target = query.strip().lower()
+    if not target:
+        return None
+    partial: Dict[str, Tuple[str, T]] = {}
+    for station_id, name, item in stations:
+        if target in (station_id.lower(), name.lower()):
+            return item
+        if target in name.lower():
+            partial.setdefault(station_id.lower(), (name, item))
+    if len(partial) > 1:
+        names = "; ".join(sorted(name for name, _ in partial.values()))
+        raise StationNotFoundError(f"'{query}' matches more than one station: {names}")
+    return next((item for _, item in partial.values()), None)
+
+
+def station_distances(
+    cities: List[Dict[str, Any]], lat: float, lon: float
+) -> List[Tuple[Dict[str, Any], float]]:
+    """(station, haversine distance in km) for each station with coordinates."""
+    target_lat, target_lon = float(lat), float(lon)
+    return [
+        (station, haversine_distance(target_lat, target_lon, s_lat, s_lon))
+        for station, s_lat, s_lon in iter_station_coords(cities)
+    ]
+
+
 def get_aqi_category(aqi_value: float) -> str:
     """Convert a numeric AQI value to a category.
 
@@ -218,23 +294,17 @@ def get_aqi_category(aqi_value: float) -> str:
     Returns:
         AQI category string.
     """
+    import pandas as pd
+
     if pd.isna(aqi_value):
         return "No Data"
-    elif aqi_value <= 50:
-        return "Good"
-    elif aqi_value <= 100:
-        return "Satisfactory"
-    elif aqi_value <= 200:
-        return "Moderate"
-    elif aqi_value <= 300:
-        return "Poor"
-    elif aqi_value <= 400:
-        return "Very Poor"
-    else:
-        return "Severe"
+    return next(
+        (name for name, band in AQI_CATEGORIES.items() if aqi_value <= band["max"]),
+        "Severe",
+    )
 
 
-def _safe_float_conversion(value: Any, default: float = np.nan) -> float:
+def _safe_float_conversion(value: Any, default: float = float("nan")) -> float:
     """Convert a value to float, or return a default value.
 
     Args:
@@ -262,6 +332,8 @@ def stations_to_dataframe(data: List[Dict]) -> pd.DataFrame:
         DataFrame with columns: city_name, city_id, state_id, station_id,
                                station_name, longitude, latitude, live, avg_aqi.
     """
+    import pandas as pd
+
     rows = []
 
     for city in data:
@@ -296,6 +368,9 @@ def stations_to_city_summary(data: List[Dict]) -> pd.DataFrame:
     Returns:
         DataFrame with aggregated statistics for each city.
     """
+    import numpy as np
+    import pandas as pd
+
     rows = []
 
     for city in data:
@@ -345,6 +420,8 @@ def stations_to_coordinates_dataframe(data: List[Dict]) -> pd.DataFrame:
     Returns:
         DataFrame with the locations and the primary station data.
     """
+    import pandas as pd
+
     rows = []
 
     for city in data:
@@ -365,11 +442,7 @@ def stations_to_coordinates_dataframe(data: List[Dict]) -> pd.DataFrame:
                         "live": station.get("live", False),
                         "avg_aqi": avg_aqi,
                         "status": "Live" if station.get("live", False) else "Offline",
-                        "aqi_category": (
-                            get_aqi_category(avg_aqi)
-                            if not pd.isna(avg_aqi)
-                            else "No Data"
-                        ),
+                        "aqi_category": get_aqi_category(avg_aqi),
                     }
                 )
             except (ValueError, TypeError, KeyError):
@@ -417,6 +490,8 @@ def analyze_station_data(data: List[Dict]) -> Dict[str, Any]:
     Returns:
         Dictionary with the results of the analysis.
     """
+    import pandas as pd
+
     df = stations_to_dataframe(data)
 
     analysis = {
@@ -449,14 +524,13 @@ def analyze_station_data(data: List[Dict]) -> Dict[str, Any]:
 
 
 def _log_if_verbose(message: str, verbose: bool) -> None:
-    """Print the message only if verbose mode is on.
+    """Log the message at INFO level if verbose is True, else at DEBUG level.
 
     Args:
-        message: Message to print.
+        message: Message to log.
         verbose: If True, verbose mode is on.
     """
-    if verbose:
-        print(message)
+    logger.log(logging.INFO if verbose else logging.DEBUG, message)
 
 
 def safe_get(
@@ -471,12 +545,12 @@ def safe_get(
 
     Args:
         url: URL of the request.
-        max_retries: Maximum number of retries.
+        max_retries: Maximum number of retries. 4xx statuses are not retried.
         timeout: Request timeout in seconds.
         verify_ssl: If True, verify the SSL certificates.
         allow_ssl_fallback: If True, send the request again without SSL
             verification when the verification fails.
-        verbose: If True, print status messages.
+        verbose: If True, log status messages at INFO level.
 
     Returns:
         requests.Response object.
@@ -484,63 +558,22 @@ def safe_get(
     Raises:
         NetworkError: If all the retries fail.
     """
-    for attempt in range(max_retries + 1):
-        try:
-            response = requests.get(
-                url, headers=DEFAULT_HEADERS, timeout=timeout, verify=verify_ssl
-            )
-            response.raise_for_status()
-            return response
-
-        except requests.exceptions.SSLError as e:
-            _log_if_verbose(
-                f"SSL Error on attempt {attempt + 1}/{max_retries + 1}: {e}", verbose
-            )
-
-            if allow_ssl_fallback and attempt < max_retries:
-                try:
-                    _log_if_verbose(
-                        "Retrying with SSL verification disabled (per config)...",
-                        verbose,
-                    )
-                    response = requests.get(
-                        url,
-                        headers=DEFAULT_HEADERS,
-                        timeout=timeout,
-                        verify=False,  # nosec B501
-                    )
-                    response.raise_for_status()
-                    _log_if_verbose(
-                        "Request succeeded with SSL verification disabled", verbose
-                    )
-                    return response
-                except Exception as fallback_error:
-                    _log_if_verbose(f"Fallback also failed: {fallback_error}", verbose)
-
-            if attempt == max_retries:
-                raise NetworkError(
-                    f"SSL verification failed after {max_retries + 1} attempts: {e}"
-                ) from e
-
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.Timeout,
-            requests.exceptions.RequestException,
-        ) as e:
-            _log_if_verbose(
-                f"Request error on attempt {attempt + 1}/{max_retries + 1}: {e}",
-                verbose,
-            )
-
-        # Wait before the next retry (exponential backoff)
-        if attempt < max_retries:
-            wait_time = DEFAULT_BACKOFF_FACTOR * (2**attempt)
-            _log_if_verbose(f"Waiting {wait_time:.1f} seconds before retry...", verbose)
-            time.sleep(wait_time)
-
-    raise NetworkError(
-        f"Failed to fetch data from {url} after {max_retries + 1} attempts"
-    )
+    _log_if_verbose(f"GET {url}", verbose)
+    try:
+        return http_client.request(
+            "get",
+            url,
+            retries=max_retries,
+            ssl_fallback=allow_ssl_fallback,
+            headers=DEFAULT_HEADERS,
+            timeout=timeout,
+            verify=verify_ssl,
+        )
+    except requests.RequestException as e:
+        raise NetworkError(
+            f"Failed to fetch data from {url} after {max_retries + 1} attempts: "
+            f"{http_client.failure_reason(e)}"
+        ) from e
 
 
 def safe_post(
@@ -562,13 +595,14 @@ def safe_post(
         headers: Request headers.
         data: Request data (dict, string, or bytes).
         cookies: Optional cookies dict.
-        max_retries: Maximum number of retry attempts.
+        max_retries: Maximum number of retry attempts. 4xx statuses are not
+            retried.
         backoff_factor: Factor for the exponential delay between retries.
         timeout: Request timeout in seconds.
         verify_ssl: If True, verify the SSL certificates.
         allow_ssl_fallback: If True, send the request again without SSL
             verification when the verification fails.
-        verbose: If True, print status messages.
+        verbose: If True, log status messages at INFO level.
 
     Returns:
         Parsed JSON response, as a dictionary.
@@ -578,119 +612,34 @@ def safe_post(
         DataProcessingError: If the client cannot decode the base64 or parse the JSON.
         ValueError: If an input parameter is not valid.
     """
-    # Validate the input
     if not url or not isinstance(url, str):
         raise ValueError("URL must be a non-empty string")
     if not headers or not isinstance(headers, dict):
         raise ValueError("Headers must be a non-empty dictionary")
-    if cookies is None:
-        cookies = {}
-    elif not isinstance(cookies, dict):
+    if cookies is not None and not isinstance(cookies, dict):
         raise ValueError("Cookies must be a dictionary or None")
 
-    for attempt in range(max_retries + 1):
-        try:
-            _log_if_verbose(
-                f"Attempt {attempt + 1}/{max_retries + 1}: POST {url}", verbose
-            )
+    _log_if_verbose(f"POST {url}", verbose)
+    try:
+        response = http_client.request(
+            "post",
+            url,
+            retries=max_retries,
+            backoff_factor=backoff_factor,
+            ssl_fallback=allow_ssl_fallback,
+            headers=headers,
+            data=data,
+            cookies=cookies or {},
+            timeout=timeout,
+            verify=verify_ssl,
+        )
+    except requests.RequestException as e:
+        raise NetworkError(f"POST {url} failed: {http_client.failure_reason(e)}") from e
 
-            response = requests.post(
-                url=url,
-                headers=headers,
-                data=data,
-                cookies=cookies,
-                timeout=timeout,
-                verify=verify_ssl,
-            )
-            response.raise_for_status()
-
-            _log_if_verbose(
-                f"Request successful (Status: {response.status_code})", verbose
-            )
-
-            # Process the response
-            try:
-                if not response.content:
-                    raise DataProcessingError("Response content is empty")
-
-                decoded_data = b64decode(response.content)
-                json_data = cast(Dict[str, Any], json.loads(decoded_data))
-                return json_data
-
-            except Exception as decode_error:
-                raise DataProcessingError(
-                    f"Failed to decode base64 or parse JSON: {decode_error}"
-                ) from decode_error
-
-        except requests.exceptions.SSLError as e:
-            _log_if_verbose(
-                f"SSL Error on attempt {attempt + 1}/{max_retries + 1}: {e}", verbose
-            )
-
-            if allow_ssl_fallback and attempt < max_retries:
-                try:
-                    _log_if_verbose(
-                        "Retrying with SSL verification disabled (per config)...",
-                        verbose,
-                    )
-                    response = requests.post(
-                        url=url,
-                        headers=headers,
-                        data=data,
-                        cookies=cookies,
-                        timeout=timeout,
-                        verify=False,  # nosec B501
-                    )
-                    response.raise_for_status()
-
-                    decoded_data = b64decode(response.content)
-                    json_data = cast(Dict[str, Any], json.loads(decoded_data))
-                    _log_if_verbose(
-                        "Request succeeded with SSL verification disabled", verbose
-                    )
-                    return json_data
-
-                except Exception as fallback_error:
-                    _log_if_verbose(
-                        f"SSL fallback also failed: {fallback_error}", verbose
-                    )
-
-            if attempt == max_retries:
-                raise NetworkError(
-                    f"SSL verification failed after {max_retries + 1} attempts: {e}"
-                ) from e
-
-        except requests.exceptions.HTTPError as e:
-            _log_if_verbose(
-                f"HTTP Error on attempt {attempt + 1}/{max_retries + 1}: {e}", verbose
-            )
-            # Do not retry client errors (4xx)
-            if e.response is not None and 400 <= e.response.status_code < 500:
-                raise NetworkError(f"HTTP {e.response.status_code} error: {e}") from e
-
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.Timeout,
-            requests.exceptions.RequestException,
-        ) as e:
-            _log_if_verbose(
-                f"Request error on attempt {attempt + 1}/{max_retries + 1}: {e}",
-                verbose,
-            )
-
-        except DataProcessingError:
-            # Do not retry data processing errors
-            raise
-
-        # Wait before the next retry (exponential backoff)
-        if attempt < max_retries:
-            wait_time = backoff_factor * (2**attempt)
-            _log_if_verbose(f"Waiting {wait_time:.1f} seconds before retry...", verbose)
-            time.sleep(wait_time)
-
-    raise NetworkError(
-        f"Failed to fetch data from {url} after {max_retries + 1} attempts"
-    )
+    try:
+        return cast(Dict[str, Any], decode_b64_json_response(response))
+    except ValueError as e:
+        raise DataProcessingError(f"Failed to decode base64 or parse JSON: {e}") from e
 
 
 def url_encode(data_dict: Dict[str, Any]) -> str:
@@ -706,17 +655,15 @@ def url_encode(data_dict: Dict[str, Any]) -> str:
     return b64encode(raw_body.encode()).decode("utf-8")
 
 
-def time_to_isodate(timestamp: int) -> str:
-    """Convert a timestamp to the ISO date format.
+def decode_b64_json_response(response: requests.Response) -> Any:
+    """Decode the base64 JSON body of an old CPCB endpoint.
 
-    Args:
-        timestamp: Unix timestamp in milliseconds.
-
-    Returns:
-        ISO formatted date string.
+    Raises:
+        ValueError: If the body is empty, or not base64 JSON.
     """
-    datetime_object = datetime.utcfromtimestamp(timestamp / 1000)
-    return datetime_object.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if not response.content:
+        raise ValueError("Response content is empty")
+    return json.loads(b64decode(response.content))
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -746,108 +693,3 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
     # Earth's radius in kilometers
     return c * 6371
-
-
-def euclidean_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate simple Euclidean distance.
-
-    This function is faster than haversine_distance, but less accurate for long
-    distances.
-
-    Args:
-        lat1, lon1: Latitude and longitude of first point.
-        lat2, lon2: Latitude and longitude of second point.
-
-    Returns:
-        Euclidean distance (arbitrary units).
-    """
-    return math.sqrt((lat1 - lat2) ** 2 + (lon1 - lon2) ** 2)
-
-
-def parse_date(date_text: str) -> Optional[str]:
-    """Parse a date in one of many formats to the standard format.
-
-    Args:
-        date_text: Raw date text.
-
-    Returns:
-        Date in YYYY-MM-DD format, or None if the parse fails.
-    """
-    if not date_text:
-        return None
-
-    # Clean the date text
-    date_text = re.sub(r"[^\w\s\/\-,:]", "", date_text.strip())
-
-    for fmt in DATE_FORMATS:
-        try:
-            parsed_date = datetime.strptime(date_text, fmt)
-            return parsed_date.strftime("%Y-%m-%d")
-        except ValueError:
-            continue
-
-    return None
-
-
-def clean_city_name(city_text: str) -> Optional[str]:
-    """Clean a city name and make it standard.
-
-    Args:
-        city_text: Raw city text.
-
-    Returns:
-        Cleaned city name.
-    """
-    if not city_text:
-        return None
-
-    # Remove extra spaces
-    city = re.sub(r"\s+", " ", city_text.strip())
-    # Remove the text in parentheses
-    city = re.sub(r"\s*\([^)]*\)", "", city)
-    # Remove frequent prefixes and suffixes
-    city = re.sub(r"^(For|Weather|Report|Forecast):\s*", "", city, flags=re.IGNORECASE)
-    city = re.sub(r"\s*(Weather|Report|Forecast)$", "", city, flags=re.IGNORECASE)
-    # Remove HTML artifacts
-    city = re.sub(r"[<>]", "", city)
-    # Use the correct capital letters
-    city = city.title()
-    # Normalize hyphens
-    city = re.sub(r"\s*-\s*", "-", city)
-
-    return city.strip()
-
-
-def convert_date_to_iso(date_str: str) -> Optional[str]:
-    """Convert dates such as "27-May" and "2-Jun" to the YYYY-MM-DD format.
-
-    Args:
-        date_str: Date string in the "DD-MMM" format (for example "27-May").
-
-    Returns:
-        Date in YYYY-MM-DD format, or None if the parse fails.
-    """
-    if not date_str:
-        return None
-
-    current_year = datetime.now().year
-
-    try:
-        # Split at the dash and clean the parts
-        parts = date_str.strip().replace("-", " ").replace("  ", " ").split(" ")
-        if len(parts) != 2:
-            return None
-
-        day, month_abbr = parts
-        day = day.zfill(2)  # Convert to the 2-digit format
-
-        # Convert the month abbreviation to a number
-        month_key = month_abbr.lower()[:3]
-        if month_key not in MONTH_ABBREV:
-            return None
-
-        month = MONTH_ABBREV[month_key]
-        return f"{current_year}-{month}-{day}"
-
-    except Exception:
-        return None

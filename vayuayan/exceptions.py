@@ -11,16 +11,12 @@ class CPCBError(Exception):
     All other exceptions in the vayuayan package inherit from this class.
     """
 
-    pass
-
 
 class NetworkError(CPCBError):
     """Error when a network request fails.
 
     A network problem, a timeout, or a server error can cause this error.
     """
-
-    pass
 
 
 class DataParsingError(CPCBError):
@@ -30,8 +26,6 @@ class DataParsingError(CPCBError):
     this error.
     """
 
-    pass
-
 
 class DataProcessingError(CPCBError):
     """Error when a data operation fails.
@@ -40,16 +34,12 @@ class DataProcessingError(CPCBError):
     failed statistical calculation.
     """
 
-    pass
-
 
 class CityNotFoundError(CPCBError):
     """Error when the CPCB database does not have a city.
 
     The CPCB monitoring network does not have the requested city or location.
     """
-
-    pass
 
 
 class StationNotFoundError(CPCBError):
@@ -59,7 +49,13 @@ class StationNotFoundError(CPCBError):
     station name.
     """
 
-    pass
+
+class DataNotFoundError(CPCBError):
+    """Error when CPCB answers, but has no data for the request.
+
+    For example, there is no file for the station and year. A network failure
+    raises NetworkError instead, so callers can tell the two apart.
+    """
 
 
 class InvalidDataError(CPCBError):
@@ -69,16 +65,12 @@ class InvalidDataError(CPCBError):
     outside the expected range.
     """
 
-    pass
-
 
 class AuthenticationError(CPCBError):
     """Error when the authentication with CPCB services fails.
 
     The API authentication failed, or CPCB refused the access.
     """
-
-    pass
 
 
 class RateLimitError(CPCBError):
@@ -87,8 +79,6 @@ class RateLimitError(CPCBError):
     The client sent too many requests to CPCB services in a short time.
     """
 
-    pass
-
 
 class FileNotFoundError(CPCBError):
     """Error when a necessary file does not exist.
@@ -96,13 +86,9 @@ class FileNotFoundError(CPCBError):
     A NetCDF file or a GeoJSON file is not at the given path.
     """
 
-    pass
-
 
 class ConfigurationError(CPCBError):
     """Error when the configuration is missing or not valid.
 
     A necessary configuration parameter is missing or has an invalid value.
     """
-
-    pass

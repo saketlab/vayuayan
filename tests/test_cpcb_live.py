@@ -1,6 +1,8 @@
 """Tests for CPCB live API fallback behavior."""
 
-from vayuayan.air_quality_client import CPCBLive
+from vayuayan import CPCBLive
+
+from .fakes import raise_connection_error
 
 RSS_STATIONS = [
     {
@@ -27,36 +29,18 @@ RSS_STATIONS = [
 ]
 
 
-def test_get_all_india_falls_back_to_rss(monkeypatch):
+def test_get_all_india_falls_back_to_rss(monkeypatch, rss_feed):
     client = CPCBLive()
-    monkeypatch.setattr(
-        client,
-        "_make_request",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            RuntimeError("old endpoint failed")
-        ),
-    )
-    monkeypatch.setattr(
-        "vayuayan.air_quality_client.fetch_cpcb_rss_station_data",
-        lambda timeout=30: RSS_STATIONS,
-    )
+    monkeypatch.setattr(client, "_make_request", raise_connection_error)
+    rss_feed(RSS_STATIONS)
 
     assert client.get_all_india() == RSS_STATIONS
 
 
-def test_get_live_aqi_data_for_station_falls_back_to_rss_metrics(monkeypatch):
+def test_get_live_aqi_data_for_station_falls_back_to_rss_metrics(monkeypatch, rss_feed):
     client = CPCBLive()
-    monkeypatch.setattr(
-        client,
-        "_make_request",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            RuntimeError("old endpoint failed")
-        ),
-    )
-    monkeypatch.setattr(
-        "vayuayan.air_quality_client.fetch_cpcb_rss_station_data",
-        lambda timeout=30: RSS_STATIONS,
-    )
+    monkeypatch.setattr(client, "_make_request", raise_connection_error)
+    rss_feed(RSS_STATIONS)
 
     data = client.get_live_aqi_data_for_station("site_5587", "2026-06-28T12:00:00Z")
 

@@ -66,3 +66,8 @@ Exceptions
    :undoc-members:
    :show-inheritance:
    :no-index:
+
+.. toctree::
+   :hidden:
+
+   api/vayuayan

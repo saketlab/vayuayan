@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://vayuayan.saketlab.org/python/sitemap.xml
+Sitemap: https://vayuayan.saketlab.org/R/sitemap.xml

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format clean build upload docs docs-multiversion
+.PHONY: help install install-dev test test-cov lint format security clean build upload upload-test docs docs-multiversion docs-serve cli-help
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -15,12 +15,16 @@ test:  ## Run tests
 test-cov:  ## Run tests with coverage
 	python -m pytest tests/ --cov=vayuayan --cov-report=html --cov-report=term
 
-lint:  ## Run linting
+lint:  ## Run the CI lint checks (ruff, ruff format, mypy)
 	ruff check .
+	ruff format --check --diff .
 	mypy vayuayan/
 
 format:  ## Format code
 	ruff format .
+
+security:  ## Run bandit as CI does (requires bandit)
+	bandit -r vayuayan/ --severity-level medium
 
 clean:  ## Clean build artifacts
 	rm -rf build/
@@ -28,21 +32,23 @@ clean:  ## Clean build artifacts
 	rm -rf *.egg-info/
 	rm -rf .pytest_cache/
 	rm -rf .mypy_cache/
+	rm -rf .ruff_cache/
 	rm -rf htmlcov/
-	find . -type d -name __pycache__ -delete
-	find . -name "*.pyc" -delete
+	rm -rf docs/_build/
+	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 
-build:  ## Build package
+build: clean  ## Build package and check it with twine
 	python -m build
+	python -m twine check --strict dist/*
 
-upload:  ## Upload to PyPI (requires twine)
+upload: build  ## Upload to PyPI (releases normally go through a version tag)
 	python -m twine upload dist/*
 
-upload-test:  ## Upload to Test PyPI
+upload-test: build  ## Upload to Test PyPI
 	python -m twine upload --repository testpypi dist/*
 
 docs:  ## Build documentation
-	cd docs && make html
+	sphinx-build -b html docs docs/_build/html
 
 docs-multiversion:  ## Build documentation for all versions
 	cd docs && make multiversion
@@ -50,15 +56,5 @@ docs-multiversion:  ## Build documentation for all versions
 docs-serve:  ## Serve documentation locally
 	cd docs/_build/html && python -m http.server 8000
 
-example-basic:  ## Run basic usage example
-	python examples/basic_usage.py
-
-example-batch:  ## Run batch processing example
-	python examples/batch_processing.py
-
 cli-help:  ## Show CLI help
 	python -m vayuayan --help
-
-setup-dev:  ## Set up development environment
-	pip install -e ".[dev]"
-	pre-commit install
