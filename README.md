@@ -1,4 +1,4 @@
-# vayuayan
+# vayuayan <img src="R/man/figures/logo.png" align="right" height="139" alt="vayuayan logo" />
 
 Download and analyze air quality data: CPCB CAAQMS stations and OAQ low-cost sensors in India, and WUSTL ACAG satellite PM2.5 for the globe.
 

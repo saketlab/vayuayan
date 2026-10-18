@@ -87,6 +87,7 @@ html_css_files = ["css/custom.css"]
 html_baseurl = "https://vayuayan.saketlab.org/python/"
 
 html_logo = "assets/vayuayan.png"
+html_favicon = "_static/favicon.ico"
 
 ogp_site_url = html_baseurl
 ogp_site_name = "vayuayan: Air Quality & Pollution Data for Python"
