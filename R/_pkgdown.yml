@@ -46,7 +46,7 @@ template:
           "url": "https://saketlab.org"
         },
         "url": "https://vayuayan.saketlab.org/R/",
-        "downloadUrl": "https://github.com/saketlab/vayuayanR",
+        "downloadUrl": "https://github.com/saketlab/vayuayan",
         "softwareVersion": "0.2.0",
         "programmingLanguage": "R",
         "keywords": "air quality, PM2.5, CPCB, India pollution, AQI, satellite data, environmental data, OAQ, air pollution analysis"
@@ -82,7 +82,7 @@ template:
         "distribution": {
           "@type": "DataDownload",
           "encodingFormat": "application/x-r-package",
-          "contentUrl": "https://github.com/saketlab/vayuayanR"
+          "contentUrl": "https://github.com/saketlab/vayuayan"
         }
       }
       </script>
@@ -155,9 +155,9 @@ home:
 
   links:
   - text: Browse source code
-    href: https://github.com/saketlab/vayuayanR
+    href: https://github.com/saketlab/vayuayan
   - text: Report a bug
-    href: https://github.com/saketlab/vayuayanR/issues
+    href: https://github.com/saketlab/vayuayan/issues
 
 navbar:
   structure:
@@ -198,7 +198,7 @@ navbar:
 
     github:
       icon: fab fa-github fa-lg
-      href: https://github.com/saketlab/vayuayanR
+      href: https://github.com/saketlab/vayuayan
       aria-label: GitHub
 
 reference:

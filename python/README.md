@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/saketlab/vayuayan/master/docs/assets/vayuayan.png" alt="Vayuayan Logo" width="200"/>
+  <img src="https://raw.githubusercontent.com/saketlab/vayuayan/main/python/docs/assets/vayuayan.png" alt="Vayuayan Logo" width="200"/>
 </p>
 
 # Vayuayan
@@ -22,14 +22,14 @@ pip install vayuayan
 Install the development version from GitHub:
 
 ```bash
-pip install git+https://github.com/saketlab/vayuayan.git
+pip install "git+https://github.com/saketlab/vayuayan.git#subdirectory=python"
 ```
 
 Or install from the source code:
 
 ```bash
 git clone https://github.com/saketlab/vayuayan.git
-cd vayuayan
+cd vayuayan/python
 pip install -e .
 ```
 

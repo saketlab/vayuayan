@@ -29,6 +29,9 @@ test_that("cached city and station files are read without downloading", {
   expect_equal(unique(city$city), "Delhi")
   expect_equal(city$value, c(100, 120))
 
+  local_mocked_bindings(
+    .cpcb_require_station = function(name) list(station_id = name, station_name = name)
+  )
   station <- cpcb_station_daily("site_1", 2022, cache_dir = dir)
   expect_equal(unique(station$station_id), "site_1")
   expect_equal(nrow(station), 2)

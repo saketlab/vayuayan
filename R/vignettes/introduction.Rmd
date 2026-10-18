@@ -42,7 +42,7 @@ Together, "Vayuayan" means "the path of wind."
 
 ```{r install, eval=FALSE}
 # Install from GitHub
-devtools::install_github("saketlab/vayuayanR")
+devtools::install_github("saketlab/vayuayan", subdir = "R")
 ```
 
 ## Data sources

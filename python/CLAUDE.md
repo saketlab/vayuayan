@@ -1,0 +1,50 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+`vayuayan` is a Python package and CLI (`vayuayan = vayuayan.cli:main`) that gets air quality data from CPCB India (historical and live AQI) and from WUSTL ACAG satellite PM2.5 NetCDF files. It supports Python 3.9 to 3.14, so do not use syntax newer than 3.9 (ruff `target-version = "py39"`).
+
+## Commands
+
+```bash
+pip install -e ".[dev]"            # dev install (includes duckdb/pyarrow for the script tests)
+pip install -e ".[docs]"           # Sphinx docs deps
+python -m pytest tests/ -v         # all tests (make test)
+python -m pytest tests/test_cpcb_historical.py::test_get_file_path_uses_new_city_level_payload  # one test
+ruff check . && mypy vayuayan/    # lint + types (make lint also runs the format check)
+ruff format .                      # format (make format); formatting.yml runs `ruff format --check --diff .`
+sphinx-build -b html docs docs/_build/html   # docs (make docs)
+python -m vayuayan --help          # CLI smoke check
+```
+
+CI (`.github/workflows/ci.yml`) runs ruff and mypy once; pytest and a CLI smoke test on Linux, macOS and Windows for Python 3.9-3.14; pytest on the lowest versions that `pyproject.toml` allows (`uv pip install --resolution lowest-direct`, with numpy below 2 for pandas 2.0); a build of the sdist and wheel with `twine check --strict` and a clean wheel install; a docs build; and `bandit -r vayuayan/ --severity-level medium`. Raise a dependency floor in `pyproject.toml` when code needs a newer version, because the lowest-deps job tests the floors. mypy is strict (`disallow_untyped_defs`), so every function in `vayuayan/` needs full type hints. Mark intentional bandit findings with `# nosec <code>`.
+
+GitHub runners cannot reach CPCB. Tests must not make network calls: they mock with `monkeypatch` (for example, they patch `client._new_api_json` or `cpcb_common.send`). `tests/conftest.py` clears any real `CPCB_*` credentials for every test and has the `rss_feed` and `cpcb_credentials` fixtures; `tests/fakes.py` has `FakeResponse`. The docs notebooks (`docs/notebooks/*.ipynb`) call CPCB, so CI does not run them. Run them locally with `jupyter nbconvert --to notebook --execute`.
+
+## Architecture
+
+- Modules: `cpcb_directory.py` (`CPCBDirectory`: auth and station directory) → `cpcb_historical.py` (`CPCBHistorical`: file paths and downloads); `cpcb_live.py` (`CPCBLive`); `cpcb_common.py` (`send`, `legacy_post`, the `RSSFeed` mixin); `pm25.py` (`PM25Client`) with `pm25_versions.py` (`PM25_VERSIONS`), `pm25_raster.py` (xarray helpers) and `gee.py` (Earth Engine); `http_client.py` (all HTTP). `air_quality_client.py` only re-exports the clients under their old import path. `client.py` holds the older `CPCBClient`. `__init__.py` re-exports the public API through `__all__`, so update `__all__` when you add a public name. Keep files under 400 lines where you can, and never over 800.
+- The CLI path is `cli.py` (argparse subcommands, each with `set_defaults(run=...)` that builds only its client) → `commands.py` (one function per subcommand, each returns `bool`, which becomes the exit code) → client methods.
+- **CPCBHistorical endpoints.** Every lookup tries the new CPCB API first (`/caaqms-common/...` and `/projectworkflow/client/custom/query`, with JSON and an OAuth token). If that fails, it falls back to the legacy `/dataRepository/` endpoints, which take a base64-encoded JSON request body and return a base64-encoded response. Keep both paths when you change `get_file_path` or a download method.
+- **Station directory.** `_directory()` reads live data only when all of `CPCB_USERNAME`, `CPCB_PASSWORD`, `CPCB_CLIENT_ID`, and `CPCB_CLIENT_SECRET` are set (`constants.get_cpcb_credentials`). Otherwise, or if the live request fails, it uses the bundled snapshot `vayuayan/data/cpcb_station_directory.json`. The public RSS feed (`RSSFeed._rss_cities`, fetched once per client) adds stations that are newer than the snapshot and is the fallback for `CPCBLive`. `utils.parse_cpcb_rss_station_data` turns the feed into the package station shape; the live feed sends the AQI as `airQualityIndexValue`.
+- **HTTP.** `http_client.request` is the only place that sends requests. It retries network errors and 5xx (not 4xx) when the caller asks for retries. The SSL fallback (send again unverified, and remember the host) is opt-in, because only CPCB certificates are known to be broken: `cpcb_common.send` and `utils.safe_get(allow_ssl_fallback=True)` turn it on, and the S3 download keeps it; GEE does not. `cpcb_common.send` is the request function of the CPCB clients (tests patch it, and `cpcb_common.fetch_cpcb_rss_station_data`); modules call it as `cpcb_common.send(...)`, so a patch reaches them. `cpcb_common.legacy_post` handles the base64 JSON of the old endpoints. `CPCBClient.list_stations` uses `CPCBLive.get_all_india`. Log failures with `http_client.failure_reason(e)`, not `str(e)`: requests puts the URL in its errors. The token request, whose URL carries the CPCB credentials, raises `AuthenticationError` with the status only (`from None`).
+- **Failure handling.** `cpcb_common.attempt(call, message, level, errors)` runs a data source and returns None on `SOURCE_ERRORS` (request errors, bad data), logging only the failure reason. Use it for each fallback step; let other errors propagate.
+- **Live directory.** With credentials, `CPCBDirectory._prefetch` fetches the city and station lists of a walk in parallel (`PREFETCH_WORKERS`) into the cache; the walk then reads them in order, so results match a sequential walk.
+- **Outage vs. no data.** `get_file_path` raises `NetworkError` when no endpoint answers, and returns `[]` only when CPCB answers with no files. The download methods raise `DataNotFoundError` or `StationNotFoundError`. The dump script writes `.empty` markers only for real "no data" answers. Catch `requests.RequestException` and `ValueError`, not `Exception`, so programming errors still surface.
+- **Logging.** Library code logs with `logging.getLogger(__name__)` and never prints. The CLI calls `logging.basicConfig(level=INFO)`. The only exception is the interactive `setup_earth_engine`.
+- **PM25Client.** `PM25_VERSIONS` holds one `PM25Version` per dataset (S3 key layout, filename, year ranges, GEE collections): `V6GL03` (V6.GL.03, the default), `V6` (V6.GL.02.04, the only one with a GEE fallback) and `V5` (V5.GL.05.02). To add a version, add an entry; the CLI choices come from the keys. Check year ranges against the bucket listing (`aws s3 ls --no-sign-request s3://satpmdata/`). The client downloads NetCDF files over HTTPS from the public `satpmdata` bucket (`archive/V6GL0204/...`, `archive/V5GL0502/...`, `V6GL03/...`) to `cache_dir` (default `pm25_data/`), through a `.part` file. If that fails, it uses Google Earth Engine (`projects/sat-io/...`, V6 only), which starts on first use (`gee_initialized` property) because `ee.Initialize` takes seconds. The GEE project ID is stored at `get_gee_project_file()` (`~/.config/vayuayan/gee_project`, which respects `XDG_CONFIG_HOME`). It computes zonal statistics over GeoJSON polygons and supports `group_by` with comma-separated columns. Monthly files go through the same path (`get_netcdf_path(year, month)`, `get_pm25_monthly_stats`, `PM25Version.gee_collection(month)`).
+- **National AQI.** `aqi.py` has the CPCB breakpoints (`POLLUTANTS`, from CPCB's "About National Air Quality Index"), `compute_aqi` and the vectorized `daily_aqi`. The Severe band's upper concentration is a vayuayan convention (Very Poor band width); keep it documented as such. `daily_aqi(day_ends_at=16)` reproduces CPCB's 4 PM bulletin window, but CPCB's own data validation is not public, so published values differ (median 10 for site_301 in 2024).
+- **Tidy data.** `tidy.TIDY_COLUMNS` is the shared long format; `cpcb_raw_to_long` is used by `download_raw_aqi_data_station_level(tidy=True)`, `CPCBHistorical.daily_aqi` and the dump script.
+- **Download cache.** `CPCBHistorical._download_repository_file` caches files whose largest year in the path is before the current year, under `constants.get_cache_dir()/cpcb`. Tests set `VAYUAYAN_CACHE_DIR` to a temporary folder (autouse fixture).
+- **Lazy imports.** pandas, numpy, geopandas, xarray/rioxarray and `ee` are imported inside the functions that use them (`import pandas as pd` at the top of the function, `pm25_raster.load_xarray()`; `from __future__ import annotations` plus `TYPE_CHECKING` for annotations), so `import vayuayan` and the CLI take about 40 ms. Do not add them back at module level; check with `python -c "import sys, vayuayan.cli; print('pandas' in sys.modules)"`.
+- `exceptions.py` defines a `CPCBError` hierarchy. It has its own `FileNotFoundError`, which shadows the builtin; the PM2.5 code raises the builtin one. Import the class you need explicitly.
+
+## Data exports
+
+`scripts/dump_raw_15min_pollutants.py` downloads the raw 15-minute CSV files of each CPCB station and builds a sorted long-format parquet with DuckDB and pyarrow. You can stop it and run it again: it skips the station-year shards, the station parquet files, and the `.empty` markers that already exist. `tests/test_dump_raw_15min_pollutants.py` imports this script. The parquet files and `data/cpcb_historical_completeness.md` in `data/` are committed exports.
+
+## Release
+
+`__version__` in `vayuayan/__init__.py` is the version source (`pyproject.toml` reads it dynamically). Build with `python -m build`. To release, push a version tag: `.github/workflows/publish.yml` runs the tests and then publishes the package to PyPI. `.github/workflows/docs-hostinger.yml` deploys the docs to https://vayuayan.saketlab.org/python/ (`/var/www/r-pkgdown/vayuayan/docs/python`). It also publishes `docs/site_root/` (landing page, `robots.txt`) at the site root, with a redirect to `/python/` for each page that used to be at the root, and leaves `R/` alone: the R package in `../R` deploys there (`pkgdown.yaml`). Workflows live in the repo-root `.github/workflows/` and run in `python/` with path filters.

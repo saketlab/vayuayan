@@ -35,3 +35,4 @@ vignettes/.*_files$
 ^CRAN-SUBMISSION$
 ^inst/examples$
 ^vignettes/data$
+^data-raw$

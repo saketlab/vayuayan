@@ -2,8 +2,10 @@
 on:
   push:
     branches: [main]
+    paths: ['R/**', '.github/workflows/pkgdown.yaml']
   pull_request:
     branches: [main]
+    paths: ['R/**', '.github/workflows/pkgdown.yaml']
   release:
     types: [published]
   workflow_dispatch:
@@ -40,10 +42,12 @@ jobs:
         with:
           extra-packages: any::pkgdown, local::.
           needs: website
+          working-directory: R
 
       # articles need local data and OAQ_API_KEY, so they are knitted on the
       # author's machine and their HTML is copied from inst/doc
       - name: Build site
+        working-directory: R
         run: |
           options(rmarkdown.html_vignette.check_title = FALSE)
           pkg <- pkgdown::as_pkgdown(".")
@@ -66,7 +70,7 @@ jobs:
         uses: burnett01/rsync-deployments@7.0.1
         with:
           switches: -avzr --delete --rsync-path="mkdir -p ${{ env.SITE_ROOT }} && rsync"
-          path: docs/
+          path: R/docs/
           remote_path: ${{ env.SITE_ROOT }}/
           remote_host: ${{ secrets.HOSTINGER_HOST }}
           remote_port: ${{ secrets.HOSTINGER_PORT || 22 }}

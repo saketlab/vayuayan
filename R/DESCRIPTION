@@ -44,8 +44,8 @@ Suggests:
     testthat (>= 3.1.7),
     tidyterra
 VignetteBuilder: knitr
-URL: https://vayuayan.saketlab.org/R/, https://github.com/saketlab/vayuayanR
-BugReports: https://github.com/saketlab/vayuayanR/issues
+URL: https://vayuayan.saketlab.org/R/, https://github.com/saketlab/vayuayan
+BugReports: https://github.com/saketlab/vayuayan/issues
 Config/testthat/edition: 3
 Config/Needs/website: exactextractr, ggrepel, here, kableExtra, khroma,
     patchwork, purrr, scales, stringr, tidyverse, lwgeom

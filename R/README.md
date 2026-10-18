@@ -1,181 +1,109 @@
-# vayuayanR: Download and analyze air pollution data in R
+# vayuayanR <img src="man/figures/logo.png" align="right" height="139" alt="vayuayanR logo" />
 
-**vayuayan** is an R package for downloading and analyzing air quality data from multiple sources:
+[![R-CMD-check](https://github.com/saketlab/vayuayan/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/saketlab/vayuayan/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- **WUSTL ACAG Satellite PM2.5**: Satellite-derived PM2.5 estimates at 0.01° (~1 km) resolution, global coverage (1998-2024, product V6.GL.03)
-- **CPCB CAAQMS**: Historical and real-time PM2.5, PM10, AQI data from 600+ Central Pollution Control Board monitoring stations (India)
-- **OAQ (Open Air Quality)**: Low-cost sensor network data from providers like Airnet (India)
-
-All three sources are accessible through a common R interface with tidy data output.
-
-This is the R port of the Python package [vayuayan](https://github.com/saketlab/vayuayan).
-
-## Etymology
-
-**Vayuayan** (वायुअयन) combines two Sanskrit words:
-
-- **Vayu** (वायु): Wind, air
-- **Ayan** (अयन): Path, journey, movement
-
-Together, "Vayuayan" means "the path of wind."
-
----
+`vayuayan` is an R package. It downloads and processes air quality data from three sources:
+CPCB CAAQMS monitoring stations in India, OAQ low-cost sensor networks in India, and WUSTL ACAG satellite PM2.5 estimates for the whole globe.
+The package gives an easy R interface to get daily AQI, PM2.5 and other pollutants for a city, a station, a point or a region.
+It is the R port of the Python package [vayuayan](https://github.com/saketlab/vayuayan/tree/main/python).
+The name means "the path of wind" (वायु, wind + अयन, path).
 
 ## Installation
 
-Install from GitHub using devtools:
-
 ```r
-# Install devtools
-install.packages("devtools")
-
-# Install vayuayan
-devtools::install_github("saketlab/vayuayanR")
+# Install from GitHub
+# install.packages("devtools")
+devtools::install_github("saketlab/vayuayan", subdir = "R")
 ```
-
----
 
 ## Quick Start
 
-### CPCB Historical AQI Data
+### CPCB monitoring stations
 
 ```r
 library(vayuayan)
 
-# Get list of available states
-states <- cpcb_get_state_list()
-print(states)
-
-# Get cities in a state
-cities <- cpcb_get_city_list("Maharashtra")
-print(cities)
-
-# Get stations in a city
+# Find the stations in a city
 stations <- cpcb_get_station_list("Mumbai")
-print(stations)
 
-# Add coordinates from CPCB live feed
-stations <- cpcb_add_coords(stations)
-print(stations[, c("label", "lat", "lon")])
+# Daily AQI for two cities in 2022, one row per city and day
+daily <- cpcb_city_daily(c("Delhi", "Mumbai"), 2022)
+aggregate(value ~ city + month, daily, mean)
 
-# Download city-level daily PM2.5 data
-cpcb_download_city_data(
-  city          = "Mumbai",
-  year          = 2022,
-  save_location = "mumbai_aqi_2022.csv"
-)
-
-# Download per-station daily PM2.5 data
-cpcb_download_station_data(
-  station_id    = "site_5964",
-  year          = 2022,
-  save_location = "station_data_2022.csv"
-)
+# Daily data for single stations
+station_daily <- cpcb_station_daily(c("Anand Vihar, Delhi", "ITO, Delhi"), 2024)
 ```
 
-### PM2.5 Satellite Data Analysis
+### Live AQI
 
 ```r
-library(vayuayan)
-
-# Get mean PM2.5 statistics for a region from WUSTL ACAG NetCDF.
-# region = "AS" downloads the smaller Asia file.
-delhi_stats <- pm25_get_stats(
-  geojson_file = "delhi_ncr.geojson",
-  year         = 2023,
-  month        = 11,
-  region       = "AS"
-)
-print(delhi_stats)
-# Returns: list(mean, std, min, max, count)
-
-# Get PM2.5 statistics grouped by a column in the GeoJSON
-state_stats <- pm25_get_stats(
-  geojson_file = "india_districts.geojson",
-  year         = 2023,
-  month        = 11,
-  region       = "AS",
-  group_by     = "state_name"
-)
-print(state_stats)
-
-# Download a NetCDF file manually. Files are cached in
-# tools::R_user_dir("vayuayan", "cache") unless cache_dir is given.
-pm25_download_netcdf(
-  year   = 2023,
-  month  = 11,
-  region = "AS"
-)
+# The 5 live stations nearest to central Delhi
+cpcb_get_nearest_stations(c(28.6139, 77.2090), k = 5)
 ```
 
----
-
-## Data Analysis with tidyverse
+### Satellite PM2.5
 
 ```r
-library(vayuayan)
-library(tidyverse)
+# Monthly PM2.5 at a point. region = "AS" downloads the smaller Asia file.
+pm25_get_point(latitude = 28.61, longitude = 77.21, year = 2023, month = 11, region = "AS")
 
-# Download and reshape city-level data
-cpcb_download_city_data("Delhi", 2022, "delhi_aqi_2022.csv")
-
-delhi_monthly <- read.csv("delhi_aqi_2022.csv") %>%
-  pivot_longer(cols = -Day, names_to = "Month_Name", values_to = "pm25") %>%
-  mutate(month = match(Month_Name, month.name)) %>%
-  filter(!is.na(pm25)) %>%
-  group_by(month) %>%
-  summarise(mean_pm25 = mean(pm25, na.rm = TRUE), .groups = "drop")
-
-# Plot seasonal trend
-ggplot(delhi_monthly, aes(x = month, y = mean_pm25)) +
-  geom_line(linewidth = 1, color = "#d77027") +
-  geom_point(size = 2.5, color = "#d77027") +
-  scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  labs(
-    title = "Delhi 2022: Monthly Mean PM2.5",
-    y     = expression(paste("PM2.5 (", mu, "g/m"^3, ")")),
-    x     = NULL
-  ) +
-  theme_minimal()
+# Monthly mean PM2.5 over Delhi
+delhi <- india_boundary(state = "Delhi")
+pm25_monthly(delhi, 2022, region = "AS")
 ```
 
----
-
-## Mapping Station Locations
+### OAQ low-cost sensors
 
 ```r
-library(vayuayan)
-library(sf)
+# Get your API key from OAQ and set it in ~/.Renviron as OAQ_API_KEY
+session <- oaq_session()
+oaq_list_providers(session)
+sensors <- oaq_stations_table(session, "airnet")
+```
+
+## Use cases
+
+### Seasonal pattern of a city
+
+```r
+library(dplyr)
 library(ggplot2)
 
-# Get stations and add coordinates from CPCB live feed
-stations    <- cpcb_get_station_list("Delhi")
-stations_sf <- cpcb_add_coords(stations) %>%
-  filter(!is.na(lat)) %>%
-  sf::st_as_sf(coords = c("lon", "lat"), crs = 4326)
-
-# Plot
-ggplot(stations_sf) +
-  geom_sf(size = 3, color = "royalblue4", alpha = 0.8) +
-  labs(
-    title   = "CPCB Monitoring Stations — Delhi",
-    caption = "Source: CPCB CAAQMS"
-  ) +
-  theme_minimal()
+cpcb_city_daily("Delhi", 2022) %>%
+  group_by(month) %>%
+  summarise(mean_aqi = mean(value, na.rm = TRUE)) %>%
+  ggplot(aes(month, mean_aqi)) +
+  geom_line(colour = "#d77027") +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  labs(title = "Delhi 2022: monthly mean AQI", x = NULL, y = "AQI")
 ```
 
----
+### Satellite PM2.5 by state
 
+```r
+# Mean PM2.5 for each state in a district GeoJSON
+pm25_get_stats(
+  geojson_file = "india_districts.geojson",
+  year = 2023,
+  month = 11,
+  region = "AS",
+  group_by = "state_name"
+)
+```
 
+## Documentation
+
+- [Introduction](https://vayuayan.saketlab.org/R/articles/introduction.html)
+- [Delhi PM2.5 Analysis](https://vayuayan.saketlab.org/R/articles/delhi_pm2.5_analysis.html)
+- [PM2.5 across five metros](https://vayuayan.saketlab.org/R/articles/metro_wide_pm2.5_analysis_comparative_2022.html)
+- [Bengaluru: CPCB vs Airnet sensors](https://vayuayan.saketlab.org/R/articles/bengaluru_cpcb_vs_airnet_2026.html)
+- [Function Reference](https://vayuayan.saketlab.org/R/reference/index.html)
 
 ## Contributing
 
-Pull requests and bug reports are welcome.
-
----
+We accept contributions. To send a change, open a Pull Request.
 
 ## Disclaimer
 
-This package is not officially affiliated with any government agency or air
-quality monitoring network. It is a third-party tool for accessing publicly
-available environmental data.
+This package is not affiliated with CPCB, OAQ or WUSTL. It is a third-party tool for publicly available data.

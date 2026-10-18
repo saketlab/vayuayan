@@ -14,8 +14,8 @@ Download and analyze air pollution data from three sources. The Central Pollutio
 Useful links:
 \itemize{
   \item \url{https://vayuayan.saketlab.org/R/}
-  \item \url{https://github.com/saketlab/vayuayanR}
-  \item Report bugs at \url{https://github.com/saketlab/vayuayanR/issues}
+  \item \url{https://github.com/saketlab/vayuayan}
+  \item Report bugs at \url{https://github.com/saketlab/vayuayan/issues}
 }
 
 }
