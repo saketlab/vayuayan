@@ -1,0 +1,239 @@
+---
+title: "Introduction to vayuayan"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to vayuayan}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+NOT_CRAN <- identical(tolower(Sys.getenv("NOT_CRAN", "false")), "true")
+# network chunks need NOT_CRAN and a reachable CPCB feed
+CPCB_OK <- NOT_CRAN && tryCatch(
+  {
+    httr::status_code(httr::HEAD(
+      "https://airquality.cpcb.gov.in/caaqms/iit_rss_feed_with_coordinates",
+      httr::timeout(5)
+    )) < 400
+  },
+  error = function(e) FALSE
+)
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  eval = CPCB_OK
+)
+```
+
+# Introduction
+
+**vayuayan** (वायुअयन) is an R package for fetching and analyzing air quality data from WUSTL ACAG satellite PM2.5 (global) and CPCB & OAQ monitoring networks (India). The name combines two Sanskrit words:
+
+- **Vayu** (वायु): Wind, air
+- **Ayan** (अयन): Path, journey, movement
+
+Together, "Vayuayan" means "the path of wind."
+
+## Installation
+
+```{r install, eval=FALSE}
+# Install from GitHub
+devtools::install_github("saketlab/vayuayanR")
+```
+
+## Data sources
+
+The package provides access to:
+
+1. **WUSTL ACAG**: Washington University satellite PM2.5 data
+   - Global coverage at 0.01 degree (about 1 km) resolution
+   - Monthly and annual data (1998-2024, product V6.GL.03)
+
+2. **CPCB**: Central Pollution Control Board monitoring network (India)
+   - Historical and real-time AQI data
+   - Station-level and city-level data
+
+3. **OAQ**: Open Air Quality low-cost sensor networks (India)
+   - Multiple providers including Airnet
+   - Daily, monthly, and annual data
+
+## Quick start
+
+```{r quickstart, eval = TRUE}
+library(vayuayan)
+library(dplyr)
+
+vayuayan_welcome()
+```
+
+# Historical AQI data
+
+The `cpcb_` functions provide access to historical air quality data from the Central Pollution Control Board.
+
+## Exploring available data
+
+States, cities and stations come from a CPCB station directory bundled with
+the package, so these calls work offline.
+
+```{r historical_explore, eval = TRUE}
+states <- cpcb_get_state_list()
+head(states)
+
+cities <- cpcb_get_city_list("Maharashtra")
+head(cities)
+
+stations <- cpcb_get_station_list("Mumbai")
+head(stations)
+```
+
+### Adding coordinates to stations
+
+```{r add_coords, eval = TRUE}
+delhi_stations <- cpcb_add_coords(cpcb_get_station_list("Delhi"))
+head(delhi_stations)
+```
+
+## Daily data in long format
+
+`cpcb_city_daily()` downloads the CPCB daily file for each city and returns
+one row per day. Files are cached, so later calls read from disk.
+
+```{r city_daily}
+daily <- cpcb_city_daily(c("Delhi", "Mumbai"), 2024, cache_dir = tempdir())
+
+daily %>%
+  group_by(city, month) %>%
+  summarise(pm25 = mean(value), .groups = "drop")
+```
+
+`cpcb_station_daily()` does the same for stations:
+
+```{r station_daily}
+station_daily <- cpcb_station_daily(
+  head(delhi_stations$value, 3), 2025,
+  cache_dir = tempdir()
+)
+count(station_daily, station_id)
+```
+
+`cpcb_download_city_data()` and `cpcb_download_station_data()` save the raw
+CPCB sheet when you want the file itself.
+
+# Live AQI monitoring
+
+Live readings come from the public station feed, which holds only the latest
+hour.
+
+```{r live_aqi}
+nearest <- cpcb_get_nearest_station(coords = c(19.0760, 72.8777))
+nearest
+
+aqi_data <- cpcb_get_live_aqi_data(station_id = nearest$station_id)
+aqi_data$metrics
+```
+
+Without arguments, `cpcb_get_live_aqi_data()` finds the station nearest to
+your IP location.
+
+## Station summaries
+
+`stations_to_dataframe()` flattens the live feed into one row per station,
+with an AQI category.
+
+```{r live_table}
+live <- stations_to_dataframe(cpcb_get_all_india())
+
+live %>%
+  group_by(state_id) %>%
+  summarise(
+    stations = n(),
+    live = sum(live),
+    avg_aqi = mean(avg_aqi, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(stations)) %>%
+  head(10)
+
+count(live, aqi_category, sort = TRUE)
+```
+
+```{r live_map}
+library(ggplot2)
+library(sf)
+
+aqi_colors <- c(
+  "Good"         = "green",
+  "Satisfactory" = "lightgreen",
+  "Moderate"     = "yellow",
+  "Poor"         = "orange",
+  "Very Poor"    = "red",
+  "Severe"       = "darkred",
+  "No Data"      = "grey70"
+)
+
+live %>%
+  filter(live) %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>%
+  ggplot() +
+  geom_sf(aes(color = aqi_category), size = 2, alpha = 0.6) +
+  scale_color_manual(values = aqi_colors) +
+  labs(title = "Live CPCB monitoring stations", color = "AQI category") +
+  theme_minimal()
+```
+
+# PM2.5 satellite data
+
+The `pm25_` functions process satellite-based PM2.5 data from WUSTL ACAG
+(product V6.GL.03, hosted on the AWS Open Data registry). The Asia subset
+(`region = "AS"`) covers India in a smaller file than the global one. Files
+are cached in `tools::R_user_dir("vayuayan", "cache")`.
+These chunks are not run when the vignette is built.
+
+```{r pm25_setup, eval = FALSE}
+pm25_nc <- pm25_download_netcdf(2023, 11, region = "AS")
+delhi <- india_boundary(state = "Delhi")
+```
+
+## Regional statistics
+
+```{r pm25_stats, eval = FALSE}
+pm25_get_stats(
+  geojson_file = "https://geo.bharatviz.org/geojsons/cities/delhi.geojson",
+  nc_file      = pm25_nc
+)
+
+pm25_get_stats(
+  geojson_file = "https://geo.bharatviz.org/geojsons/districts/India_LGD_districts.geojson",
+  nc_file      = pm25_nc,
+  group_by     = "state_name"
+)
+```
+
+## Maps
+
+```{r pm25_map, eval = FALSE}
+r <- pm25_load_netcdf_bbox(pm25_nc, delhi, var = "PM25", mask = TRUE)
+pm25_map(r, delhi, title = "Delhi, November 2023")
+```
+
+## Cache management
+
+```{r pm25_cache, eval = FALSE}
+pm25_list_cached_files()
+pm25_clear_cache()
+```
+
+# Utility functions
+
+```{r utilities, eval = TRUE}
+clean_station_name("Dr. Karni Singh Shooting Range, Delhi - DPCC")
+
+get_aqi_categories(c(42, 180, 320))
+
+# Mumbai to Delhi, in km
+haversine_distance(19.0760, 72.8777, 28.7041, 77.1025)
+```
