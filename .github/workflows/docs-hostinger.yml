@@ -3,12 +3,17 @@ name: docs-hostinger
 on:
   push:
     branches: [main, master]
+    paths: ['python/**', '.github/workflows/docs-hostinger.yml']
   release:
     types: [published]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    working-directory: python
 
 jobs:
   deploy:
@@ -17,7 +22,7 @@ jobs:
       group: docs-hostinger-${{ github.ref }}
       cancel-in-progress: true
     env:
-      # vayuayan.saketlab.org serves this folder; the R docs (saketlab/vayuayanR)
+      # vayuayan.saketlab.org serves this folder; the R docs (pkgdown.yaml)
       # deploy to its R/ folder
       SITE_ROOT: /var/www/r-pkgdown/vayuayan/docs
 
@@ -56,7 +61,7 @@ jobs:
         uses: burnett01/rsync-deployments@7.0.1
         with:
           switches: -avzr --delete --rsync-path="mkdir -p ${{ env.SITE_ROOT }}/python && rsync"
-          path: docs/_build/html/
+          path: python/docs/_build/html/
           remote_path: ${{ env.SITE_ROOT }}/python/
           remote_host: ${{ secrets.HOSTINGER_HOST }}
           remote_port: ${{ secrets.HOSTINGER_PORT }}
@@ -67,7 +72,7 @@ jobs:
         uses: burnett01/rsync-deployments@7.0.1
         with:
           switches: -avzr --delete --exclude=/python/ --exclude=/R/
-          path: docs/_build/root/
+          path: python/docs/_build/root/
           remote_path: ${{ env.SITE_ROOT }}/
           remote_host: ${{ secrets.HOSTINGER_HOST }}
           remote_port: ${{ secrets.HOSTINGER_PORT }}

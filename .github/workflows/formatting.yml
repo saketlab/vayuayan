@@ -3,8 +3,14 @@ name: Code Formatting
 on:
   push:
     branches: [ master, main ]
+    paths: ['python/**', '.github/workflows/formatting.yml']
   pull_request:
     branches: [ master, main ]
+    paths: ['python/**', '.github/workflows/formatting.yml']
+
+defaults:
+  run:
+    working-directory: python
 
 jobs:
   format-check:

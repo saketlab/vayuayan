@@ -1,0 +1,102 @@
+# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
+on:
+  push:
+    branches: [main]
+    paths: ['R/**', '.github/workflows/pkgdown.yaml']
+  pull_request:
+    branches: [main]
+    paths: ['R/**', '.github/workflows/pkgdown.yaml']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+name: pkgdown
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pkgdown-${{ github.event_name == 'pull_request' && github.run_id || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  pkgdown:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      # vayuayan.saketlab.org serves /var/www/r-pkgdown/vayuayan/docs; the
+      # Python docs deploy to its python/ folder
+      SITE_ROOT: /var/www/r-pkgdown/vayuayan/docs/R
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::pkgdown, local::.
+          needs: website
+          working-directory: R
+
+      # articles need local data and OAQ_API_KEY, so they are knitted on the
+      # author's machine and their HTML is copied from inst/doc
+      - name: Build site
+        working-directory: R
+        run: |
+          options(rmarkdown.html_vignette.check_title = FALSE)
+          pkg <- pkgdown::as_pkgdown(".")
+          pkgdown::clean_site(pkg, force = TRUE)
+          pkgdown::build_home(pkg)
+          pkgdown::build_reference(pkg)
+          pkgdown::build_news(pkg)
+          pkgdown::build_articles_index(pkg)
+          file.copy(
+            list.files("inst/doc", pattern = "\\.html$", full.names = TRUE),
+            "docs/articles/",
+            overwrite = TRUE
+          )
+          pkgdown::build_redirects(pkg)
+          pkgdown::build_search(pkg)
+        shell: Rscript {0}
+
+      - name: Upload the site
+        if: github.event_name != 'pull_request'
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avzr --delete --rsync-path="mkdir -p ${{ env.SITE_ROOT }} && rsync"
+          path: R/docs/
+          remote_path: ${{ env.SITE_ROOT }}/
+          remote_host: ${{ secrets.HOSTINGER_HOST }}
+          remote_port: ${{ secrets.HOSTINGER_PORT || 22 }}
+          remote_user: ${{ secrets.HOSTINGER_USER }}
+          remote_key: ${{ secrets.HOSTINGER_SSH_KEY }}
+
+      # on the host; Cloudflare answers 403 to runner IPs
+      - name: Mirror and check the site
+        if: github.event_name != 'pull_request'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ secrets.HOSTINGER_PORT || 22 }}
+          envs: SITE_ROOT
+          script: |
+            set -eu
+            # vayuayanr.saketlab.org mirrors the same files
+            mirror=/var/www/r-pkgdown/vayuayanr/docs
+            if [ ! -L "$mirror" ]; then
+              mkdir -p "$(dirname "$mirror")"
+              if [ -e "$mirror" ]; then mv "$mirror" "$mirror.old"; fi
+              ln -s "$SITE_ROOT" "$mirror"
+            fi
+            for url in vayuayan.saketlab.org/R/ vayuayanr.saketlab.org/; do
+              code=$(curl -sk -o /dev/null -w '%{http_code}' -H "Host: ${url%%/*}" "https://127.0.0.1/${url#*/}")
+              test "$code" = "200" || { echo "$url answered $code" >&2; exit 1; }
+            done

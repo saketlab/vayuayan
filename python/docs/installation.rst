@@ -31,14 +31,14 @@ Install the latest development version from GitHub:
 
 .. code-block:: bash
 
-   pip install git+https://github.com/saketlab/vayuayan.git
+   pip install "git+https://github.com/saketlab/vayuayan.git#subdirectory=python"
 
 To contribute to vayuayan, use these commands:
 
 .. code-block:: bash
 
    git clone https://github.com/saketlab/vayuayan.git
-   cd vayuayan
+   cd vayuayan/python
    pip install -e ".[dev]"
 
 These commands install vayuayan in development mode with the development dependencies:
