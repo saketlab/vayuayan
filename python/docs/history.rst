@@ -19,13 +19,15 @@ v0.3.0 (unreleased)
 
 **Added**
 
-* ``vayuayan.aqi``: the CPCB National AQI (``compute_aqi``, ``sub_index``, ``daily_aqi``), with CPCB's 16-hour and three-pollutant rules, plus ``health_impact``, ``pollutant_category`` and ``WHO_PM25_GUIDELINES``. CPCB gives no Severe upper limit; vayuayan extends the band by the Very Poor width and caps the AQI at 500.
+* ``vayuayan.us_aqi``: the US EPA AQI (``compute_us_aqi``, ``us_sub_index``, ``us_aqi_category``, ``us_aqi_color``, ``us_pollutant_name``) with the May 2024 EPA tables. Labels with a mass unit, such as ``"O3 (µg/m³)"``, are converted to ppm or ppb at 25 °C.
+* ``vayuayan.aqi``: the CPCB National AQI (``compute_aqi``, ``sub_index``, ``daily_aqi``), with CPCB's 16-hour and three-pollutant rules, plus ``health_impact``, ``pollutant_category`` and ``WHO_PM25_GUIDELINES``. CPCB gives no Severe upper limit; vayuayan extends the band by the Very Poor width, and above it the sub-index continues on the same slope, as in CPCB's AQI calculator. The AQI is rounded half up.
 * ``vayuayan.tidy``: long tables (``TIDY_COLUMNS``) from raw CPCB data, daily AQI workbooks and live data.
 * ``CPCBHistorical.daily_aqi``, the ``daily_aqi`` CLI command, and ``tidy=True`` for raw downloads.
 * ``PM25Client.get_pm25_monthly_stats``, and ``get_pm25_stats(..., geometry=True)`` for maps.
 * A cache of past-year CPCB downloads in ``~/.cache/vayuayan`` (``VAYUAYAN_CACHE_DIR``, ``use_cache=False``).
 * New: ``OAQClient`` (OAQ low-cost sensors), ``CPCBHistorical.add_coords``, ``city_daily`` and ``station_daily``, ``cpcb_tidy_daily``, ``nearest_stations``, ``get_aqi_categories``, ``india_boundary``, and the exports ``pollutant_name``, ``get_cache_dir`` and ``stations_to_city_summary``.
 * OAQ sensor tools: ``OAQClient.sensors``, ``readings``, ``daily_means``, ``daily_records`` and ``check_daily_records``, ``oaq_nearest_cpcb`` and ``oaq_city_tally``; ``CPCBHistorical.raw_readings`` for several stations.
+* ``set_theme`` and ``vayuayan.plot_theme``: one figure theme for all vayuayan plots (300 pixels per inch on screen and when saved, system sans-serif font, colour-blind-safe palette). ``plot_sensor_vs_reference``: sensor-days against the reference station, with the median of both over time.
 * OAQ daily records: ``compare_daily_records``, ``daily_record_summary``, ``OAQClient.audit_daily_records`` and the ``plot_daily_record_*`` figures (``pip install "vayuayan[plot]"``). ``check_daily_records`` also compares with the median and the mean of the last 2 and 4 readings, and its tolerance is 0.005 (OAQ's 2 decimals).
 * OAQ data requests are retried after network errors and 5xx statuses; ``get_city_latest`` lower-cases the city, as OAQ's paths need.
 * ``vayuayan.sensor_qa``: ``readings_mean``, ``sensor_completeness``, ``sensor_plausibility``, ``collocated_precision``, ``peer_ratio``, ``sensor_accuracy``, ``ratio_by_humidity`` and ``EPA_PM25_TARGETS`` (US EPA targets for PM2.5 sensors).

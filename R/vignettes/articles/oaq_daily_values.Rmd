@@ -1,0 +1,167 @@
+---
+title: "OAQ daily values: the last 15-minute reading instead of the daily mean"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{OAQ daily values: the last 15-minute reading instead of the daily mean}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r knitr-setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 11,
+  fig.height = 5,
+  dpi = 300,
+  out.width = "100%"
+)
+library(vayuayan)
+```
+
+For each sensor, [OAQ](https://oaq.notf.in) supplies the 15-minute readings of
+each day. It also supplies one daily value for each day (in the annual and
+monthly files). The usual definition of a daily value is the mean of the
+readings of that day.
+
+This article shows that the daily value is the mean until the last days of
+February 2026. From approximately 1 March 2026, the daily value is usually the
+**last 15-minute reading of the day**. The date of the change is not the same
+for all sensors, but the differences are small. We see the change on all three
+providers (`cpcb`, `airnet`, `aurassure`), in Bengaluru, Delhi and Cuttack. For
+daily means from March 2026, use `oaq_daily_means()`.
+
+The Python notebook *OAQ daily values* does this analysis again with the same
+functions. For the OAQ calls, you must have `OAQ_API_KEY`.
+
+```{r setup}
+session <- oaq_session()
+change <- "2026-03-01"
+labels <- c(
+  "cpcb 164" = "cpcb 164 · Bengaluru",
+  "cpcb 103" = "cpcb 103 · Delhi",
+  "airnet 12036" = "airnet 12036 · Bengaluru",
+  "airnet 12096" = "airnet 12096 · Bengaluru",
+  "aurassure 14709" = "aurassure 14709 · Cuttack"
+)
+```
+
+# One day in detail
+
+This section uses `cpcb` sensor 103 (CRRI Mathura Road, Delhi) on 7 March
+2026. `oaq_check_daily_records()` compares the daily value of OAQ (`record`)
+with the statistics of the readings of that day.
+
+```{r one-day}
+check <- oaq_check_daily_records(session, "cpcb", "103", "2026-03-07")
+check[, c("date", "record", "n", "mean", "last", "max", "last_2_mean", "class")]
+```
+
+```{r one-day-plot}
+plot_daily_record_day(
+  oaq_readings(session, "cpcb", "103", "2026-03-07"), check,
+  title = "cpcb 103 (Delhi), 7 March 2026"
+)
+```
+
+The daily value is equal to the 23:45 reading. It is not the mean of the
+readings of that day, the maximum, or the mean of the last two readings. A day
+in Bengaluru shows the same result:
+
+```{r second-day}
+plot_daily_record_day(
+  oaq_readings(session, "cpcb", "164", "2026-05-29"),
+  oaq_check_daily_records(session, "cpcb", "164", "2026-05-29"),
+  title = "cpcb 164 (Bengaluru), 29 May 2026"
+)
+```
+
+# All days of six sensor-years
+
+`oaq_audit_daily_records()` examines each complete day of the specified sensors
+and years. It does not include today, because the values for today are not
+complete.
+
+```{r audit}
+audit <- rbind(
+  oaq_audit_daily_records(session, data.frame(provider = "cpcb", sensor_id = "164"), c(2025, 2026)),
+  oaq_audit_daily_records(
+    session,
+    data.frame(
+      provider = c("cpcb", "airnet", "airnet", "aurassure"),
+      sensor_id = c("103", "12036", "12096", "14709")
+    ),
+    2026
+  )
+)
+nrow(audit)
+table(paste(audit$provider, audit$sensor_id), audit$class)
+```
+
+`daily_record_summary()` counts the days on which the mean and the last reading
+have a difference of more than 1. On these days, a value cannot agree with the
+two statistics accidentally. The function also finds when each sensor changed.
+It gives the last day with a value equal to only the mean. It also gives the
+first day with a value equal to only the last reading.
+
+```{r summary}
+daily_record_summary(audit)
+```
+
+```{r timeline, fig.height = 4}
+plot_daily_record_timeline(audit, change = change, labels = labels)
+```
+
+```{r scatter, fig.height = 6.4}
+plot_daily_record_scatter(audit)
+```
+
+The days with a daily value equal to the mean (blue) are on the 1:1 line on
+the left. The days with a daily value equal to the last reading (orange) are on
+the 1:1 line on the right.
+
+```{r share}
+plot_daily_record_share(audit, change = change)
+```
+
+```{r series}
+plot_daily_record_series(
+  audit, "103",
+  change = change,
+  title = "cpcb 103 (Delhi): OAQ's daily value against the daily mean"
+)
+```
+
+```{r difference}
+plot_daily_record_difference(audit, change, labels = labels)
+```
+
+# Other explanations
+
+The table that follows gives the number of days on which the daily value is
+equal to each statistic of the readings. The statistics are the mean, the last
+reading, the maximum, the median, and the mean of the last 2 and the last 4
+readings (a mean over a short period at the end of the day).
+
+```{r statistics}
+stats <- grep("^record_is_", names(audit), value = TRUE)
+aggregate(audit[stats], audit[c("provider", "sensor_id")], sum, na.rm = TRUE)
+```
+
+# Notes
+
+- This article examines only `pm25`, and five sensors on three providers.
+- Some daily values are not equal to the mean or to the last reading. Most of
+  these values are for Aurassure 14709 from August 2026. We cannot identify
+  these values.
+
+
+- `monthly_2026_03.json` returns HTTP 404 for `cpcb` 103 and `cpcb` 164, but
+  `annual_2026.json` has the data for March.
+

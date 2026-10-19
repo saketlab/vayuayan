@@ -1,6 +1,5 @@
-# CPCB National AQI breakpoints (cpcb.gov.in, "About National Air Quality
-# Index"). CPCB gives no upper concentration for Severe (401-500); the last
-# band extends it by the width of Very Poor and the index is capped at 500.
+# CPCB's About NAQI page; the 2014 report differs in places (Pb 0.6-1.0)
+# Severe has no upper limit; extended by the Very Poor width, at that slope
 .aqi_pollutants <- list(
   PM10 = list(unit = "ug", hours = 24, bp = c(0, 50, 51, 100, 101, 250, 251, 350, 351, 430, 430, 510)),
   PM2.5 = list(unit = "ug", hours = 24, bp = c(0, 30, 31, 60, 61, 90, 91, 120, 121, 250, 250, 380)),
@@ -32,12 +31,35 @@
   out <- rep(NA_real_, length(concentration))
   ok <- !is.na(concentration)
   out[ok] <- stats::approx(pts$x, pts$y, xout = concentration[ok], rule = 2)$y
+  # no cap at 500, as in CPCB's AQI-Calculator.xls
+  n <- length(pts$x)
+  above <- ok & concentration > pts$x[n]
+  slope <- (pts$y[n] - pts$y[n - 1]) / (pts$x[n] - pts$x[n - 1])
+  out[above] <- pts$y[n] + (concentration[above] - pts$x[n]) * slope
   out
 }
 
-.aqi_split_label <- function(label) {
+# round() rounds half to even; CPCB's calculator shows half up
+.round_half_up <- function(x) floor(x + 0.5)
+
+.aqi_split_label <- function(label, part = 1) {
   m <- regmatches(label, regexec("^\\s*(.*?)\\s*(?:\\((.*?)\\))?\\s*$", label, perl = TRUE))
-  vapply(m, function(x) if (length(x)) x[2] else NA_character_, character(1))
+  vapply(m, function(x) if (length(x)) x[part + 1] else NA_character_, character(1))
+}
+
+# Unit of a label such as "PM2.5 (ug/m3)", "" when it has none
+.aqi_label_unit <- function(label) .aqi_split_label(label, part = 2)
+
+# A label without its unit, case or punctuation: "PM2.5 (ug/m3)" -> "pm25"
+.aqi_key <- function(label) {
+  key <- tolower(.aqi_split_label(as.character(label)))
+  gsub("[^a-z0-9]", "", sub("2.5", "25", key, fixed = TRUE))
+}
+
+# "ug" or "mg" for a concentration unit such as "ug/m3" or "\u00b5g/m3", else ""
+.aqi_mass_unit <- function(unit) {
+  mass <- substr(gsub("\u03bc|\u00b5", "u", tolower(trimws(as.character(unit)))), 1, 2)
+  ifelse(mass %in% c("ug", "mg"), mass, "")
 }
 
 #' NAQI name of a pollutant label
@@ -54,11 +76,8 @@
 #' aqi_pollutant_name(c("PM2.5 (ug/m3)", "Ozone", "Benzene"))
 #' @export
 aqi_pollutant_name <- function(label) {
-  key <- tolower(.aqi_split_label(as.character(label)))
-  key <- gsub("[^a-z0-9]", "", sub("2.5", "25", key, fixed = TRUE))
-  names_by_key <- stats::setNames(names(.aqi_pollutants), gsub("[^a-z0-9]", "", sub("2.5", "25", tolower(names(.aqi_pollutants)), fixed = TRUE)))
-  names_by_key <- c(names_by_key, ozone = "O3", lead = "Pb")
-  unname(names_by_key[key])
+  names_by_key <- c(stats::setNames(names(.aqi_pollutants), .aqi_key(names(.aqi_pollutants))), ozone = "O3", lead = "Pb")
+  unname(names_by_key[.aqi_key(label)])
 }
 
 #' National AQI sub-index of concentrations
@@ -70,8 +89,9 @@ aqi_pollutant_name <- function(label) {
 #' @param pollutant A pollutant label (see \code{aqi_pollutant_name()}).
 #' @param concentration Numeric vector of 24-hour averages (8-hour for CO and
 #'   O3), in mg/m3 for CO and ug/m3 for the others.
-#' @return Numeric vector of sub-indices, capped at 500; \code{NA} stays
-#'   \code{NA}.
+#' @return Numeric vector of sub-indices; above the last breakpoint the
+#'   slope of the Severe band continues, so a sub-index can be more than 500.
+#'   \code{NA} stays \code{NA}.
 #' @examples
 #' aqi_sub_index("PM2.5", c(25, 45, 300))
 #' @export
@@ -109,6 +129,9 @@ compute_aqi <- function(concentrations) {
     mapply(.aqi_interp, names_naqi[keep], as.numeric(values[keep])),
     names_naqi[keep]
   )
+  # a repeated label counts once; ties go to the first in .aqi_pollutants
+  order <- intersect(names(.aqi_pollutants), names(subs))
+  subs <- vapply(order, function(n) max(subs[names(subs) == n]), numeric(1))
   if (!.aqi_sufficient(names(subs))) {
     return(list(
       aqi = NA_integer_, category = NA_character_,
@@ -116,7 +139,7 @@ compute_aqi <- function(concentrations) {
     ))
   }
   dominant <- names(subs)[which.max(subs)]
-  aqi <- as.integer(round(max(subs)))
+  aqi <- as.integer(.round_half_up(max(subs)))
   list(
     aqi = aqi, category = get_aqi_category(aqi),
     dominant_pollutant = dominant, sub_indices = subs
@@ -128,8 +151,7 @@ compute_aqi <- function(concentrations) {
     any(c("PM2.5", "PM10") %in% pollutants)
 }
 
-# "Possible health impacts" of each category, from the CPCB National AQI
-# bulletin
+# health texts of CPCB's AQI-Calculator.xls
 .aqi_health_impacts <- c(
   Good = "Minimal impact",
   Satisfactory = "Minor breathing discomfort to sensitive people",
@@ -172,5 +194,5 @@ aqi_health_impact <- function(aqi_value) {
 #' aqi_pollutant_category("PM2.5", c(20, 75))
 #' @export
 aqi_pollutant_category <- function(pollutant, concentration) {
-  get_aqi_categories(aqi_sub_index(pollutant, concentration))
+  get_aqi_categories(.round_half_up(aqi_sub_index(pollutant, concentration)))
 }

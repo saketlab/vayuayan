@@ -15,7 +15,15 @@
 
 ## New features
 
-* CPCB National AQI: `compute_aqi()`, `aqi_sub_index()`, `daily_aqi()`.
+* `theme_vayuayan()` (the ggplot2 theme of the package's figures) and
+  `plot_sensor_vs_reference()`.
+* `compute_us_aqi()`, `us_aqi_sub_index()`, `us_aqi_category()`,
+  `us_aqi_color()` and `us_aqi_pollutant_name()` calculate the US EPA AQI with the May 2024 EPA
+  tables. Labels with a mass unit, such as `"O3 (ug/m3)"`, are converted to
+  ppm or ppb at 25 degrees C.
+* CPCB National AQI: `compute_aqi()`, `aqi_sub_index()`, `daily_aqi()`. Above
+  the Severe band the sub-index continues on the same slope, as in CPCB's AQI
+  calculator, and the AQI is rounded half up.
 * Raw and hourly CPCB data: `cpcb_download_raw_station_data()`,
   `cpcb_download_hourly_city_data()`, `cpcb_download_hourly_station_data()`,
   `cpcb_raw_to_long()`, `cpcb_station_daily_aqi()`.
@@ -45,6 +53,9 @@
 
 ## Bug fixes
 
+* OAQ responses with bare `NaN` values (some daily files of 2025) are read with
+  `NA`; before, `oaq_readings()` and the functions that use it left those days
+  out.
 * `oaq_fetch_monthly_stations()` failed when providers return different
   columns or id types; `oaq_get_city_latest()` needs a lower-case city in
   OAQ's paths and now lower-cases it; OAQ data requests are retried after

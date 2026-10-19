@@ -3,7 +3,9 @@ The Indian National Air Quality Index (NAQI) of CPCB, from pollutant
 concentrations.
 
 Breakpoints and rules are from CPCB, "About National Air Quality Index" and
-"How is AQI calculated?" (cpcb.gov.in):
+"How is AQI calculated?" (cpcb.gov.in). Where CPCB documents differ (Pb
+0.5-1.0 here, 0.6-1.0 in the 2014 NAQI report), vayuayan follows the About
+page:
 
 - A sub-index is a linear function of the concentration within a breakpoint
   band. Concentrations are 24-hour averages, and 8-hour averages for CO and O3.
@@ -13,7 +15,10 @@ Breakpoints and rules are from CPCB, "About National Air Quality Index" and
 
 CPCB gives no upper concentration for the Severe band (401-500). vayuayan
 extends it by the width of the Very Poor band, as common open
-implementations do (for example PM2.5 250-380), and caps the index at 500.
+implementations do (for example PM2.5 250-380). Above that, the sub-index
+continues on the same slope, as in CPCB's AQI calculator (AQI-Calculator.xls),
+so it can be more than 500. The AQI is rounded half up, as the calculator
+shows it.
 """
 
 from __future__ import annotations
@@ -97,7 +102,7 @@ _MASS_FACTORS = {("µg", "mg"): 1e-3, ("mg", "µg"): 1e3}
 MIN_HOURS = 16
 MIN_POLLUTANTS = 3
 
-# "Possible health impacts" of each category, from the CPCB National AQI bulletin
+# health texts of CPCB's AQI-Calculator.xls
 HEALTH_IMPACTS: Dict[str, str] = {
     "Good": "Minimal impact",
     "Satisfactory": "Minor breathing discomfort to sensitive people",
@@ -157,7 +162,7 @@ def pollutant_category(pollutant: str, concentration: float) -> str:
         >>> pollutant_category("PM2.5", 75)
         'Moderate'
     """
-    return get_aqi_category(sub_index(pollutant, concentration))
+    return get_aqi_category(_round_half_up(sub_index(pollutant, concentration)))
 
 
 @dataclass(frozen=True)
@@ -196,11 +201,16 @@ def compute_aqi(concentrations: Mapping[str, float]) -> AQIResult:
         name = pollutant_name(label)
         if name is None or value is None or math.isnan(float(value)):
             continue
-        subs[name] = float(_interpolate(POLLUTANTS[name], float(value)))
+        sub = float(_interpolate(POLLUTANTS[name], float(value)))
+        # A pollutant given twice (for example "PM10" and "pm10") counts once
+        subs[name] = max(sub, subs.get(name, -math.inf))
     if not _sufficient(subs):
         return AQIResult(None, None, None, subs)
-    dominant = max(subs, key=lambda name: subs[name])
-    value = int(round(subs[dominant]))
+    # Ties go to the first pollutant in POLLUTANTS order
+    dominant = max(
+        (name for name in POLLUTANTS if name in subs), key=lambda name: subs[name]
+    )
+    value = int(_round_half_up(subs[dominant]))
     return AQIResult(value, get_aqi_category(value), dominant, subs)
 
 
@@ -237,6 +247,7 @@ def daily_aqi(
     """
     if not 1 <= day_ends_at <= 24:
         raise ValueError("day_ends_at must be an hour from 1 to 24")
+    import numpy as np
     import pandas as pd
 
     shift = pd.Timedelta(hours=24 - day_ends_at)
@@ -281,7 +292,10 @@ def daily_aqi(
             )
         )
 
-    daily = pd.concat(daily_parts, axis=1).reset_index()
+    daily = pd.concat(daily_parts, axis=1)
+    # fixed order so ties match R
+    order = [f"{name}_sub_index" for name in POLLUTANTS]
+    daily = daily[[c for c in order if c in daily.columns]].reset_index()
     daily["date"] = daily.pop("day").dt.date
     subs = daily.filter(like="_sub_index")
     present = subs.notna()
@@ -290,7 +304,8 @@ def daily_aqi(
     ].any(axis=1)
     daily["n_pollutants"] = present.sum(axis=1)
     ok = (daily["n_pollutants"] >= MIN_POLLUTANTS) & has_pm
-    daily["aqi"] = subs.max(axis=1).where(ok).round().astype("Int64")
+    # Half up, as compute_aqi; Series.round() rounds half to even
+    daily["aqi"] = np.floor(subs.max(axis=1).where(ok) + 0.5).astype("Int64")
     dominant = subs[ok].idxmax(axis=1).str.removesuffix("_sub_index")
     daily["dominant_pollutant"] = dominant.reindex(daily.index)
     daily["category"] = daily["aqi"].map(get_aqi_category, na_action="ignore")
@@ -309,12 +324,21 @@ def _require(pollutant: str) -> Pollutant:
 
 
 def _interpolate(pollutant: Pollutant, concentrations: ArrayLike) -> np.ndarray:
-    """Sub-indices of concentrations (array); NaN stays NaN, the cap is 500."""
+    """Sub-indices of concentrations (array); NaN stays NaN. Above the last
+    breakpoint the slope of the last band continues."""
     import numpy as np
 
     xs, ys = _POINTS[pollutant.name]
     c = np.asarray(concentrations, dtype=float)
-    return np.where(np.isnan(c), np.nan, np.interp(c, xs, ys))
+    slope = (ys[-1] - ys[-2]) / (xs[-1] - xs[-2])
+    above = ys[-1] + (c - xs[-1]) * slope
+    sub = np.where(c > xs[-1], above, np.interp(c, xs, ys))
+    return np.where(np.isnan(c), np.nan, sub)
+
+
+def _round_half_up(x: float) -> float:
+    """Round half up, as Excel shows CPCB's calculator; round() rounds half to even."""
+    return x if math.isnan(x) else float(math.floor(x + 0.5))
 
 
 def _sufficient(subs: Mapping[str, float]) -> bool:

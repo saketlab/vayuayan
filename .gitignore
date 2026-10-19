@@ -9,5 +9,3 @@ __pycache__/
 CLAUDE.md
 .claude/
 
-# --dump files of the report scripts hold all the OAQ readings
-reports/**/*_20??.json

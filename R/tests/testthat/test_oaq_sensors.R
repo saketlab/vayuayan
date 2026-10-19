@@ -161,3 +161,13 @@ test_that("oaq_get_city_latest uses lower-case paths", {
   oaq_get_city_latest(list(), "AIRNET", "Bengaluru")
   expect_equal(path, "provider=airnet/live/by_city/bengaluru/map_latest.json")
 })
+
+test_that("OAQ JSON with bare NaN and Infinity parses with NA", {
+  # as in OAQ's daily file of cpcb 164 on 2025-10-19
+  text <- '{"data": [{"date": "2025-10-19T00:15:00+05:30", "pm25": 35.0, "pm10": NaN, "so2": -Infinity}, {"date": "x", "pm25": NaN, "pm10": 1, "so2": 2}], "note": "NaN in a string"}'
+  got <- .oaq_parse(text)
+  expect_equal(got$data$pm25, c(35, NA))
+  expect_equal(got$data$pm10, c(NA, 1))
+  expect_equal(got$data$so2, c(NA, 2))
+  expect_equal(got$note, "NaN in a string")
+})

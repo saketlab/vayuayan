@@ -11,37 +11,43 @@ from __future__ import annotations
 
 import statistics
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 if TYPE_CHECKING:
     import pandas as pd
     from matplotlib.figure import Figure
 
-# Validated colour-blind-safe pair (CVD ΔE 24.7) and neutral greys
-MEAN, LAST, BOTH, NEITHER = "#2a78d6", "#eb6834", "#c3c2b7", "#52514e"
-SURFACE, INK, INK_2, MUTED, GRID, AXIS = (
-    "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7",
-)  # fmt: skip
-CLASS_COLOURS = {"mean": MEAN, "last": LAST, "both": BOTH, "neither": NEITHER}
+from .oaq_records import RECORD_TOLERANCE
+from .plot_theme import (
+    AXIS,
+    INK,
+    INK_2,
+    MUTED,
+    PALETTE,
+    SURFACE,
+    day_label,
+    mark_change,
+    new_figure,
+    theme_context,
+)
+
+MEAN, LAST = PALETTE[0], PALETTE[1]
+CLASS_COLOURS = {"mean": MEAN, "last": LAST, "both": AXIS, "neither": INK_2}
 CLASS_LABELS = {
     "mean": "Daily value = mean of the readings",
     "last": "Daily value = last reading of the day",
-    "both": "Matches both (mean and last reading equal)",
+    "both": f"Matches both (mean and last reading within {RECORD_TOLERANCE})",
     "neither": "Matches neither",
 }
-_RC = {
-    "figure.facecolor": SURFACE, "axes.facecolor": SURFACE, "savefig.facecolor": SURFACE,
-    "font.size": 10.5, "text.color": INK, "axes.labelcolor": INK_2, "axes.edgecolor": AXIS,
-    "axes.linewidth": 0.8, "axes.spines.top": False, "axes.spines.right": False,
-    "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.6, "axes.axisbelow": True,
-    "xtick.color": MUTED, "ytick.color": MUTED, "xtick.labelcolor": INK_2,
-    "ytick.labelcolor": INK_2, "xtick.major.size": 0, "ytick.major.size": 0,
-    "legend.frameon": False, "axes.titlesize": 12, "axes.titleweight": "bold",
-    "axes.titlelocation": "left", "axes.titlepad": 10,
-}  # fmt: skip
 
 Labels = Optional[Dict[str, str]]
-Change = Optional[Any]
+
+_NAMES = {"pm25": "PM2.5", "pm10": "PM10", "no2": "NO2", "so2": "SO2", "o3": "O3"}
+
+
+def _quantity(value: str) -> str:
+    """'PM2.5 (µg/m³)' for 'pm25'."""
+    return f"{_NAMES.get(value, value)} (µg/m³)"
 
 
 def plot_daily_record_day(
@@ -65,8 +71,8 @@ def plot_daily_record_day(
     row = check.iloc[0] if isinstance(check, pd.DataFrame) else check
     r = readings.dropna(subset=[value]).sort_values("timestamp")
     start = pd.Timestamp(row["date"])
-    with _style():
-        fig = _figure((8, 4.8))
+    with theme_context():
+        fig = new_figure((8, 4.8))
         ax = fig.add_subplot()
         ax.plot(
             r["timestamp"], r[value], color=INK_2, lw=1.2, marker="o", ms=2.6, zorder=2
@@ -81,8 +87,8 @@ def plot_daily_record_day(
         peak = r[value].max() if len(r) else 0
         ax.set_ylim(0, max(peak, row["record"], row["mean"]) * 1.15)
         ax.set_xlim(start, start + timedelta(hours=23, minutes=59))
-        ax.set_title(title or f"Sensor {row['sensor_id']}, {_day(start)}")
-        ax.set_ylabel(f"{value} (µg/m³)")
+        ax.set_title(title or f"Sensor {row['sensor_id']}, {day_label(start)}")
+        ax.set_ylabel(_quantity(value))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
         ax.xaxis.set_major_locator(mdates.HourLocator(byhour=range(0, 24, 4)))
         _legend(fig, [
@@ -100,7 +106,7 @@ def plot_daily_record_day(
 
 
 def plot_daily_record_timeline(
-    audit: pd.DataFrame, change: Change = None, labels: Labels = None
+    audit: pd.DataFrame, change: Optional[Any] = None, labels: Labels = None
 ) -> Figure:
     """Which statistic each day's record equals, one row per sensor.
 
@@ -114,8 +120,8 @@ def plot_daily_record_timeline(
 
     a = _with_key(audit, labels)
     rows = list(dict.fromkeys(a["label"]))
-    with _style():
-        fig = _figure((13, 1.6 + 0.65 * len(rows)))
+    with theme_context():
+        fig = new_figure((13, 1.6 + 0.65 * len(rows)))
         ax = fig.add_subplot()
         for i, label in enumerate(rows):
             g = a[a["label"] == label]
@@ -125,7 +131,7 @@ def plot_daily_record_timeline(
                     [(d - 0.5, 1) for d in days], (i - 0.34, 0.68),
                     facecolors=colour, edgecolor=SURFACE, lw=0.3,
                 )  # fmt: skip
-        _mark_change(ax, change, y=-0.75)
+        mark_change(ax, change, y=-0.75)
         ax.set_yticks(range(len(rows)), rows)
         ax.set_ylim(len(rows) - 0.4, -1)
         ax.grid(axis="y", visible=False)
@@ -146,15 +152,17 @@ def plot_daily_record_scatter(audit: pd.DataFrame) -> Figure:
     """The daily record against the mean (left) and the last reading (right)."""
     from matplotlib.lines import Line2D
 
-    with _style():
-        fig = _figure((12, 6.4))
+    with theme_context():
+        fig = new_figure((12, 6.4))
         axes = fig.subplots(1, 2)
         for ax, stat, xlabel in [
-            (axes[0], "mean", "Mean of the day's 15-minute readings"),
-            (axes[1], "last", "Last 15-minute reading of the day"),
+            (axes[0], "mean", "Mean of the day's 15-minute readings (µg/m³)"),
+            (axes[1], "last", "Last 15-minute reading of the day (µg/m³)"),
         ]:
             top = float(audit[[stat, "record"]].max().max()) * 1.03
             ax.plot([0, top], [0, top], color=AXIS, lw=1)
+            ax.annotate("1:1", (top, top), xytext=(-6, -4), textcoords="offset points",
+                        ha="right", va="top", color=MUTED, fontsize=9)  # fmt: skip
             for cls in ["neither", "both", "mean", "last"]:
                 g = audit[audit["class"] == cls]
                 ax.scatter(
@@ -165,7 +173,7 @@ def plot_daily_record_scatter(audit: pd.DataFrame) -> Figure:
             ax.set_ylim(0, top)
             ax.set_aspect("equal")
             ax.set_xlabel(xlabel)
-            ax.set_ylabel("OAQ daily value")
+            ax.set_ylabel("OAQ daily value (µg/m³)")
         axes[0].set_title("Against the daily mean")
         axes[1].set_title("Against the last reading")
         handles = [
@@ -184,7 +192,9 @@ def plot_daily_record_scatter(audit: pd.DataFrame) -> Figure:
     return fig
 
 
-def plot_daily_record_share(audit: pd.DataFrame, change: Change = None) -> Figure:
+def plot_daily_record_share(
+    audit: pd.DataFrame, change: Optional[Any] = None
+) -> Figure:
     """Share of days by month that the record equals each statistic."""
     import pandas as pd
 
@@ -192,8 +202,8 @@ def plot_daily_record_share(audit: pd.DataFrame, change: Change = None) -> Figur
     share = pd.crosstab(a["month"], a["class"], normalize="index")
     share = share.reindex(columns=list(CLASS_COLOURS), fill_value=0) * 100
     counts = a.groupby("month").size()
-    with _style():
-        fig = _figure((13, 5))
+    with theme_context():
+        fig = new_figure((13, 5))
         ax = fig.add_subplot()
         bottom = pd.Series(0.0, index=share.index)
         for cls in CLASS_COLOURS:
@@ -221,7 +231,7 @@ def plot_daily_record_share(audit: pd.DataFrame, change: Change = None) -> Figur
 def plot_daily_record_series(
     audit: pd.DataFrame,
     sensor_id: str,
-    change: Change = None,
+    change: Optional[Any] = None,
     title: Optional[str] = None,
     value: str = "pm25",
 ) -> Figure:
@@ -231,8 +241,8 @@ def plot_daily_record_series(
 
     a = audit[audit["sensor_id"].astype(str) == str(sensor_id)].copy()
     a["day"] = pd.to_datetime(a["date"])
-    with _style():
-        fig = _figure((13, 5))
+    with theme_context():
+        fig = new_figure((13, 5))
         ax = fig.add_subplot()
         ax.plot(
             a["day"],
@@ -242,10 +252,10 @@ def plot_daily_record_series(
             label="Daily mean of the 15-minute readings",
         )
         ax.plot(a["day"], a["record"], color=LAST, lw=1.4, label="OAQ daily value")
-        _mark_change(ax, change)
+        mark_change(ax, change)
         ax.xaxis.set_major_locator(mdates.MonthLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b\n%Y"))
-        ax.set_ylabel(f"{value} (µg/m³)")
+        ax.set_ylabel(_quantity(value))
         ax.set_title(
             title or f"Sensor {sensor_id}: OAQ's daily value against the daily mean"
         )
@@ -266,8 +276,8 @@ def plot_daily_record_difference(
     a["difference"] = a["record"] - a["mean"]
     rows = list(dict.fromkeys(a["label"]))
     ticks: List[str] = []
-    with _style():
-        fig = _figure((13, 5.8))
+    with theme_context():
+        fig = new_figure((13, 5.8))
         ax = fig.add_subplot()
         for i, label in enumerate(rows):
             medians = []
@@ -291,37 +301,15 @@ def plot_daily_record_difference(
         ax.set_yticks(steps, [f"{t:g}" for t in steps])
         ax.set_xticks(range(len(rows)), ticks)
         ax.grid(axis="x", visible=False)
-        ax.set_ylabel("OAQ daily value − daily mean (symlog)")
+        ax.set_ylabel("OAQ daily value − daily mean (µg/m³, symlog)")
         ax.set_title(
-            f"How far OAQ's daily value is from the daily mean, before and from {_day(when)}"
+            f"How far OAQ's daily value is from the daily mean, before and from {day_label(when)}"
         )
         _legend(fig, [
-            Line2D([], [], ls="", marker="o", ms=7, color=MEAN, label=f"Days before {_day(when)}"),
-            Line2D([], [], ls="", marker="o", ms=7, color=LAST, label=f"Days from {_day(when)}"),
+            Line2D([], [], ls="", marker="o", ms=7, color=MEAN, label=f"Days before {day_label(when)}"),
+            Line2D([], [], ls="", marker="o", ms=7, color=LAST, label=f"Days from {day_label(when)}"),
         ], ncol=2)  # fmt: skip
     return fig
-
-
-def _style() -> Any:
-    from matplotlib import rc_context
-
-    return rc_context(cast(Any, _RC))
-
-
-def _figure(size: Tuple[float, float]) -> Figure:
-    """A figure made with pyplot, so that notebooks display it, and closed, so
-    that a notebook shows the returned figure once and scripts do not collect
-    open figures."""
-    import matplotlib.pyplot as plt
-
-    fig = plt.figure(figsize=size, dpi=100)
-    plt.close(fig)
-    return fig
-
-
-def _day(when: Any) -> str:
-    """'1 March 2026', without zero padding on any platform."""
-    return f"{when.day} {when:%B %Y}"
 
 
 def _legend(fig: Figure, handles: Any, ncol: int, rows: int = 1) -> None:
@@ -341,23 +329,6 @@ def _with_key(audit: pd.DataFrame, labels: Labels) -> pd.DataFrame:
     a["label"] = a["key"].map(lambda k: (labels or {}).get(k, k))
     a["day"] = pd.to_datetime(a["date"])
     return a
-
-
-def _mark_change(ax: Any, change: Change, y: Optional[float] = None) -> None:
-    import matplotlib.dates as mdates
-    import pandas as pd
-
-    if change is None:
-        return
-    when = pd.Timestamp(change)
-    x = mdates.date2num(when)
-    ax.axvline(x, color=INK, lw=1)
-    if y is None:
-        ax.text(
-            x, 0.97, f"  {_day(when)}", transform=ax.get_xaxis_transform(), va="top"
-        )
-    else:
-        ax.text(x, y, f"  {_day(when)}", va="center")
 
 
 def _place_label(

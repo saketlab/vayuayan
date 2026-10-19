@@ -8,7 +8,7 @@
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-Download and analyze air pollution data from three sources. The Central Pollution Control Board (CPCB) of India publishes historical and real-time particulate matter and air quality index readings from more than 600 continuous ambient air quality monitoring stations \url{https://airquality.cpcb.gov.in/ccr/}. Open Air Quality (OAQ) aggregates low-cost sensor networks in India \url{https://oaq.notf.in}. The Atmospheric Composition Analysis Group at Washington University in St. Louis provides satellite-derived fine particulate matter (PM2.5) estimates at 0.01 degree resolution for 1998-2024 \url{https://www.satpm.org}. Includes station lookup, nearest-station matching, the CPCB National Air Quality Index computed from pollutant concentrations, regional PM2.5 summaries from 'NetCDF' rasters, quality checks of sensor readings against the United States Environmental Protection Agency performance targets for PM2.5 sensors, and checks of OAQ's daily values against their 15-minute readings.
+Downloads and examines air quality data from three sources. The Central Pollution Control Board (CPCB) of India operates more than 600 monitoring stations. Open Air Quality (OAQ) \url{https://oaq.notf.in} collects data from low-cost sensor networks in India. The Atmospheric Composition Analysis Group at Washington University in St. Louis gives satellite estimates of fine particulate matter (PM2.5) for all areas of the Earth \url{https://www.satpm.org}. The package calculates the CPCB National Air Quality Index and the mean PM2.5 in an area.
 }
 \seealso{
 Useful links:

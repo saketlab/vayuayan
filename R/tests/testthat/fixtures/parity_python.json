@@ -6,6 +6,11 @@
   "daily_aqi": "daily_aqi",
   "health_impact": "aqi_health_impact",
   "pollutant_category": "aqi_pollutant_category",
+  "compute_us_aqi": "compute_us_aqi",
+  "us_sub_index": "us_aqi_sub_index",
+  "us_pollutant_name": "us_aqi_pollutant_name",
+  "us_aqi_category": "us_aqi_category",
+  "us_aqi_color": "us_aqi_color",
   "cpcb_raw_to_long": "cpcb_raw_to_long",
   "cpcb_tidy_daily": "cpcb_tidy_daily",
   "live_to_long": "cpcb_live_to_long",
@@ -75,6 +80,8 @@
   "plot_daily_record_share": "plot_daily_record_share",
   "plot_daily_record_series": "plot_daily_record_series",
   "plot_daily_record_difference": "plot_daily_record_difference",
+  "plot_sensor_vs_reference": "plot_sensor_vs_reference",
+  "set_theme": "theme_vayuayan",
   "readings_mean": "readings_mean",
   "sensor_completeness": "sensor_completeness",
   "sensor_plausibility": "sensor_plausibility",
@@ -607,12 +614,12 @@
   {
    "pollutant": "PM10",
    "concentration": 510.05,
-   "sub_index": 500.0
+   "sub_index": 500.0618750000008
   },
   {
    "pollutant": "PM10",
    "concentration": 765.0,
-   "sub_index": 500.0
+   "sub_index": 815.5625000039445
   },
   {
    "pollutant": "PM2.5",
@@ -802,12 +809,12 @@
   {
    "pollutant": "PM2.5",
    "concentration": 380.05,
-   "sub_index": 500.0
+   "sub_index": 500.0380769230772
   },
   {
    "pollutant": "PM2.5",
    "concentration": 570.0,
-   "sub_index": 500.0
+   "sub_index": 644.6923076934207
   },
   {
    "pollutant": "NO2",
@@ -997,12 +1004,12 @@
   {
    "pollutant": "NO2",
    "concentration": 520.05,
-   "sub_index": 500.0
+   "sub_index": 500.04125000000033
   },
   {
    "pollutant": "NO2",
    "concentration": 780.0,
-   "sub_index": 500.0
+   "sub_index": 714.5000000017875
   },
   {
    "pollutant": "O3",
@@ -1192,12 +1199,12 @@
   {
    "pollutant": "O3",
    "concentration": 1288.05,
-   "sub_index": 500.0
+   "sub_index": 500.00916666666666
   },
   {
    "pollutant": "O3",
    "concentration": 1932.0,
-   "sub_index": 500.0
+   "sub_index": 618.0666666668853
   },
   {
    "pollutant": "CO",
@@ -1352,12 +1359,12 @@
   {
    "pollutant": "CO",
    "concentration": 51.05,
-   "sub_index": 500.0
+   "sub_index": 500.29117647060536
   },
   {
    "pollutant": "CO",
    "concentration": 76.5,
-   "sub_index": 500.0
+   "sub_index": 648.5000000087352
   },
   {
    "pollutant": "SO2",
@@ -1547,12 +1554,12 @@
   {
    "pollutant": "SO2",
    "concentration": 2400.05,
-   "sub_index": 500.0
+   "sub_index": 500.0061875
   },
   {
    "pollutant": "SO2",
    "concentration": 3600.0,
-   "sub_index": 500.0
+   "sub_index": 648.5000000001857
   },
   {
    "pollutant": "NH3",
@@ -1727,12 +1734,12 @@
   {
    "pollutant": "NH3",
    "concentration": 2400.05,
-   "sub_index": 500.0
+   "sub_index": 500.00825000000003
   },
   {
    "pollutant": "NH3",
    "concentration": 3600.0,
-   "sub_index": 500.0
+   "sub_index": 698.00000000033
   },
   {
    "pollutant": "Pb",
@@ -1902,12 +1909,12 @@
   {
    "pollutant": "Pb",
    "concentration": 3.9499999999999997,
-   "sub_index": 500.0
+   "sub_index": 512.3750000309375
   },
   {
    "pollutant": "Pb",
    "concentration": 5.85,
-   "sub_index": 500.0
+   "sub_index": 982.6250012065626
   }
  ],
  "compute_aqi": [
@@ -1977,14 +1984,14 @@
     "NH3": 3000,
     "Pb": 4
    },
-   "aqi": 500,
+   "aqi": 611,
    "category": "Severe",
-   "dominant_pollutant": "PM2.5",
+   "dominant_pollutant": "PM10",
    "sub_indices": {
-    "PM2.5": 500.0,
-    "PM10": 500.0,
-    "NH3": 500.0,
-    "Pb": 500.0
+    "PM2.5": 591.3846153853183,
+    "PM10": 611.3750000013922,
+    "NH3": 599.000000000165,
+    "Pb": 524.7500000618751
    }
   },
   {
@@ -1993,9 +2000,9 @@
     "PM10": 50.5,
     "SO2": 40.5
    },
-   "aqi": 50,
-   "category": "Good",
-   "dominant_pollutant": "PM2.5",
+   "aqi": 51,
+   "category": "Satisfactory",
+   "dominant_pollutant": "PM10",
    "sub_indices": {
     "PM2.5": 50.5,
     "PM10": 50.5,
@@ -2016,6 +2023,65 @@
     "PM10": 113.6241610738255,
     "NO2": 110.0,
     "O3": 70.0
+   }
+  },
+  {
+   "input": {
+    "PM10": 80,
+    "pm10": 120,
+    "NO2": 30
+   },
+   "aqi": null,
+   "category": null,
+   "dominant_pollutant": null,
+   "sub_indices": {
+    "PM10": 113.6241610738255,
+    "NO2": 37.5
+   }
+  },
+  {
+   "input": {
+    "NO2": 80,
+    "PM10": 100,
+    "SO2": 10
+   },
+   "aqi": 100,
+   "category": "Satisfactory",
+   "dominant_pollutant": "PM10",
+   "sub_indices": {
+    "NO2": 100.0,
+    "PM10": 100.0,
+    "SO2": 12.5
+   }
+  },
+  {
+   "input": {
+    "PM2.5": 30.5,
+    "PM10": 10,
+    "NO2": 10
+   },
+   "aqi": 51,
+   "category": "Satisfactory",
+   "dominant_pollutant": "PM2.5",
+   "sub_indices": {
+    "PM2.5": 50.5,
+    "PM10": 10.0,
+    "NO2": 12.5
+   }
+  },
+  {
+   "input": {
+    "PM2.5": 1000,
+    "PM10": 2000,
+    "CO": 100
+   },
+   "aqi": 2344,
+   "category": "Severe",
+   "dominant_pollutant": "PM10",
+   "sub_indices": {
+    "PM2.5": 972.153846157478,
+    "PM10": 2343.8750000230484,
+    "CO": 785.352941193256
    }
   }
  ],
@@ -4112,6 +4178,1898 @@
     "EU",
     "NA"
    ]
+  }
+ ],
+ "us_pollutants": {
+  "PM2.5": {
+   "unit": "µg/m³",
+   "decimals": 1,
+   "bands": [
+    [
+     0.0,
+     9.0,
+     0,
+     50
+    ],
+    [
+     9.1,
+     35.4,
+     51,
+     100
+    ],
+    [
+     35.5,
+     55.4,
+     101,
+     150
+    ],
+    [
+     55.5,
+     125.4,
+     151,
+     200
+    ],
+    [
+     125.5,
+     225.4,
+     201,
+     300
+    ],
+    [
+     225.5,
+     325.4,
+     301,
+     500
+    ]
+   ]
+  },
+  "PM10": {
+   "unit": "µg/m³",
+   "decimals": 0,
+   "bands": [
+    [
+     0,
+     54,
+     0,
+     50
+    ],
+    [
+     55,
+     154,
+     51,
+     100
+    ],
+    [
+     155,
+     254,
+     101,
+     150
+    ],
+    [
+     255,
+     354,
+     151,
+     200
+    ],
+    [
+     355,
+     424,
+     201,
+     300
+    ],
+    [
+     425,
+     604,
+     301,
+     500
+    ]
+   ]
+  },
+  "O3": {
+   "unit": "ppm",
+   "decimals": 3,
+   "bands": [
+    [
+     0.0,
+     0.054,
+     0,
+     50
+    ],
+    [
+     0.055,
+     0.07,
+     51,
+     100
+    ],
+    [
+     0.071,
+     0.085,
+     101,
+     150
+    ],
+    [
+     0.086,
+     0.105,
+     151,
+     200
+    ],
+    [
+     0.106,
+     0.2,
+     201,
+     300
+    ]
+   ]
+  },
+  "O3_1h": {
+   "unit": "ppm",
+   "decimals": 3,
+   "bands": [
+    [
+     0.125,
+     0.164,
+     101,
+     150
+    ],
+    [
+     0.165,
+     0.204,
+     151,
+     200
+    ],
+    [
+     0.205,
+     0.404,
+     201,
+     300
+    ],
+    [
+     0.405,
+     0.604,
+     301,
+     500
+    ]
+   ]
+  },
+  "CO": {
+   "unit": "ppm",
+   "decimals": 1,
+   "bands": [
+    [
+     0.0,
+     4.4,
+     0,
+     50
+    ],
+    [
+     4.5,
+     9.4,
+     51,
+     100
+    ],
+    [
+     9.5,
+     12.4,
+     101,
+     150
+    ],
+    [
+     12.5,
+     15.4,
+     151,
+     200
+    ],
+    [
+     15.5,
+     30.4,
+     201,
+     300
+    ],
+    [
+     30.5,
+     50.4,
+     301,
+     500
+    ]
+   ]
+  },
+  "SO2": {
+   "unit": "ppb",
+   "decimals": 0,
+   "bands": [
+    [
+     0,
+     35,
+     0,
+     50
+    ],
+    [
+     36,
+     75,
+     51,
+     100
+    ],
+    [
+     76,
+     185,
+     101,
+     150
+    ],
+    [
+     186,
+     304,
+     151,
+     200
+    ]
+   ]
+  },
+  "SO2_24h": {
+   "unit": "ppb",
+   "decimals": 0,
+   "bands": [
+    [
+     305,
+     604,
+     201,
+     300
+    ],
+    [
+     605,
+     1004,
+     301,
+     500
+    ]
+   ]
+  },
+  "NO2": {
+   "unit": "ppb",
+   "decimals": 0,
+   "bands": [
+    [
+     0,
+     53,
+     0,
+     50
+    ],
+    [
+     54,
+     100,
+     51,
+     100
+    ],
+    [
+     101,
+     360,
+     101,
+     150
+    ],
+    [
+     361,
+     649,
+     151,
+     200
+    ],
+    [
+     650,
+     1249,
+     201,
+     300
+    ],
+    [
+     1250,
+     2049,
+     301,
+     500
+    ]
+   ]
+  }
+ },
+ "us_pollutant_name": [
+  {
+   "label": "PM2.5",
+   "name": "PM2.5"
+  },
+  {
+   "label": "PM2.5 (µg/m³)",
+   "name": "PM2.5"
+  },
+  {
+   "label": "pm25",
+   "name": "PM2.5"
+  },
+  {
+   "label": "PM10 (ug/m3)",
+   "name": "PM10"
+  },
+  {
+   "label": "Ozone",
+   "name": "O3"
+  },
+  {
+   "label": "O3",
+   "name": "O3"
+  },
+  {
+   "label": "O3_1h",
+   "name": "O3_1h"
+  },
+  {
+   "label": "O3 1h",
+   "name": "O3_1h"
+  },
+  {
+   "label": "CO (mg/m3)",
+   "name": "CO"
+  },
+  {
+   "label": "NO2",
+   "name": "NO2"
+  },
+  {
+   "label": "SO2",
+   "name": "SO2"
+  },
+  {
+   "label": "SO2_24h",
+   "name": "SO2_24h"
+  },
+  {
+   "label": "SO2 24h",
+   "name": "SO2_24h"
+  },
+  {
+   "label": "NH3",
+   "name": null
+  },
+  {
+   "label": "Benzene",
+   "name": null
+  }
+ ],
+ "us_sub_index": [
+  {
+   "pollutant": "PM2.5",
+   "concentration": 0.0,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 0.05,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 4.5,
+   "sub_index": 25.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 8.95,
+   "sub_index": 49.44444444444444
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 9.0,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 9.05,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 9.1,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 9.15,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 22.25,
+   "sub_index": 75.40684410646388
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 35.35,
+   "sub_index": 99.81368821292776
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 35.4,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 35.45,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 35.5,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 35.55,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 45.45,
+   "sub_index": 125.37688442211055
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 55.35,
+   "sub_index": 149.7537688442211
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 55.4,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 55.45,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 55.5,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 55.55,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 90.45,
+   "sub_index": 175.46494992846925
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 125.35,
+   "sub_index": 199.92989985693848
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 125.4,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 125.45,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 125.5,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 125.55,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 175.45,
+   "sub_index": 250.45045045045046
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 225.35,
+   "sub_index": 299.9009009009009
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 225.4,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 225.45,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 225.5,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 225.55,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 275.45,
+   "sub_index": 400.4004004004004
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 325.35,
+   "sub_index": 499.80080080080086
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 325.4,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 325.45,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "PM2.5",
+   "concentration": 488.09999999999997,
+   "sub_index": 824.0970970970973
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 0,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 0.5,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 27.0,
+   "sub_index": 25.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 53.5,
+   "sub_index": 49.074074074074076
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 54,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 54.5,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 55,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 55.5,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 104.5,
+   "sub_index": 75.25252525252526
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 153.5,
+   "sub_index": 99.5050505050505
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 154,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 154.5,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 155,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 155.5,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 204.5,
+   "sub_index": 125.25252525252526
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 253.5,
+   "sub_index": 149.50505050505052
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 254,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 254.5,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 255,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 255.5,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 304.5,
+   "sub_index": 175.25252525252526
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 353.5,
+   "sub_index": 199.50505050505052
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 354,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 354.5,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 355,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 355.5,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 389.5,
+   "sub_index": 249.7826086956522
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 423.5,
+   "sub_index": 298.5652173913044
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 424,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 424.5,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 425,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 425.5,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 514.5,
+   "sub_index": 399.9441340782123
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 603.5,
+   "sub_index": 498.8882681564246
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 604,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 604.5,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "PM10",
+   "concentration": 906.0,
+   "sub_index": 835.7430167597765
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0005,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.027,
+   "sub_index": 25.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0535,
+   "sub_index": 49.074074074074076
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.054,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0545,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.055,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0555,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0625,
+   "sub_index": 73.86666666666665
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0695,
+   "sub_index": 96.73333333333332
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.07,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0705,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.071,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0715,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.078,
+   "sub_index": 125.5
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0845,
+   "sub_index": 146.5
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.085,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0855,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.086,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0865,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.0955,
+   "sub_index": 174.21052631578948
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.1045,
+   "sub_index": 197.42105263157896
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.105,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.1055,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.106,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.1065,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.153,
+   "sub_index": 250.5
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.1995,
+   "sub_index": 298.94680851063833
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.2,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.2005,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "O3",
+   "concentration": 0.30000000000000004,
+   "sub_index": null
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.1245,
+   "sub_index": null
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.125,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.1255,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.1445,
+   "sub_index": 124.87179487179485
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.1635,
+   "sub_index": 148.74358974358972
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.164,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.1645,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.165,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.1655,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.1845,
+   "sub_index": 174.87179487179486
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.2035,
+   "sub_index": 198.74358974358978
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.204,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.2045,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.205,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.2055,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.3045,
+   "sub_index": 250.25125628140702
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.4035,
+   "sub_index": 299.50251256281405
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.404,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.4045,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.405,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.4055,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.5045,
+   "sub_index": 400.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.6035,
+   "sub_index": 499.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.604,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.6045,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "O3_1h",
+   "concentration": 0.9059999999999999,
+   "sub_index": 802.0000000000001
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 0.0,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 0.05,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 2.2,
+   "sub_index": 25.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 4.35,
+   "sub_index": 48.86363636363636
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 4.4,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 4.45,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 4.5,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 4.55,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 6.95,
+   "sub_index": 75.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 9.35,
+   "sub_index": 99.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 9.4,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 9.45,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 9.5,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 9.55,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 10.95,
+   "sub_index": 124.65517241379311
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 12.35,
+   "sub_index": 148.31034482758622
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 12.4,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 12.45,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 12.5,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 12.55,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 13.95,
+   "sub_index": 174.6551724137931
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 15.35,
+   "sub_index": 198.31034482758622
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 15.4,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 15.45,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 15.5,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 15.55,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 22.95,
+   "sub_index": 250.16778523489933
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 30.35,
+   "sub_index": 299.33557046979865
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 30.4,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 30.45,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 30.5,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 30.55,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 40.45,
+   "sub_index": 400.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 50.35,
+   "sub_index": 499.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 50.4,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 50.45,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "CO",
+   "concentration": 75.6,
+   "sub_index": 752.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 0,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 0.5,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 17.5,
+   "sub_index": 24.285714285714285
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 34.5,
+   "sub_index": 48.57142857142857
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 35,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 35.5,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 36,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 36.5,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 55.5,
+   "sub_index": 74.87179487179488
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 74.5,
+   "sub_index": 98.74358974358975
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 75,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 75.5,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 76,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 76.5,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 130.5,
+   "sub_index": 125.27522935779817
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 184.5,
+   "sub_index": 149.55045871559633
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 185,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 185.5,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 186,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 186.5,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 245.0,
+   "sub_index": 175.5
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 303.5,
+   "sub_index": 199.58474576271186
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 304,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 304.5,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "SO2",
+   "concentration": 456.0,
+   "sub_index": null
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 304.5,
+   "sub_index": null
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 305,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 305.5,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 454.5,
+   "sub_index": 250.33444816053512
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 603.5,
+   "sub_index": 299.66889632107024
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 604,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 604.5,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 605,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 605.5,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 804.5,
+   "sub_index": 400.25062656641603
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 1003.5,
+   "sub_index": 499.50125313283206
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 1004,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 1004.5,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "SO2_24h",
+   "concentration": 1506.0,
+   "sub_index": 750.3709273182958
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 0,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 0.5,
+   "sub_index": 0.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 26.5,
+   "sub_index": 24.528301886792452
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 52.5,
+   "sub_index": 49.056603773584904
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 53,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 53.5,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 54,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 54.5,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 77.0,
+   "sub_index": 75.5
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 99.5,
+   "sub_index": 98.93478260869566
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 100,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 100.5,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 101,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 101.5,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 230.5,
+   "sub_index": 125.4054054054054
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 359.5,
+   "sub_index": 149.8108108108108
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 360,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 360.5,
+   "sub_index": 150.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 361,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 361.5,
+   "sub_index": 151.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 505.0,
+   "sub_index": 175.5
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 648.5,
+   "sub_index": 199.82986111111111
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 649,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 649.5,
+   "sub_index": 200.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 650,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 650.5,
+   "sub_index": 201.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 949.5,
+   "sub_index": 250.41736227045075
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 1248.5,
+   "sub_index": 299.8347245409015
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 1249,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 1249.5,
+   "sub_index": 300.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 1250,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 1250.5,
+   "sub_index": 301.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 1649.5,
+   "sub_index": 400.37546933667085
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 2048.5,
+   "sub_index": 499.7509386733417
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 2049,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 2049.5,
+   "sub_index": 500.0
+  },
+  {
+   "pollutant": "NO2",
+   "concentration": 3073.5,
+   "sub_index": 755.0387984981226
+  },
+  {
+   "pollutant": "O3 (µg/m³)",
+   "concentration": 100,
+   "sub_index": 46.296296296296305
+  },
+  {
+   "pollutant": "O3 (ug/m3)",
+   "concentration": 108,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "O3_1h (µg/m³)",
+   "concentration": 300,
+   "sub_index": 134.9230769230769
+  },
+  {
+   "pollutant": "NO2 (µg/m³)",
+   "concentration": 100,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "NO2 (ug/m3)",
+   "concentration": 101.9,
+   "sub_index": 51.0
+  },
+  {
+   "pollutant": "SO2 (µg/m³)",
+   "concentration": 93,
+   "sub_index": 50.0
+  },
+  {
+   "pollutant": "SO2_24h (µg/m³)",
+   "concentration": 1000,
+   "sub_index": 226.16387959866222
+  },
+  {
+   "pollutant": "CO (mg/m³)",
+   "concentration": 5,
+   "sub_index": 48.86363636363636
+  },
+  {
+   "pollutant": "CO (mg/m3)",
+   "concentration": 10.9,
+   "sub_index": 101.0
+  },
+  {
+   "pollutant": "PM2.5 (µg/m³)",
+   "concentration": 35.45,
+   "sub_index": 100.0
+  },
+  {
+   "pollutant": "PM10 (ug/m3)",
+   "concentration": 154.9,
+   "sub_index": 100.0
+  }
+ ],
+ "compute_us_aqi": [
+  {
+   "input": {
+    "PM2.5": 35.4,
+    "O3": 0.06,
+    "Benzene": 3
+   },
+   "aqi": 100,
+   "category": "Moderate",
+   "dominant_pollutant": "PM2.5",
+   "sub_indices": {
+    "PM2.5": 100.0,
+    "O3": 67.33333333333331
+   }
+  },
+  {
+   "input": {
+    "PM2.5": 12.0,
+    "PM10": 160,
+    "NO2": 120,
+    "CO": 5.0,
+    "SO2": 40
+   },
+   "aqi": 105,
+   "category": "Unhealthy for Sensitive Groups",
+   "dominant_pollutant": "NO2",
+   "sub_indices": {
+    "PM2.5": 56.40304182509506,
+    "PM10": 103.47474747474747,
+    "NO2": 104.5945945945946,
+    "CO": 56.0,
+    "SO2": 56.02564102564102
+   }
+  },
+  {
+   "input": {
+    "O3": 0.078
+   },
+   "aqi": 126,
+   "category": "Unhealthy for Sensitive Groups",
+   "dominant_pollutant": "O3",
+   "sub_indices": {
+    "O3": 125.5
+   }
+  },
+  {
+   "input": {
+    "O3": 0.21,
+    "O3_1h": 0.21
+   },
+   "aqi": 203,
+   "category": "Very Unhealthy",
+   "dominant_pollutant": "O3_1h",
+   "sub_indices": {
+    "O3_1h": 203.48743718592965
+   }
+  },
+  {
+   "input": {
+    "O3": 0.08,
+    "O3_1h": 0.13
+   },
+   "aqi": 133,
+   "category": "Unhealthy for Sensitive Groups",
+   "dominant_pollutant": "O3",
+   "sub_indices": {
+    "O3": 132.5,
+    "O3_1h": 107.28205128205128
+   }
+  },
+  {
+   "input": {
+    "SO2": 400,
+    "SO2_24h": 400,
+    "PM2.5": 20
+   },
+   "aqi": 232,
+   "category": "Very Unhealthy",
+   "dominant_pollutant": "SO2_24h",
+   "sub_indices": {
+    "SO2_24h": 232.45484949832775,
+    "PM2.5": 71.30798479087453
+   }
+  },
+  {
+   "input": {
+    "SO2": 305,
+    "SO2_24h": 304
+   },
+   "aqi": 200,
+   "category": "Unhealthy",
+   "dominant_pollutant": "SO2",
+   "sub_indices": {
+    "SO2": 200.0
+   }
+  },
+  {
+   "input": {
+    "SO2": 500,
+    "SO2_24h": 200,
+    "NO2": 120
+   },
+   "aqi": 200,
+   "category": "Unhealthy",
+   "dominant_pollutant": "SO2",
+   "sub_indices": {
+    "NO2": 104.5945945945946,
+    "SO2": 200.0
+   }
+  },
+  {
+   "input": {
+    "PM2.5": 400,
+    "CO": 60,
+    "NO2 (µg/m³)": 6000
+   },
+   "aqi": 784,
+   "category": "Hazardous",
+   "dominant_pollutant": "NO2",
+   "sub_indices": {
+    "PM2.5": 648.6026026026027,
+    "CO": 596.0,
+    "NO2": 783.6808510638298
+   }
+  },
+  {
+   "input": {
+    "PM2.5": 400,
+    "PM10": null
+   },
+   "aqi": 649,
+   "category": "Hazardous",
+   "dominant_pollutant": "PM2.5",
+   "sub_indices": {
+    "PM2.5": 648.6026026026027
+   }
+  },
+  {
+   "input": {
+    "PM2.5 (µg/m³)": 55.0,
+    "O3 (µg/m³)": 150,
+    "NO2 (µg/m³)": 90,
+    "CO (mg/m³)": 4
+   },
+   "aqi": 149,
+   "category": "Unhealthy for Sensitive Groups",
+   "dominant_pollutant": "PM2.5",
+   "sub_indices": {
+    "PM2.5": 149.01507537688443,
+    "O3": 118.5,
+    "NO2": 44.339622641509436,
+    "CO": 38.63636363636363
+   }
+  },
+  {
+   "input": {
+    "Benzene": 3,
+    "PM2.5": null
+   },
+   "aqi": null,
+   "category": null,
+   "dominant_pollutant": null,
+   "sub_indices": {}
+  }
+ ],
+ "us_aqi_category": [
+  {
+   "aqi": 0,
+   "category": "Good",
+   "color": "#00E400",
+   "color_assist": "#9EFF91"
+  },
+  {
+   "aqi": 1,
+   "category": "Good",
+   "color": "#00E400",
+   "color_assist": "#9EFF91"
+  },
+  {
+   "aqi": 50,
+   "category": "Good",
+   "color": "#00E400",
+   "color_assist": "#9EFF91"
+  },
+  {
+   "aqi": 50.4,
+   "category": "Moderate",
+   "color": "#FFFF00",
+   "color_assist": "#FFC905"
+  },
+  {
+   "aqi": 50.6,
+   "category": "Moderate",
+   "color": "#FFFF00",
+   "color_assist": "#FFC905"
+  },
+  {
+   "aqi": 51,
+   "category": "Moderate",
+   "color": "#FFFF00",
+   "color_assist": "#FFC905"
+  },
+  {
+   "aqi": 100,
+   "category": "Moderate",
+   "color": "#FFFF00",
+   "color_assist": "#FFC905"
+  },
+  {
+   "aqi": 101,
+   "category": "Unhealthy for Sensitive Groups",
+   "color": "#FF7E00",
+   "color_assist": "#FF8205"
+  },
+  {
+   "aqi": 200,
+   "category": "Unhealthy",
+   "color": "#FF0000",
+   "color_assist": "#F02200"
+  },
+  {
+   "aqi": 250,
+   "category": "Very Unhealthy",
+   "color": "#8F3F97",
+   "color_assist": "#890997"
+  },
+  {
+   "aqi": 300,
+   "category": "Very Unhealthy",
+   "color": "#8F3F97",
+   "color_assist": "#890997"
+  },
+  {
+   "aqi": 301,
+   "category": "Hazardous",
+   "color": "#7E0023",
+   "color_assist": "#640015"
+  },
+  {
+   "aqi": 400,
+   "category": "Hazardous",
+   "color": "#7E0023",
+   "color_assist": "#640015"
+  },
+  {
+   "aqi": 401,
+   "category": "Hazardous",
+   "color": "#7E0023",
+   "color_assist": "#640015"
+  },
+  {
+   "aqi": 500,
+   "category": "Hazardous",
+   "color": "#7E0023",
+   "color_assist": "#640015"
+  },
+  {
+   "aqi": 999,
+   "category": "Hazardous",
+   "color": "#7E0023",
+   "color_assist": "#640015"
+  },
+  {
+   "aqi": null,
+   "category": "No Data",
+   "color": null,
+   "color_assist": null
   }
  ],
  "health_impact": [

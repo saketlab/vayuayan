@@ -4,12 +4,13 @@
 
 # Vayuayan
 
-**Vayuayan** is a Python package that gets air quality data from these sources and analyzes the data:
+Vayuayan downloads and examines air quality data from three sources:
 
-- **WUSTL ACAG**: [Washington University satellite PM2.5 data](https://sites.wustl.edu/acag/datasets/surface-pm2-5/) (Global)
-- **CPCB India**: [Central Pollution Control Board](https://cpcb.nic.in/) monitoring network (India only)
+- The monitoring stations of the [Central Pollution Control Board (CPCB)](https://cpcb.nic.in/) in India.
+- Low-cost sensor networks in India, from [Open Air Quality (OAQ)](https://oaq.notf.in).
+- [Satellite PM2.5 data](https://sites.wustl.edu/acag/datasets/surface-pm2-5/) for all areas of the Earth, from the Atmospheric Composition Analysis Group (ACAG) at Washington University in St. Louis (WUSTL).
 
-It also computes the Indian National Air Quality Index (NAQI) from pollutant concentrations, with the CPCB breakpoints and rules, and turns CPCB data into tidy (long) tables. Downloaded CPCB files of past years are cached in `~/.cache/vayuayan` (set `VAYUAYAN_CACHE_DIR` to move it).
+Vayuayan calculates the CPCB National Air Quality Index. It changes CPCB files into tidy (long) tables. It compares sensor data with the US EPA targets for PM2.5 sensors.
 
 ## Installation
 
@@ -34,6 +35,10 @@ git clone https://github.com/saketlab/vayuayan.git
 cd vayuayan/python
 pip install -e .
 ```
+
+## Cache
+
+Vayuayan keeps CPCB files of past years in `~/.cache/vayuayan`. To use a different directory, set `VAYUAYAN_CACHE_DIR`.
 
 ## Quick Start
 

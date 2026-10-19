@@ -35,11 +35,11 @@ and eastern coasts, the Deccan plateau, and the Bay of Bengal. Each city has a
 different pollution profile. Topography, industry, traffic, and climate have an
 effect on this profile.
 
-This article uses the `vayuayan` package to ask one question for all five
+This article uses the `vayuayan` package to examine one question for all five
 cities:
 
-> **How does PM2.5 pollution change across the major metros of India by season,
-> by location, and by monitoring coverage?**
+> **How does PM2.5 pollution change across the largest metros of India by
+> season, by location, and by station coverage?**
 
 We use two independent data sources:
 
@@ -50,9 +50,9 @@ The analysis has five parts:
 
 1. When is pollution highest in each city? *(seasonal trends)*
 2. How much does pollution change from day to day in each city? *(SD ribbons)*
-3. What is the annual pollution level of each city? *(cross-city ranking)*
+3. How high is the annual pollution level of each city? *(cross-city ranking)*
 4. Where in each city is pollution highest? *(spatial heatmaps)*
-5. Do the cities have sufficient monitoring for their pollution burden? *(station coverage)*
+5. Do the cities have sufficient stations for their pollution burden? *(station coverage)*
 
 ---
 
@@ -61,8 +61,8 @@ The analysis has five parts:
 ## Satellite data
 
 The satellite data is the monthly PM2.5 estimates from WUSTL ACAG V5GL04 (~1 km
-resolution, 1998 to 2022). The package reads the files with a fast bounding-box
-subset method. This method does not load the full 121 MB global array.
+resolution, 1998 to 2022). The package uses a fast bounding-box subset method
+to read the files. This method does not load the full 121 MB global array.
 
 ## Ground data
 
@@ -82,11 +82,11 @@ from the daily readings.
 
 ## Comparison note
 
-Ground readings are consistently higher than satellite estimates because of
-point-source siting bias (refer to the cross-city ranking figure below). All
-comparisons in this article use the same method for all cities. Thus, relative
-comparisons are valid, even when the absolute values from the two sources are
-different.
+Ground readings are consistently higher than satellite estimates. The cause is a bias
+in the locations of the stations near point sources (refer to the cross-city
+ranking figure below). In this article, we use the same method to compare all
+cities. Thus, the relative differences are correct, although the absolute values
+from the two sources are different.
 
 ---
 
@@ -268,10 +268,10 @@ ggsave(file.path(fig_dir, "fig1_metro_seasonal_comparison.png"), width = 10, hei
 
 The seasonal line chart shows monthly *means*. Means do not show the
 day-to-day changes that residents experience. A city with a high mean and wide
-variability is less predictable than a city with a steady moderate level. It is
-also more difficult for residents to plan for. The ribbon below shows ±1
-standard deviation around each monthly mean. We calculate it from the daily
-readings.
+variability is less predictable than a city with a constant moderate level.
+Also, it is harder for residents to prepare for this type of city. The ribbon
+below shows ±1 standard deviation around each monthly mean. We calculate the
+standard deviation from the daily readings.
 
 ```{r seasonal-ribbon, fig.width=10, fig.height=10, fig.cap="Day-to-day variability in monthly PM2.5 across five metros, 2022. The line is the monthly mean. The ribbon is ±1 SD across daily readings. Each city has its own Y-axis. The Delhi winter ribbon is very wide. It shows extreme pollution events in addition to a baseline that is already high."}
 # Monthly mean and SD were computed in ground_monthly above
@@ -333,8 +333,8 @@ ggsave(file.path(fig_dir, "fig1b_metro_seasonal_variability.png"),
 )
 ```
 
-> **Finding:** The Delhi winter ribbon is much wider than the ribbon of any
-> other city. Both the monthly mean and the day-to-day changes are extreme. A
+> **Finding:** The Delhi winter ribbon is much wider than the ribbons of all
+> other cities. The monthly mean and the day-to-day changes are extreme. A
 > Delhi resident gets more pollution variability in one winter month than a
 > Bengaluru resident gets in the full year.
 
@@ -342,8 +342,8 @@ ggsave(file.path(fig_dir, "fig1b_metro_seasonal_variability.png"),
 
 ## Cross-city ranking
 
-Before we examine spatial patterns, we compare the cities in absolute terms.
-This comparison gives the frame of reference for the heatmaps below.
+Before we examine the spatial patterns, we compare the absolute values of the
+cities. This step gives the reference for the heatmaps below.
 
 ```{r annual-summary}
 annual_sat <- sat_monthly %>%
@@ -458,20 +458,22 @@ ggsave(file.path(fig_dir, "fig2_metro_annual_ranking.png"), width = 10, height =
 ```
 
 > **Finding:** The Delhi annual mean is many times the annual mean of Mumbai,
-> Chennai, and Bengaluru. The two data sources give the same city ranking. Thus,
-> the ranking is reliable, although the absolute values are different. All five
-> cities are more than the WHO guidelines every year.
+> Chennai, and Bengaluru. The two data sources put the cities in the same
+> sequence. Thus, the sequence is reliable, although the
+> absolute values are different. All five cities are more than the WHO
+> guidelines each year.
 
 ---
 
 ## Spatial heatmaps
 
-The ranking shows *how much* each city pollutes. The heatmaps show *where* the
-pollution is concentrated in each city. We put the cities in groups by
-geography. The Indo-Gangetic Plain cities (Delhi, Kolkata, Kanpur) have a common
-pollution cause: the IGP trap. The coastal and southern cities (Mumbai, Chennai,
-Bengaluru) are the second group. Each city uses its own independent color scale,
-so that its internal spatial structure is clear.
+The annual means show *how much* pollution each city has. The heatmaps show
+*where* the pollution is highest in each city. Each city uses an independent
+color scale. Thus, the spatial structure in each city is clear.
+
+We put the cities in two groups by geography. The Indo-Gangetic Plain cities
+(Delhi, Kolkata, Kanpur) have the same pollution cause: the IGP trap. The
+coastal and southern cities (Mumbai, Chennai, Bengaluru) are the other group.
 
 ```{r heatmap-data}
 # IGP group (Delhi, Kolkata, Kanpur) and coastal/southern group (Mumbai,
@@ -515,9 +517,9 @@ ggsave(file.path(fig_dir, "fig3a_heatmaps_igp.png"), width = 13, height = 6, dpi
 ```
 
 > **IGP finding:** All three cities have higher values in northern/western
-> zones, where pollution collects against the terrain. Kanpur has lower absolute
-> values than Delhi. But Kanpur has strong spatial gradients, which its
-> industrial belt along the Ganga causes.
+> areas, where pollution collects against the terrain. Kanpur has lower absolute
+> values than Delhi. But the industrial belt of Kanpur along the Ganga causes
+> strong spatial gradients.
 
 ```{r heatmaps-coastal, fig.width=12, fig.height=5, fig.cap="November 2022 PM2.5 in coastal and southern cities (Mumbai, Chennai, Bengaluru). Sea breezes and elevation give these cities structurally lower pollution. Spatial gradients show industrial and traffic hotspots."}
 wrap_plots(heatmaps[c("Mumbai", "Chennai", "Bengaluru")], ncol = 3) +
@@ -536,17 +538,17 @@ ggsave(file.path(fig_dir, "fig3b_heatmaps_coastal.png"), width = 13, height = 6,
 ```
 
 > **Coastal finding:** The peninsular shape of Mumbai causes a clear east-west
-> gradient. The eastern industrial suburbs (Thane, Navi Mumbai corridor) have
-> consistently higher PM2.5 than the western seafront. Chennai and Bengaluru
+> gradient. The eastern industrial suburbs (Thane, Navi Mumbai corridor) always
+> have consistently higher PM2.5 than the western seafront. Chennai and Bengaluru
 > have more diffuse patterns, because their industry is less concentrated.
 
 ---
 
 ## Station coverage
 
-A city with many stations can still have poor monitoring if all the stations
-are in one zone. This section examines 12 Indian cities. The question is whether
-the monitoring investment matches the pollution burden.
+A city with many stations can have bad station coverage if all the stations
+are in one area. This section examines 12 Indian cities. We examine if the
+investment in stations agrees with the pollution burden.
 
 ```{r extra-cities}
 # Daily readings for the extra cities were downloaded into ground_daily above.
@@ -680,9 +682,10 @@ ggplot(
 ggsave(file.path(fig_dir, "fig4_metro_station_density.png"), width = 11, height = 7, dpi = 300)
 ```
 
-> **Finding:** Several highly polluted cities are in the under-monitored
-> quadrant, with high PM2.5 and low station density. This combination is the
-> most serious. The cities that need monitoring most have the least coverage.
+> **Finding:** Some cities with very high pollution are in the under-monitored
+> quadrant. This quadrant has high PM2.5 and low station density. This
+> combination is the worst. The cities that must have the most stations have the
+> smallest coverage.
 
 ---
 
@@ -690,88 +693,97 @@ ggsave(file.path(fig_dir, "fig4_metro_station_density.png"), width = 11, height 
 
 ## Day-to-day variability
 
-The SD ribbon plots show that pollution in Delhi has a high average and is very
-unpredictable. The Delhi winter ribbon is much wider than the ribbon of any
-other city. Thus, residents of Delhi get extreme day-to-day changes in air
-quality. This unpredictability has health consequences. People cannot reliably
-plan outdoor exposure, even when they know that winter is usually bad. Coastal
-cities have narrow ribbons through the full year, and their pollution is lower
-and more predictable.
+The SD ribbon plots show that pollution in Delhi has a high mean and is very
+unpredictable. The Delhi winter ribbon is much wider than the ribbons of all
+other cities. Thus, residents of Delhi get extreme day-to-day changes in air
+quality. The coastal cities have thin ribbons through the full year. Their
+pollution is lower and more predictable.
+
+This unpredictability has an effect on health. Residents cannot accurately
+prepare for outdoor exposure, although they know that winter is usually bad.
 
 ## Geography and seasonal patterns
 
 The seasonal analysis shows that geography has a large effect on pollution
-patterns. Delhi and Kolkata are both on the Indo-Gangetic Plain. These two
-cities have the highest winter peaks. The IGP is a natural trap. The Himalayas
-stop the cold northern winds that can disperse pollutants, and shallow
-temperature inversions keep emissions near the surface. Sea breezes give the
-coastal cities (Mumbai, Chennai) partial ventilation through the full year.
+patterns. Delhi and Kolkata are on the Indo-Gangetic Plain. These two cities
+have the highest winter peaks. Sea breezes give some ventilation to the coastal
+cities (Mumbai, Chennai) through the full year.
+
+The geography of the IGP makes a trap for pollutants. The Himalayas stop the
+cold northern winds that can move pollutants away. Shallow temperature
+inversions keep emissions near the surface.
 
 ## The monsoon and pollution levels
 
 In all five cities, pollution decreases during the southwest monsoon (June to
-September). The size of the decrease is very different between the cities. In
-Delhi, monsoon PM2.5 stays above the WHO annual limit. Chennai and Bengaluru
-come near safe levels in the wettest months. Their baseline emissions are lower,
-and rain removes pollutants from their air more efficiently.
+September). But pollution decreases by very different quantities in the
+different cities. In Delhi, monsoon PM2.5 stays above the WHO annual limit.
+Chennai and Bengaluru come near safe levels in the wettest months. These two
+cities have lower baseline emissions. Also, rain removes a larger part of the
+pollutants from the air of these two cities.
 
 ## Spatial heterogeneity within cities
 
-The per-city heatmaps show that pollution is not uniform in a city. The IGP
+The per-city heatmaps show that pollution is not the same in all areas of a
+city. The IGP
 cities (Delhi, Kolkata, Kanpur) have strong northern and western gradients,
 where pollutants collect against terrain features. The coastal cities have
 different patterns. In Mumbai, the industrial eastern suburbs cause an east-west
 gradient. Chennai and Bengaluru have more diffuse distributions, because their
-industry is less concentrated. In all cities, city-level averages show less
-exposure than the residents of the most affected neighborhoods get.
+industry is less concentrated. In all cities, city-level means show less
+exposure than the residents of the most polluted neighborhoods get.
 
 ## Monitoring coverage
 
-The station density analysis shows that monitoring investment does not always
-match the pollution burden. The 12-city scatter plot shows that many large,
-polluted cities have much less monitoring than their pollution burden needs. The
-cities that most need measurement often have the least coverage.
+The station density analysis shows that the investment in stations does not
+always agree with the pollution burden. The 12-city scatter plot shows that many
+large, polluted cities have a much smaller number of stations than their
+pollution burden makes necessary. The cities where measurement is most
+necessary frequently have the smallest coverage.
 
 ---
 
 # Limitations
 
-- SD ribbons: The ±1 SD ribbon assumes approximately symmetric distributions.
-  PM2.5 is usually right-skewed. Thus, on clean days, the lower bound of the
-  ribbon can go below plausible values. Use the ribbon as an indicator of
-  spread, not as a strict confidence interval.
+- SD ribbons: The ±1 SD ribbon is correct only for approximately symmetrical
+  distributions. PM2.5 is usually right-skewed. Thus, on clean days, the lower
+  bound of the ribbon can go below possible values. Use the ribbon only to see
+  the approximate spread. Do not use the ribbon as a strict confidence
+  interval.
 
-- Satellite data version: V5GL04 covers 1998 to 2022. When V6GL02 is
+- Satellite data version: V5GL04 has data for 1998 to 2022. When V6GL02 is
   available, you can use the same method for all years.
 
 - Independent heatmap scales: Per-city color scales show the spatial structure
-  in each city. You cannot use them to compare absolute pollution levels
-  between cities. Use Figure 2 for absolute comparisons between cities. To help
-  interpretation, the cities are in two geographic groups: IGP (Delhi, Kolkata,
-  Kanpur) and coastal/southern (Mumbai, Chennai, Bengaluru).
+  in each city. You cannot use these scales to compare absolute pollution
+  levels between cities. To compare absolute values between cities, use
+  Figure 2. To make the heatmaps easier to read, we put the cities in two
+  geographic groups: IGP (Delhi, Kolkata, Kanpur) and coastal/southern (Mumbai,
+  Chennai, Bengaluru).
 
 - City boundary files: The results change with the definition of the city
   boundaries. Administrative boundaries can be different from the functional
   urban area where pollution occurs and where stations measure it.
 
-- Station count only: This analysis counts stations. It does not examine their
-  spatial distribution in each city.
+- Station count only: This analysis counts stations. The analysis does not
+  examine the spatial distribution of the stations in each city.
 
 - 2022 only: One year can be different from the long-term pollution
-  climatology. Year-to-year variability, particularly in monsoon intensity, can
-  change annual means significantly.
+  climatology. Year-to-year variability can cause large changes in the annual
+  means. The variability in monsoon intensity is an important example.
 
 - Boundary source: We make the city boundaries from the BharatViz LGD district
   layer (`geo.bharatviz.org`). Each city boundary is the union of one or more
   districts. Delhi uses all districts of the NCT.
 
-- Kolkata boundary: The boundary combines four districts (Kolkata, 24 Paraganas
+- Kolkata boundary: The boundary includes four districts (Kolkata, 24 Paraganas
   North, 24 Paraganas South, Howrah). Thus, all 7 CPCB stations are in the
   boundary.
 
-- Hyderabad boundary: The boundary combines the Hyderabad and Ranga Reddy
-  districts (~8,500 km²). The Hyderabad district alone (~197 km²) has older
-  administrative boundaries from before the GHMC expansion.
+- Hyderabad boundary: The boundary includes the Hyderabad and Ranga Reddy
+  districts (~8,500 km²). The Hyderabad district without Ranga Reddy
+  (~197 km²) has the administrative boundaries from before the GHMC
+  expansion.
 
 ---
 

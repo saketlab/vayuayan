@@ -1,26 +1,16 @@
 """
-Vayuayan: air quality data for India.
+Vayuayan (वायुअयन) is Sanskrit for "path of the wind". This package downloads
+and examines air quality data.
 
-Vayuayan (वायुअयन) is Sanskrit for "path of the wind". This Python package gets
-air quality data from many sources and analyzes the data.
-
-Main Classes:
-    - CPCBClient: Legacy client for CPCB web services
-    - CPCBHistorical: Client for historical air quality data
-    - CPCBLive: Client for live air quality data
-    - PM25Client: Client for satellite PM2.5 data
-
-National AQI and tidy data:
-    - compute_aqi, sub_index: CPCB National AQI from concentrations
-    - daily_aqi: daily AQI of stations from tidy (long) data
-    - cpcb_raw_to_long: raw CPCB station data to tidy rows (TIDY_COLUMNS)
+CPCBHistorical and CPCBLive read data from the CPCB monitoring stations in
+India. OAQClient reads data from OAQ low-cost sensors. PM25Client reads WUSTL
+ACAG satellite PM2.5 data. compute_aqi and daily_aqi calculate the CPCB
+National AQI. compute_us_aqi calculates the US EPA AQI. The sensor_* functions
+compare sensor data with the US EPA targets for PM2.5 sensors.
 
 Usage:
-    >>> from vayuayan import CPCBHistorical, CPCBLive
-    >>> historical = CPCBHistorical()
-    >>> states = historical.get_state_list()
-    >>> live = CPCBLive()
-    >>> location = live.get_system_location()
+    >>> from vayuayan import CPCBHistorical
+    >>> states = CPCBHistorical().get_state_list()
 """
 
 __version__ = "0.3.0"
@@ -77,7 +67,9 @@ from .oaq_plots import (
     plot_daily_record_timeline,
 )
 from .oaq_records import compare_daily_records, daily_record_summary
+from .plot_theme import set_theme
 from .pm25 import PM25Client
+from .sensor_plots import plot_sensor_vs_reference
 from .sensor_qa import (
     EPA_PM25_TARGETS,
     collocated_precision,
@@ -95,6 +87,17 @@ from .tidy import (
     daily_aqi_workbook_to_long,
     live_metrics,
     live_to_long,
+)
+from .us_aqi import (
+    US_AQI_CATEGORIES,
+    US_AQI_COLORS,
+    US_AQI_COLORS_ASSIST,
+    US_POLLUTANTS,
+    compute_us_aqi,
+    us_aqi_category,
+    us_aqi_color,
+    us_pollutant_name,
+    us_sub_index,
 )
 
 # Utility functions for users
@@ -128,6 +131,8 @@ __all__ = [
     "plot_daily_record_share",
     "plot_daily_record_series",
     "plot_daily_record_difference",
+    "plot_sensor_vs_reference",
+    "set_theme",
     # National AQI and tidy data
     "AQIResult",
     "compute_aqi",
@@ -138,6 +143,16 @@ __all__ = [
     "pollutant_category",
     "HEALTH_IMPACTS",
     "WHO_PM25_GUIDELINES",
+    # US EPA AQI
+    "compute_us_aqi",
+    "us_sub_index",
+    "us_pollutant_name",
+    "us_aqi_category",
+    "us_aqi_color",
+    "US_AQI_CATEGORIES",
+    "US_AQI_COLORS",
+    "US_AQI_COLORS_ASSIST",
+    "US_POLLUTANTS",
     "TIDY_COLUMNS",
     "live_to_long",
     "live_metrics",

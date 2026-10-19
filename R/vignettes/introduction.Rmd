@@ -31,7 +31,9 @@ knitr::opts_chunk$set(
 
 # Introduction
 
-**vayuayan** (वायुअयन) is an R package that downloads and analyzes air quality data. The data comes from WUSTL ACAG satellite PM2.5 (global) and the CPCB and OAQ monitoring networks (India). The name combines two Sanskrit words:
+**vayuayan** (वायुअयन) is an R package that downloads and analyzes air quality
+data. The data comes from WUSTL ACAG satellite PM2.5 (global) and the CPCB and
+OAQ monitoring networks (India). The name contains two Sanskrit words:
 
 - Vayu (वायु) means wind or air.
 - Ayan (अयन) means path, journey or movement.
@@ -72,12 +74,13 @@ vayuayan_welcome()
 
 # Historical AQI data
 
-The `cpcb_` functions provide access to historical air quality data from the Central Pollution Control Board.
+The `cpcb_` functions give access to historical air quality data from the
+Central Pollution Control Board.
 
 ## Available data
 
 The lists of states, cities and stations come from a CPCB station directory
-in the package. Thus, these calls work offline.
+in the package. Thus, you can use these calls offline.
 
 ```{r historical_explore, eval = TRUE}
 states <- cpcb_get_state_list()
@@ -99,9 +102,9 @@ head(delhi_stations)
 
 ## Daily data in long format
 
-`cpcb_city_daily()` downloads the CPCB daily file for each city and returns
-one row per day. The package caches the files, so later calls read them from
-disk.
+`cpcb_city_daily()` downloads the CPCB daily file for each city. The function
+returns one row for each day. The package caches the files. Thus, subsequent
+calls read the files from disk.
 
 ```{r city_daily}
 daily <- cpcb_city_daily(c("Delhi", "Mumbai"), 2024, cache_dir = tempdir())
@@ -121,13 +124,13 @@ station_daily <- cpcb_station_daily(
 count(station_daily, station_id)
 ```
 
-If you want the file itself, `cpcb_download_city_data()` and
-`cpcb_download_station_data()` save the raw CPCB sheet.
+`cpcb_download_city_data()` and `cpcb_download_station_data()` save the raw
+CPCB sheet. Use these functions to get the file.
 
 # Live AQI data
 
-The live readings come from the public station feed. The feed holds only the
-latest hour.
+The live readings come from the public station feed. The feed contains only
+the data of the last hour.
 
 ```{r live_aqi}
 nearest <- cpcb_get_nearest_station(coords = c(19.0760, 72.8777))
@@ -142,8 +145,8 @@ your IP location.
 
 ## Station summaries
 
-`stations_to_dataframe()` flattens the live feed into one row per station,
-with an AQI category.
+`stations_to_dataframe()` changes the live feed into one row for each
+station. Each row also has an AQI category.
 
 ```{r live_table}
 live <- stations_to_dataframe(cpcb_get_all_india())
@@ -190,8 +193,9 @@ live %>%
 
 The `pm25_` functions process satellite PM2.5 data from WUSTL ACAG
 (product V6.GL.03 on the AWS Open Data registry). The Asia subset
-(`region = "AS"`) includes India, and its file is smaller than the global
-file. The package caches the files in `tools::R_user_dir("vayuayan", "cache")`.
+(`region = "AS"`) includes India. The file of this subset is smaller than the
+global file. The package caches the files in
+`tools::R_user_dir("vayuayan", "cache")`.
 The vignette build does not run these chunks.
 
 ```{r pm25_setup, eval = FALSE}

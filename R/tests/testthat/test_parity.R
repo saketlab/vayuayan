@@ -129,6 +129,52 @@ test_that("health impacts and pollutant categories match Python", {
   }
 })
 
+test_that("US AQI breakpoints match Python", {
+  expect_setequal(names(.us_aqi_pollutants), names(parity$us_pollutants))
+  for (name in names(parity$us_pollutants)) {
+    py <- parity$us_pollutants[[name]]
+    expect_equal(.us_aqi_pollutants[[name]]$bands, as.numeric(unlist(py$bands)), info = name)
+    expect_equal(.us_aqi_pollutants[[name]]$decimals, py$decimals, info = name)
+  }
+})
+
+test_that("US AQI labels, sub-indices and categories match Python", {
+  cases <- parity$us_pollutant_name
+  got <- us_aqi_pollutant_name(vapply(cases, `[[`, "", "label"))
+  expect_equal(got, .vec(lapply(cases, `[[`, "name")))
+  for (case in parity$us_sub_index) {
+    expect_equal(
+      us_aqi_sub_index(case$pollutant, case$concentration), case$sub_index %||% NA_real_,
+      tolerance = 1e-9, info = paste(case$pollutant, case$concentration)
+    )
+  }
+  values <- .vec(lapply(parity$us_aqi_category, `[[`, "aqi"))
+  expect_equal(us_aqi_category(values), vapply(parity$us_aqi_category, `[[`, "", "category"))
+  expect_equal(us_aqi_color(values), .vec(lapply(parity$us_aqi_category, `[[`, "color")))
+  expect_equal(
+    us_aqi_color(values, color_vision_assist = TRUE),
+    .vec(lapply(parity$us_aqi_category, `[[`, "color_assist"))
+  )
+})
+
+test_that("compute_us_aqi matches Python", {
+  for (case in parity$compute_us_aqi) {
+    input <- lapply(case$input, function(v) if (is.null(v)) NA_real_ else v)
+    got <- compute_us_aqi(input)
+    info <- jsonlite::toJSON(case$input, auto_unbox = TRUE, null = "null")
+    expect_equal(got$aqi, case$aqi %||% NA_integer_, info = info)
+    expect_equal(got$category, case$category %||% NA_character_, info = info)
+    expect_equal(got$dominant_pollutant, case$dominant_pollutant %||% NA_character_, info = info)
+    want <- unlist(case$sub_indices)
+    if (is.null(want)) {
+      expect_length(got$sub_indices, 0)
+      next
+    }
+    expect_equal(got$sub_indices[names(want)], want, tolerance = 1e-9, info = info)
+    expect_setequal(names(got$sub_indices), names(want))
+  }
+})
+
 # Data frame against the JSON columns of a Python one
 .expect_columns <- function(got, want, info = NULL) {
   expect_setequal(names(got), names(want))

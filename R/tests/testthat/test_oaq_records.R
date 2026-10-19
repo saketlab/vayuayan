@@ -53,3 +53,14 @@ test_that("the daily record plots build", {
   expect_match(labels[1], "^OAQ daily value 197.39 = last reading")
   expect_match(labels[2], "^Mean ")
 })
+
+test_that("plot_sensor_vs_reference and theme_vayuayan build", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("patchwork")
+  paired <- data.frame(date = seq(as.Date("2026-02-20"), by = "day", length.out = 20), pm25 = 20:39, reference = 25:44)
+  p <- plot_sensor_vs_reference(paired, change = "2026-03-01")
+  expect_s3_class(p, "patchwork")
+  built <- ggplot2::ggplot_build(p[[1]])
+  expect_equal(as.vector(table(built$data[[2]]$colour)), c(9L, 11L))
+  expect_s3_class(theme_vayuayan(), "theme")
+})

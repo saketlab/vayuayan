@@ -4,12 +4,19 @@
   with the CRAN incoming checks (`_R_CHECK_CRAN_INCOMING_REMOTE_=true`)
 * GitHub Actions: macOS (release), Windows (release, oldrel-1), Ubuntu
   (devel, release, oldrel-1)
+* win-builder: R-devel, R-release
 
 ## R CMD check results
 
 0 errors | 0 warnings | 1 note
 
 * This is a new submission.
+* "Possibly misspelled words in DESCRIPTION": CPCB (Central Pollution Control
+  Board) and OAQ (Open Air Quality) are acronyms of the data providers, spelled
+  out in the Description.
+
+The CPCB portal (airquality.cpcb.gov.in) refuses connections from outside
+India, so the Description does not link to it.
 
 URLs were checked with `urlchecker::url_check()` and spelling with
 `spelling::spell_check_package()`.

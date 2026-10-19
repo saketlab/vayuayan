@@ -27,9 +27,10 @@ library(vayuayan)
 
 # Introduction
 
-The [OAQ platform](https://oaq.notf.in) aggregates air quality data from
-many networks across India. This vignette maps all monitoring stations that
-are currently active on OAQ, for each provider:
+The [OAQ platform](https://oaq.notf.in) collects air quality data from many
+networks across India. This vignette shows a map of all the monitoring
+stations that are in operation on OAQ at this time. It shows the stations for
+each provider:
 
 | Provider | Network | Coverage |
 |---|---|---|
@@ -59,7 +60,7 @@ dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
 ---
 
-# Fetch station data
+# Get the station data
 
 ```{r fetch-stations, cache=TRUE}
 session <- oaq_session()
@@ -199,9 +200,9 @@ ggsave(file.path(fig_dir, "fig_oaq_india_faceted.png"), width = 14, height = 5, 
 # Nearest CPCB neighbors for non-CPCB sensors
 
 For each Airnet and Aurassure station, `nearest_stations()` finds the 3
-nearest CPCB reference stations by haversine distance. You can use these pairs
-of low-cost sensors and nearby government monitors for calibration or
-cross-validation.
+nearest CPCB reference stations. It uses the haversine distance. You can use
+these pairs of low-cost sensors and near government monitors for calibration
+or cross-validation.
 
 ```{r nearest-cpcb-table}
 cpcb_stations <- all_stations |> filter(provider == "cpcb")
@@ -252,10 +253,11 @@ nearest_cpcb |>
 
 # Bengaluru: sensor network and nearest CPCB matches
 
-Airnet (47 stations) and Aurassure (1 station) are concentrated in Bengaluru.
-Thus, Bengaluru is the only city where more than one low-cost network operates
-together with CPCB reference monitors. The map shows ward-level boundaries for
-spatial context.
+Airnet (47 stations) and Aurassure (1 station) have a high concentration in
+Bengaluru. Thus, Bengaluru is the only city where more than one low-cost
+network operates together with CPCB reference monitors. The map shows
+ward-level boundaries to give spatial context.
+
 
 ```{r blr-boundary}
 blr_geojson_url <- "https://geo.bharatviz.org/geojsons/cities/bengaluru.geojson"

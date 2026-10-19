@@ -102,6 +102,7 @@ The ``notebooks/`` directory has interactive notebooks with examples:
    notebooks/04_pm25_regional_analysis
    notebooks/05_oaq_sensors_vs_cpcb
    notebooks/06_oaq_sensor_quality
+   notebooks/07_oaq_daily_values
 
 API Reference
 =============

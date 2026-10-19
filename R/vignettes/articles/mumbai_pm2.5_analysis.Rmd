@@ -32,30 +32,32 @@ sf::sf_use_s2(FALSE)
 
 # Introduction
 
-Mumbai is the financial capital of India and its most densely populated city,
-with more than 20 million residents. Its coastal location gives relatively
-better natural ventilation than landlocked Delhi. But the PM2.5 levels in
-Mumbai regularly exceed the WHO safe limits. The causes are vehicle emissions,
-industrial activity, construction dust, and seasonal sea-salt aerosols.
+Mumbai is the financial capital of India. Mumbai is also the most densely
+populated city in India, with more than 20 million residents. Because Mumbai is
+on the coast, it has better natural ventilation than Delhi, which is landlocked.
+But the PM2.5 levels in Mumbai are regularly more than the WHO safe limits. The
+causes are vehicle emissions, industrial activity, construction dust, and
+seasonal sea-salt aerosols.
 
-This vignette uses two independent data sources in the `vayuayan` package to
-analyze the air quality of Mumbai in 2022. The two sources together answer one
-policy question:
+This vignette uses two different data sources in the `vayuayan` package for
+an analysis of the air quality of Mumbai in 2022. Together, the two sources
+help with one policy question:
 
 > Do the 30 CPCB ground monitoring stations give sufficient coverage of the
-> full spatial extent of pollution in Mumbai? Or do some localities have too
-> few monitors, so that the network systematically misses their PM2.5?
+> full spatial extent of pollution in Mumbai? Or do some localities have an
+> insufficient number of monitors? If so, is the PM2.5 of these localities
+> systematically missing from the network data?
 
 The analysis has four steps:
 
 1. The seasonal trend shows if the satellite data and the ground data agree on
    the pollution cycle of Mumbai.
 2. The spatial heatmap shows where pollution in Mumbai is highest.
-3. The station network map shows the locations of the 30 sensors relative to
-   that pollution.
-4. The monitoring gap analysis finds which localities are farthest from their
-   nearest sensor. It also finds if that distance predicts the disagreement
-   between ground and satellite data.
+3. The station network map shows the locations of the 30 sensors in relation
+   to that pollution.
+4. The gap analysis finds the localities that are farthest from their nearest
+   sensor. The gap analysis also finds if that distance predicts the
+   disagreement between ground data and satellite data.
 
 ---
 
@@ -65,32 +67,33 @@ The analysis has four steps:
 
 The monthly PM2.5 estimates come from the V5GL04 product of the Washington
 University in St. Louis Atmospheric Composition Analysis Group (WUSTL ACAG).
-V5GL04 is a global gridded dataset at ~0.01° (~1 km) resolution. It comes from
-satellite retrievals of aerosol optical depth, chemical transport models, and
-ground-level calibration (van Donkelaar et al., 2021). The files are in NetCDF
+V5GL04 is a global gridded dataset at ~0.01° (~1 km) resolution. The dataset
+uses satellite retrievals of aerosol optical depth, chemical transport models,
+and ground-level calibration (van Donkelaar et al., 2021). The files are in NetCDF
 format.
 
-V5GL04 covers 1998 to 2022. For 2023 and later years, you must use V6GL02.
-The departmental server does not have the V6GL02 download yet. This vignette
-uses 2022 data in all sections.
+V5GL04 has data for 1998 to 2022. For 2023 and the years after 2023, you must
+use V6GL02. At this time, the departmental server does not have the V6GL02
+download. This vignette uses 2022 data in all sections.
 
 ## Ground data
 
 `cpcb_download_city_data()` and `cpcb_download_station_data()` get the daily
 city-level and per-station PM2.5 readings from the Central Pollution Control
 Board (CPCB) data repository. Mumbai has 30 registered CAAQMS stations. MPCB,
-IITM, and BMC manage these stations. `cpcb_add_coords()` gets the station
-coordinates directly from the CPCB live feed. The function uses Nominatim as a
-fallback only for stations that are temporarily absent from the live feed.
+IITM, and BMC operate these stations. `cpcb_add_coords()` gets the station
+coordinates directly from the CPCB live feed. The function uses Nominatim as an
+alternative source only for the stations that are temporarily not in the live
+feed.
 
 12 of the 30 registered Mumbai stations have no downloadable historical data in
-the CPCB repository for any year. But the station registry lists them. MPCB
-and BMC operate these 12 stations. They are in central, western, and eastern
-Mumbai.
+the CPCB repository for any year. But these stations are in the station
+registry. MPCB and BMC operate these 12 stations. These stations are in
+central, western, and eastern Mumbai.
 
 Thus, the delta map uses only the 18 stations with 2022 readings. The priority
-map uses all 29 stations with valid coordinates. The analysis excludes one
-station (`site_5102`, Vasai West), because it is outside the Mumbai city
+map uses all 29 stations with valid coordinates. The analysis does not include
+one station (`site_5102`, Vasai West). This station is outside the Mumbai city
 limits, in Palghar district.
 
 ## Spatial units
@@ -101,18 +104,19 @@ localities in the 24 administrative wards of Mumbai (codes A to T). Each
 locality is in one ward. All spatial analysis is at the locality level. The
 maps show the ward boundaries as a reference.
 
-## Comparison caveat
+## Limits of the comparison
 
 The two data sources measure PM2.5 differently:
 
 - A satellite value is the spatial mean over a full area (~1 km pixels).
 - A ground value is a point measurement at one physical location. Ground
-  stations are often near pollution sources.
+  stations are frequently near pollution sources.
 
-Thus, the ground readings are consistently higher than the satellite
-estimates. This difference comes from point-source measurement against
-area-averaged measurement. It is not an error. For a fair comparison in time,
-the analysis aggregates the ground data to monthly means.
+Thus, the ground readings are consistently higher than the satellite estimates.
+This difference is the result of a point measurement compared with an
+area-averaged measurement. The difference is not an error. To compare the two
+sources in time correctly, the analysis calculates monthly means from the
+ground data.
 
 ---
 
@@ -141,7 +145,7 @@ for (d in c(data_dir, fig_dir, station_dir)) {
 }
 ```
 
-## Satellite reads
+## Satellite files
 
 The satellite values come from WUSTL ACAG V5GL04 monthly files. The package
 downloads these files (Asia subset) one time from the AWS Open Data registry
@@ -228,13 +232,13 @@ ggplot(mumbai_final, aes(x = month)) +
 ggsave(file.path(fig_dir, "fig1_mumbai_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
 ```
 
-The line chart shows a clear seasonal cycle in Mumbai. PM2.5 peaks from
-October to January. It decreases sharply during the southwest monsoon (June to
-September). In Mumbai, heavy rainfall cleans the air, and the monsoon months
-come near safe levels. Delhi does not have this effect.
+The line chart shows a clear seasonal cycle in Mumbai. PM2.5 is highest from
+October to January. PM2.5 decreases by a large quantity during the southwest
+monsoon (June to September). In Mumbai, heavy rain cleans the air, and PM2.5 in
+the monsoon months comes near safe levels. Delhi does not have this effect.
 
-For 2023 to 2025, ground data is available. The satellite data for these years
-(V6GL02) is not yet on the departmental server.
+For 2023 to 2025, ground data is available. At this time, the satellite data
+for these years (V6GL02) is not on the departmental server.
 
 ---
 
@@ -285,8 +289,8 @@ ggsave(file.path(fig_dir, "fig2_mumbai_heatmap_nov2022.png"), width = 9, height 
 
 The heatmap shows higher pollution in the northern suburbs (Kandivali,
 Borivali, Malad, Andheri) than in the southern peninsula (Colaba, Fort). This
-agrees with the higher industrial activity, traffic density, and construction
-in the north.
+result agrees with the higher industrial activity, traffic density, and
+construction in the north.
 
 ---
 
@@ -368,8 +372,8 @@ ggsave(file.path(fig_dir, "fig3_mumbai_choropleth_stations.png"), width = 9, hei
 ```
 
 The choropleth shows that most stations are in south and central Mumbai.
-Several northern localities, particularly in wards R and S, have high PM2.5
-but few sensors.
+Some northern localities have high PM2.5 but only a small number of sensors.
+Most of these localities are in wards R and S.
 
 ---
 
@@ -594,51 +598,55 @@ ggsave(file.path(fig_dir, "fig6_mumbai_distance_vs_disagreement.png"), width = 9
 ## Seasonal pattern
 
 The seasonal PM2.5 cycle of Mumbai is different from the cycle of Delhi (refer
-to the seasonal line chart). The southwest monsoon (June to September) brings
-heavy rainfall. The rain efficiently removes particulates from the air, and
-PM2.5 comes close to safe levels in some months. In the dry winter months
-(October to January), PM2.5 increases sharply. Northeast monsoon winds bring
-dry continental air, and temperature inversions keep pollutants near the
-surface.
+to the seasonal line chart). The southwest monsoon (June to September) causes
+heavy rain. The rain removes a large quantity of particulates from the air. As
+a result, PM2.5 comes near safe levels in some months. In the dry winter months
+(October to January), PM2.5 increases by a large quantity. In these months,
+northeast monsoon winds supply dry continental air, and temperature inversions
+keep pollutants near the surface.
 
-## Spatial heterogeneity
+## Spatial differences
 
 The heatmap shows a clear north-south gradient. The northern suburbs have
-higher satellite PM2.5 than the southern peninsula. This agrees with the
-concentration of industrial zones, construction activity, and traffic
-corridors in the north. The southern peninsula gets sea breezes from three
+higher satellite PM2.5 than the southern peninsula. This gradient agrees with
+the concentration of industrial zones, construction activity, and traffic
+corridors in the north. The southern peninsula receives sea breezes from three
 sides.
 
 ## Monitoring gap
 
-The gap analysis finds the localities where the current 30-station network can
-give incomplete data. Localities with long centroid-to-station lines on the
-gap map have the highest risk that the network underestimates their pollution.
-This is particularly true in the outer northern wards.
+The gap analysis finds the localities where the 30-station network can give
+incomplete data at this time. Some localities have long lines from the
+centroid to the station on the gap map. For these localities, the risk is
+highest that the network data shows PM2.5 values that are too low. This risk
+is highest in the outer northern wards.
 
 ---
 
 # Limitations
 
-- The delta values are negative. Ground stations consistently read higher than
-  satellite estimates because of the point-source siting bias. Thus, the
-  analysis uses the *relative* disagreement across localities. It does not use
-  the absolute values.
+- The delta values are negative. Ground stations consistently give higher values
+  than satellite estimates. The cause is the point-source bias: the stations
+  are near pollution sources. Thus, the analysis uses the *relative*
+  disagreement across localities. The analysis does not use the absolute
+  values.
 
 - 12 of the 30 registered Mumbai stations have no downloadable historical data
-  in the CPCB repository for any year. But the station registry lists them.
-  MPCB and BMC operate these stations, and they are in central, western, and
-  eastern Mumbai. Thus, the delta map uses only the 18 stations with 2022
-  readings. The priority map uses all 29 stations with valid coordinates.
+  in the CPCB repository for any year. But these stations are in the station
+  registry. MPCB and BMC operate these stations. These stations are in central,
+  western, and eastern Mumbai. Thus, the delta map uses only the 18 stations
+  with 2022 readings. The priority map uses all 29 stations with valid
+  coordinates.
 
 - `site_5102` (Vasai West) is outside the Mumbai city limits, in Palghar
-  district. All spatial analyses exclude this station.
+  district. No spatial analysis includes this station.
 
-- The satellite data version V5GL04 covers 1998 to 2022. When the newer
-  version is available, the same method will work for any year.
+- The satellite data version V5GL04 has data for 1998 to 2022. When the new
+  version is available, you can use the same method for all years.
 
-- Mumbai has a complex coastline, so some locality polygons can include areas
-  of sea. This has a small effect on the area-weighted PM2.5 extraction.
+- Mumbai has an irregular coastline. Thus, some locality polygons can include
+  areas of sea. These areas of sea have a small effect on the area-weighted
+  extraction of PM2.5.
 
 ---
 

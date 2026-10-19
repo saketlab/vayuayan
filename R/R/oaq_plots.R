@@ -7,9 +7,15 @@
 .record_labels <- c(
   mean = "Daily value = mean of the readings",
   last = "Daily value = last reading of the day",
-  both = "Matches both (mean and last reading equal)",
+  both = "Matches both (mean and last reading within 0.005)",
   neither = "Matches neither"
 )
+# axis label of an OAQ parameter: "PM2.5 (ug/m3)" for pm25
+.quantity <- function(value) {
+  names <- c(pm25 = "PM2.5", pm10 = "PM10", no2 = "NO2", so2 = "SO2", o3 = "O3")
+  paste0(if (value %in% names(names)) names[[value]] else value, " (\u00b5g/m\u00b3)")
+}
+
 .ink <- c(
   surface = "#fcfcfb", ink = "#0b0b0b", ink2 = "#52514e", muted = "#898781",
   grid = "#e1e0d9", axis = "#c3c2b7"
@@ -26,8 +32,25 @@ utils::globalVariables(c(
   }
 }
 
-.record_theme <- function() {
-  ggplot2::theme_minimal(base_size = 10.5) +
+#' The vayuayan ggplot2 theme
+#'
+#' @description
+#' A ggplot2 theme with a light surface, recessive grid and axes, a
+#' left-aligned bold title and the legend below the panel. The
+#' \code{plot_*} functions use it. Same look as the Python package's
+#' \code{set_theme()}.
+#'
+#' @param base_size Base font size in points.
+#' @return A ggplot2 theme, to add to a plot with \code{+}.
+#' @examplesIf requireNamespace("ggplot2", quietly = TRUE)
+#' library(ggplot2)
+#' ggplot(mtcars, aes(wt, mpg)) +
+#'   geom_point() +
+#'   theme_vayuayan()
+#' @export
+theme_vayuayan <- function(base_size = 10.5) {
+  .need_ggplot()
+  ggplot2::theme_minimal(base_size = base_size) +
     ggplot2::theme(
       plot.background = ggplot2::element_rect(fill = .ink[["surface"]], colour = NA),
       panel.background = ggplot2::element_rect(fill = .ink[["surface"]], colour = NA),
@@ -125,9 +148,9 @@ plot_daily_record_day <- function(readings, check, value = "pm25", title = NULL)
     ggplot2::scale_y_continuous(limits = c(0, top), expand = c(0, 0)) +
     ggplot2::labs(
       title = title %||% paste0("Sensor ", row$sensor_id, ", ", .day_label(as.Date(row$date))),
-      x = NULL, y = paste0(value, " (\u00b5g/m\u00b3)")
+      x = NULL, y = .quantity(value)
     ) +
-    .record_theme()
+    theme_vayuayan()
 }
 
 # Where a label for a horizontal line at level fits: the start time (15-minute
@@ -185,7 +208,7 @@ plot_daily_record_timeline <- function(audit, change = NULL, labels = NULL) {
       title = "Which statistic of the day's 15-minute readings OAQ's daily value equals",
       x = NULL, y = NULL
     ) +
-    .record_theme() +
+    theme_vayuayan() +
     ggplot2::theme(panel.grid.major.y = ggplot2::element_blank())
   .mark_change(p, change)
 }
@@ -213,15 +236,24 @@ plot_daily_record_scatter <- function(audit) {
     )
   }))
   top <- max(c(long$x, long$record), na.rm = TRUE) * 1.03
-  ggplot2::ggplot(long, ggplot2::aes(x, record, colour = class)) +
+  # last on top, as in Python
+  long <- long[order(match(long$class, c("neither", "both", "mean", "last"))), , drop = FALSE]
+  ggplot2::ggplot(long, ggplot2::aes(x, record, fill = class)) +
     ggplot2::geom_abline(slope = 1, intercept = 0, colour = .ink[["axis"]]) +
-    ggplot2::geom_point(size = 1.4, alpha = 0.75) +
+    ggplot2::annotate("text",
+      x = top, y = top, label = "1:1", hjust = 1.2, vjust = 1.5,
+      size = 3.2, colour = .ink[["muted"]]
+    ) +
+    ggplot2::geom_point(shape = 21, size = 1.6, alpha = 0.75, colour = .ink[["surface"]], stroke = 0.2) +
     ggplot2::facet_wrap(~panel) +
-    ggplot2::scale_colour_manual(values = .record_palette, labels = .record_labels, drop = FALSE) +
+    ggplot2::scale_fill_manual(values = .record_palette, labels = .record_labels, drop = FALSE) +
     ggplot2::coord_equal(xlim = c(0, top), ylim = c(0, top), expand = FALSE) +
-    ggplot2::labs(x = "Statistic of the day's 15-minute readings", y = "OAQ daily value") +
-    ggplot2::guides(colour = ggplot2::guide_legend(nrow = 2, override.aes = list(size = 3))) +
-    .record_theme() +
+    ggplot2::labs(
+      x = "Statistic of the day's 15-minute readings (\u00b5g/m\u00b3)",
+      y = "OAQ daily value (\u00b5g/m\u00b3)"
+    ) +
+    ggplot2::guides(fill = ggplot2::guide_legend(nrow = 2, override.aes = list(size = 3, alpha = 1))) +
+    theme_vayuayan() +
     ggplot2::theme(strip.text = ggplot2::element_text(face = "bold", hjust = 0, size = 11))
 }
 
@@ -261,7 +293,7 @@ plot_daily_record_share <- function(audit, change = NULL) {
       title = "Share of days by month (number of days above each bar)",
       x = NULL, y = "Share of days (%)"
     ) +
-    .record_theme() +
+    theme_vayuayan() +
     ggplot2::theme(panel.grid.major.x = ggplot2::element_blank())
   if (!is.null(change)) {
     i <- match(format(as.Date(change), "%Y-%m"), levels(a$month))
@@ -301,9 +333,9 @@ plot_daily_record_series <- function(audit, sensor_id, change = NULL, title = NU
     ggplot2::scale_x_date(date_breaks = "1 month", date_labels = "%b\n%Y") +
     ggplot2::labs(
       title = title %||% paste0("Sensor ", sensor_id, ": OAQ's daily value against the daily mean"),
-      x = NULL, y = paste0(value, " (\u00b5g/m\u00b3)")
+      x = NULL, y = .quantity(value)
     ) +
-    .record_theme()
+    theme_vayuayan()
   .mark_change(p, change)
 }
 
@@ -357,10 +389,10 @@ plot_daily_record_difference <- function(audit, change, labels = NULL) {
     ) +
     ggplot2::labs(
       title = paste("How far OAQ's daily value is from the daily mean, before and from", .day_label(when)),
-      x = NULL, y = "OAQ daily value \u2212 daily mean (symlog)"
+      x = NULL, y = "OAQ daily value \u2212 daily mean (\u00b5g/m\u00b3, symlog)"
     ) +
     ggplot2::guides(colour = ggplot2::guide_legend(override.aes = list(size = 3, alpha = 1))) +
-    .record_theme() +
+    theme_vayuayan() +
     ggplot2::theme(panel.grid.major.x = ggplot2::element_blank())
 }
 

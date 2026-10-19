@@ -132,11 +132,10 @@ template:
         var codeBlocks = document.querySelectorAll('div.sourceCode');
         codeBlocks.forEach(function(block) {
           var btn = document.createElement('button');
-          btn.innerText = 'Show code';
+          btn.innerText = 'Hide code';
           btn.className = 'btn btn-sm btn-outline-secondary mb-1';
           btn.style.fontSize = '0.75rem';
-          var visible = false;
-          block.style.display = 'none';
+          var visible = true;
           btn.onclick = function() {
             visible = !visible;
             block.style.display = visible ? 'block' : 'none';
@@ -186,6 +185,8 @@ navbar:
         href: articles/bengaluru_cpcb_vs_airnet_2026.html
       - text: OAQ India Sensor Network Map
         href: articles/oaq_india_sensor_network.html
+      - text: OAQ Daily Values (last reading since March 2026)
+        href: articles/oaq_daily_values.html
 
     news:
       text: Changelog

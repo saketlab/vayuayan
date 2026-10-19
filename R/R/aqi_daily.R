@@ -43,7 +43,8 @@ daily_aqi <- function(long, min_hours = .aqi_min_hours, day_ends_at = 24) {
   }
 
   shift <- (24 - day_ends_at) * 3600
-  parts <- lapply(sort(unique(hourly$pollutant), method = "radix"), function(name) {
+  # fixed order so ties match Python
+  parts <- lapply(intersect(names(.aqi_pollutants), unique(hourly$pollutant)), function(name) {
     group <- hourly[hourly$pollutant == name, , drop = FALSE]
     group <- group[order(group$station_id, group$hour), , drop = FALSE]
     eight_hour <- .aqi_pollutants[[name]]$hours == 8
@@ -82,7 +83,7 @@ daily_aqi <- function(long, min_hours = .aqi_min_hours, day_ends_at = 24) {
   daily$n_pollutants <- rowSums(present)
   ok <- daily$n_pollutants >= .aqi_min_pollutants & rowSums(present[, pm_cols, drop = FALSE]) > 0
   daily$aqi <- NA_integer_
-  daily$aqi[ok] <- as.integer(round(apply(subs[ok, , drop = FALSE], 1, max, na.rm = TRUE)))
+  daily$aqi[ok] <- as.integer(.round_half_up(apply(subs[ok, , drop = FALSE], 1, max, na.rm = TRUE)))
   dominant <- colnames(subs)[max.col(replace(subs, is.na(subs), -Inf), ties.method = "first")]
   daily$dominant_pollutant <- ifelse(ok, sub("_sub_index$", "", dominant), NA_character_)
   daily$category <- ifelse(is.na(daily$aqi), NA_character_, get_aqi_categories(daily$aqi))
@@ -134,9 +135,7 @@ daily_aqi <- function(long, min_hours = .aqi_min_hours, day_ends_at = 24) {
 
 # factor from each row's unit to the NAQI unit of its pollutant (ug <-> mg)
 .aqi_unit_factor <- function(unit, pollutant) {
-  mass <- tolower(trimws(as.character(unit)))
-  mass <- gsub("\u03bc|\u00b5", "u", mass)
-  mass <- substr(mass, 1, 2)
+  mass <- .aqi_mass_unit(unit)
   target <- vapply(pollutant, function(p) {
     if (is.na(p)) NA_character_ else .aqi_pollutants[[p]]$unit
   }, character(1))

@@ -14,11 +14,11 @@ import io
 import json
 import math
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 
-from vayuayan import aqi, oaq, oaq_records, sensor_qa, tidy, utils
+from vayuayan import aqi, oaq, oaq_records, sensor_qa, tidy, us_aqi, utils
 from vayuayan.constants import AQI_CATEGORIES
 from vayuayan.cpcb_historical import CPCBHistorical
 from vayuayan.pm25_versions import PM25_VERSIONS
@@ -38,6 +38,11 @@ API = {
     "daily_aqi": "daily_aqi",
     "health_impact": "aqi_health_impact",
     "pollutant_category": "aqi_pollutant_category",
+    "compute_us_aqi": "compute_us_aqi",
+    "us_sub_index": "us_aqi_sub_index",
+    "us_pollutant_name": "us_aqi_pollutant_name",
+    "us_aqi_category": "us_aqi_category",
+    "us_aqi_color": "us_aqi_color",
     "cpcb_raw_to_long": "cpcb_raw_to_long",
     "cpcb_tidy_daily": "cpcb_tidy_daily",
     "live_to_long": "cpcb_live_to_long",
@@ -107,6 +112,8 @@ API = {
     "plot_daily_record_share": "plot_daily_record_share",
     "plot_daily_record_series": "plot_daily_record_series",
     "plot_daily_record_difference": "plot_daily_record_difference",
+    "plot_sensor_vs_reference": "plot_sensor_vs_reference",
+    "set_theme": "theme_vayuayan",
     "readings_mean": "readings_mean",
     "sensor_completeness": "sensor_completeness",
     "sensor_plausibility": "sensor_plausibility",
@@ -151,6 +158,37 @@ AQI_CASES: List[Dict[str, Optional[float]]] = [
     {"PM2.5": 500, "PM10": 600, "NH3": 3000, "Pb": 4},
     {"PM2.5": 30.5, "PM10": 50.5, "SO2": 40.5},
     {"PM2.5": None, "PM10": 120, "NO2": 90, "O3": 70},
+    {"PM10": 80, "pm10": 120, "NO2": 30},
+    {"NO2": 80, "PM10": 100, "SO2": 10},
+    {"PM2.5": 30.5, "PM10": 10, "NO2": 10},
+    {"PM2.5": 1000, "PM10": 2000, "CO": 100},
+]
+
+US_LABELS = [
+    "PM2.5", "PM2.5 (µg/m³)", "pm25", "PM10 (ug/m3)", "Ozone", "O3", "O3_1h",
+    "O3 1h", "CO (mg/m3)", "NO2", "SO2", "SO2_24h", "SO2 24h", "NH3", "Benzene",
+]  # fmt: skip
+
+US_UNIT_CASES = [
+    ("O3 (µg/m³)", 100), ("O3 (ug/m3)", 108), ("O3_1h (µg/m³)", 300),
+    ("NO2 (µg/m³)", 100), ("NO2 (ug/m3)", 101.9), ("SO2 (µg/m³)", 93),
+    ("SO2_24h (µg/m³)", 1000), ("CO (mg/m³)", 5), ("CO (mg/m3)", 10.9),
+    ("PM2.5 (µg/m³)", 35.45), ("PM10 (ug/m3)", 154.9),
+]  # fmt: skip
+
+US_AQI_CASES: List[Dict[str, Optional[float]]] = [
+    {"PM2.5": 35.4, "O3": 0.060, "Benzene": 3},
+    {"PM2.5": 12.0, "PM10": 160, "NO2": 120, "CO": 5.0, "SO2": 40},
+    {"O3": 0.078},
+    {"O3": 0.21, "O3_1h": 0.21},
+    {"O3": 0.08, "O3_1h": 0.13},
+    {"SO2": 400, "SO2_24h": 400, "PM2.5": 20},
+    {"SO2": 305, "SO2_24h": 304},
+    {"SO2": 500, "SO2_24h": 200, "NO2": 120},
+    {"PM2.5": 400, "CO": 60, "NO2 (µg/m³)": 6000},
+    {"PM2.5": 400, "PM10": None},
+    {"PM2.5 (µg/m³)": 55.0, "O3 (µg/m³)": 150, "NO2 (µg/m³)": 90, "CO (mg/m³)": 4},
+    {"Benzene": 3, "PM2.5": None},
 ]
 
 CATEGORY_VALUES = [
@@ -397,9 +435,34 @@ def _sub_index_cases() -> List[Dict[str, Any]]:
     return cases
 
 
-def _compute_aqi_case(case: Dict[str, Optional[float]]) -> Dict[str, Any]:
-    """compute_aqi of one case, with None as a missing value."""
-    r = aqi.compute_aqi({k: math.nan if v is None else v for k, v in case.items()})
+def _us_sub_index_cases() -> List[Dict[str, Any]]:
+    """Every US AQI breakpoint, half a unit of precision either side, band
+    midpoints, a value above each table, and labels with mass units."""
+    cases = []
+    for name, p in us_aqi.US_POLLUTANTS.items():
+        step = 0.5 * 10.0**-p.decimals
+        edges = sorted({c for band in p.bands for c in band[:2]})
+        concs = set(edges)
+        concs |= {round(e + d, 6) for e in edges for d in (-step, step) if e + d >= 0}
+        concs |= {round((b[0] + b[1]) / 2, 6) for b in p.bands}
+        concs |= {edges[-1] * 1.5}
+        cases += [(name, c) for c in sorted(concs)]
+    cases += US_UNIT_CASES
+    return [
+        {
+            "pollutant": n,
+            "concentration": c,
+            "sub_index": _num(us_aqi.us_sub_index(n, c)),
+        }
+        for n, c in cases
+    ]
+
+
+def _aqi_case(
+    compute: Callable[[Dict[str, float]], Any], case: Dict[str, Optional[float]]
+) -> Dict[str, Any]:
+    """compute_aqi or compute_us_aqi of one case, with None as a missing value."""
+    r = compute({k: math.nan if v is None else v for k, v in case.items()})
     return {
         "input": case,
         "aqi": r.aqi,
@@ -430,7 +493,7 @@ def build() -> Dict[str, Any]:
         "aqi_categories": {k: [v["min"], v["max"]] for k, v in AQI_CATEGORIES.items()},
         "pollutant_name": [{"label": x, "name": aqi.pollutant_name(x)} for x in LABELS],
         "sub_index": _sub_index_cases(),
-        "compute_aqi": [_compute_aqi_case(c) for c in AQI_CASES],
+        "compute_aqi": [_aqi_case(aqi.compute_aqi, c) for c in AQI_CASES],
         "aqi_category": [
             {"aqi": v, "category": utils.get_aqi_category(math.nan if v is None else v)}
             for v in CATEGORY_VALUES
@@ -469,6 +532,28 @@ def build() -> Dict[str, Any]:
             for region in v.regions
             for year in v.year_range
             for month in (None, 1, 12)
+        ],
+        "us_pollutants": {
+            name: {
+                "unit": p.unit,
+                "decimals": p.decimals,
+                "bands": [list(b) for b in p.bands],
+            }
+            for name, p in us_aqi.US_POLLUTANTS.items()
+        },
+        "us_pollutant_name": [
+            {"label": x, "name": us_aqi.us_pollutant_name(x)} for x in US_LABELS
+        ],
+        "us_sub_index": _us_sub_index_cases(),
+        "compute_us_aqi": [_aqi_case(us_aqi.compute_us_aqi, c) for c in US_AQI_CASES],
+        "us_aqi_category": [
+            {
+                "aqi": v,
+                "category": us_aqi.us_aqi_category(v),
+                "color": us_aqi.us_aqi_color(v),
+                "color_assist": us_aqi.us_aqi_color(v, color_vision_assist=True),
+            }
+            for v in CATEGORY_VALUES
         ],
         "health_impact": [
             {"aqi": v, "impact": aqi.health_impact(math.nan if v is None else v)}

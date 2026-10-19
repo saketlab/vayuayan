@@ -5,7 +5,7 @@ test_that("sub-indices match the Python package", {
   cases <- data.frame(
     pollutant = c("PM2.5", "PM2.5", "PM2.5", "PM2.5", "PM10", "O3", "CO", "CO", "Pb", "Pb", "Ozone"),
     concentration = c(30, 30.5, 45, 1000, 430, 900, 1.05, 10, 0.5, 0.50001, 120),
-    expected = c(50, 50.5, 74.65517, 500, 400, 428.86667, 50.5, 200, 50, 51.00098, 129.07463)
+    expected = c(50, 50.5, 74.65517, 500 + 620 * 99 / 130, 400, 428.86667, 50.5, 200, 50, 51.00098, 129.07463)
   )
   got <- mapply(aqi_sub_index, cases$pollutant, cases$concentration)
   expect_equal(unname(got), cases$expected, tolerance = 1e-6)
@@ -82,4 +82,24 @@ test_that("cpcb_tidy_daily adds dates and drops impossible days", {
   sheet <- data.frame(Day = c(28, 30), January = c(1, 2), February = c(3, 4))
   out <- cpcb_tidy_daily(sheet, year = 2024)
   expect_equal(as.character(out$date), c("2024-01-28", "2024-01-30", "2024-02-28"))
+})
+
+test_that("the AQI rounds half up and a category uses the rounded sub-index", {
+  r <- compute_aqi(c("PM2.5" = 30.5, PM10 = 10, NO2 = 10))
+  expect_equal(c(r$aqi, r$category), c("51", "Satisfactory"))
+  expect_equal(aqi_pollutant_category("PM2.5", c(30.5, 30.2)), c("Satisfactory", "Good"))
+})
+
+test_that("a repeated pollutant counts once and ties go to the first pollutant", {
+  r <- compute_aqi(c(PM10 = 80, pm10 = 120, NO2 = 30))
+  expect_true(is.na(r$aqi))
+  expect_equal(r$sub_indices[["PM10"]], aqi_sub_index("PM10", 120))
+  expect_equal(compute_aqi(c(NO2 = 80, PM10 = 100, SO2 = 10))$dominant_pollutant, "PM10")
+})
+
+test_that("compute_aqi matches the CPCB calculator sample", {
+  # sample inputs of CPCB's AQI-Calculator.xls (cpcb.nic.in): AQI 114, PM10
+  r <- compute_aqi(c(PM10 = 121, "PM2.5" = 34, SO2 = 0, NO2 = 8, CO = 0, O3 = 57, NH3 = 34))
+  expect_equal(r$aqi, 114L)
+  expect_equal(r$dominant_pollutant, "PM10")
 })

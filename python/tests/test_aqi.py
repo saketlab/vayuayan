@@ -5,7 +5,13 @@ import math
 import pandas as pd
 import pytest
 
-from vayuayan.aqi import compute_aqi, daily_aqi, pollutant_name, sub_index
+from vayuayan.aqi import (
+    compute_aqi,
+    daily_aqi,
+    pollutant_category,
+    pollutant_name,
+    sub_index,
+)
 
 
 @pytest.mark.parametrize(
@@ -15,11 +21,11 @@ from vayuayan.aqi import compute_aqi, daily_aqi, pollutant_name, sub_index
         ("PM2.5", 31, 51),
         ("PM2.5", 60, 100),
         ("PM2.5", 45, 75),
-        # Band edges, the shared boundaries and the cap
+        # Band edges, the shared boundaries, and the Severe slope above 500
         ("PM10", 50, 50),
         ("PM10", 51, 51),
         ("PM10", 430, 400),
-        ("PM10", 5000, 500),
+        ("PM10", 600, 611),  # 500 + 90 * 99 / 80
         ("CO", 10, 200),
         ("Pb", 0.5, 50),
         ("O3", 748, 400),
@@ -121,3 +127,38 @@ def test_health_impact_and_pollutant_category():
     assert health_impact(float("nan")) == "No Data"
     assert pollutant_category("PM2.5", 75) == "Moderate"
     assert pollutant_category("PM2.5", 400) == "Severe"
+
+
+def test_aqi_rounds_half_up_and_category_uses_the_rounded_value():
+    # PM2.5 30.5 -> sub-index 50.5: half up gives 51, Satisfactory
+    r = compute_aqi({"PM2.5": 30.5, "PM10": 10, "NO2": 10})
+    assert (r.aqi, r.category) == (51, "Satisfactory")
+    assert pollutant_category("PM2.5", 30.5) == "Satisfactory"
+    assert pollutant_category("PM2.5", 30.2) == "Good"  # 50.33 -> 50
+
+
+def test_compute_aqi_counts_a_repeated_pollutant_once():
+    r = compute_aqi({"PM10": 80, "pm10": 120, "NO2": 30})
+    assert r.aqi is None  # two pollutants, not three
+    assert r.sub_indices["PM10"] == sub_index("PM10", 120)
+
+
+def test_compute_aqi_tie_goes_to_the_first_pollutant_in_order():
+    # PM10 100 and NO2 80 both give 100
+    r = compute_aqi({"NO2": 80, "PM10": 100, "SO2": 10})
+    assert r.dominant_pollutant == "PM10"
+
+
+def test_compute_aqi_matches_the_cpcb_calculator_sample():
+    # sample inputs of CPCB's AQI-Calculator.xls, which shows 114 from PM10
+    sample = {
+        "PM10": 121,
+        "PM2.5": 34,
+        "SO2": 0,
+        "NO2": 8,
+        "CO": 0,
+        "O3": 57,
+        "NH3": 34,
+    }
+    r = compute_aqi(sample)
+    assert (r.aqi, r.dominant_pollutant) == (114, "PM10")

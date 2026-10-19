@@ -13,8 +13,9 @@ aqi_sub_index(pollutant, concentration)
 O3), in mg/m3 for CO and ug/m3 for the others.}
 }
 \value{
-Numeric vector of sub-indices, capped at 500; \code{NA} stays
-\code{NA}.
+Numeric vector of sub-indices; above the last breakpoint the
+slope of the Severe band continues, so a sub-index can be more than 500.
+\code{NA} stays \code{NA}.
 }
 \description{
 The CPCB National AQI sub-index of one pollutant, by linear interpolation

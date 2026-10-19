@@ -63,11 +63,14 @@ oaq_session <- function(api_key = Sys.getenv("OAQ_API_KEY")) {
   )
   httr::stop_for_status(response)
 
+  .oaq_parse(httr::content(response, as = "text", encoding = "UTF-8"))
+}
+
+# OAQ sends bare NaN (cpcb 164, 2025-10-19), which jsonlite rejects
+.oaq_parse <- function(text) {
+  text <- gsub("([:\\[,]\\s*)-?(?:NaN|Infinity)(?=\\s*[,\\]}])", "\\1null", text, perl = TRUE)
   tryCatch(
-    jsonlite::fromJSON(
-      httr::content(response, as = "text", encoding = "UTF-8"),
-      simplifyVector = TRUE
-    ),
+    jsonlite::fromJSON(text, simplifyVector = TRUE),
     error = function(e) stop(sprintf("Failed to parse OAQ response: %s", e$message))
   )
 }
