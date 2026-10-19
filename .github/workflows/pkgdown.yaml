@@ -53,6 +53,16 @@ jobs:
           key: article-data-${{ hashFiles('R/vignettes/articles/*.Rmd') }}
           restore-keys: article-data-
 
+      # Runners cannot reach CPCB: the CPCB files of the articles come from the
+      # article-data release (built by data-raw/article_data.R)
+      - name: Get the CPCB files of the articles
+        working-directory: R
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download article-data --pattern article-data.tar.gz --clobber
+          tar -xzf article-data.tar.gz
+
       # The analysis articles download real data and the OAQ ones need
       # OAQ_API_KEY; pull requests from forks get no secrets, so they build
       # only the introduction. NOT_CRAN runs the network chunks of the

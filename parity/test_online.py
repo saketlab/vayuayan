@@ -1,5 +1,4 @@
-"""Online parity: the R and Python packages must return the same live data.
-"""
+"""Online parity: the R and Python packages must return the same live data."""
 
 from __future__ import annotations
 

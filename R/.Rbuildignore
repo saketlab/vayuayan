@@ -40,3 +40,4 @@ vignettes/.*_files$
 ^vayuayan_.*\.tar\.gz$
 ^.*\.Rcheck$
 ^\.gitignore$
+^article-data\.tar\.gz$

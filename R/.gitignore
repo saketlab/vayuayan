@@ -50,3 +50,4 @@ vignettes/articles/*.html
 
 # R CMD build output
 vayuayan_*.tar.gz
+article-data.tar.gz

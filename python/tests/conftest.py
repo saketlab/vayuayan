@@ -1,8 +1,13 @@
 """Fixtures that several test files share."""
 
+import os
+
 import pytest
 
 from vayuayan.constants import CPCB_CREDENTIAL_ENV
+
+# Tk on Windows runners fails when figures are created; tests draw off screen
+os.environ.setdefault("MPLBACKEND", "Agg")
 
 
 @pytest.fixture(autouse=True)

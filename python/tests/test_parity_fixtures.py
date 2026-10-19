@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import io
 import json
+import math
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 import vayuayan
@@ -30,12 +33,28 @@ pytestmark = pytest.mark.skipif(
 def test_parity_json_is_current() -> None:
     committed = json.loads(make_parity_fixtures.JSON_PATH.read_text(encoding="utf-8"))
     current = json.loads(make_parity_fixtures.dumps(make_parity_fixtures.build()))
-    assert committed == current, STALE
+    assert _same(committed, current), STALE
 
 
 def test_daily_aqi_csv_is_current() -> None:
-    committed = make_parity_fixtures.DAILY_OUTPUT.read_text(encoding="utf-8")
-    assert committed == make_parity_fixtures.build_daily_csv(), STALE
+    committed = pd.read_csv(make_parity_fixtures.DAILY_OUTPUT, encoding="utf-8")
+    current = pd.read_csv(io.StringIO(make_parity_fixtures.build_daily_csv()))
+    pd.testing.assert_frame_equal(committed, current, check_exact=False, rtol=1e-9)
+
+
+def _same(a: object, b: object) -> bool:
+    """Equal, with floats compared to 1e-9: the last digit differs by platform."""
+    if isinstance(a, float) or isinstance(b, float):
+        return (
+            isinstance(a, (int, float))
+            and isinstance(b, (int, float))
+            and (math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12))
+        )
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(_same(a[k], b[k]) for k in a)
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_same(x, y) for x, y in zip(a, b))
+    return a == b
 
 
 def _public_api() -> set:
