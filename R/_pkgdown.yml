@@ -233,6 +233,15 @@ reference:
   - aqi_pollutant_category
   - daily_aqi
 
+- title: "US EPA AQI"
+  desc: "The US EPA Air Quality Index (EPA-454/B-24-002, May 2024)."
+  contents:
+  - compute_us_aqi
+  - us_aqi_sub_index
+  - us_aqi_pollutant_name
+  - us_aqi_category
+  - us_aqi_color
+
 - title: "CPCB Real-Time AQI Data"
   desc: "Fetch live air quality index readings from CPCB CAAQMS monitoring stations across all Indian cities"
   contents:
@@ -275,6 +284,8 @@ reference:
   - plot_daily_record_share
   - plot_daily_record_series
   - plot_daily_record_difference
+  - plot_sensor_vs_reference
+  - theme_vayuayan
 
 - title: "Satellite PM2.5 Data (WUSTL ACAG)"
   desc: "Download and analyze WUSTL ACAG satellite-derived PM2.5 estimates at 1 km resolution globally (V6GL03, V6, V5 and V5GL04)"
