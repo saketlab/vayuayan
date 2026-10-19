@@ -23,7 +23,7 @@ Usage:
     >>> location = live.get_system_location()
 """
 
-__version__ = "0.1.5"
+__version__ = "0.3.0"
 __author__ = "Saket Choudhary"
 __email__ = "saketc@iitb.ac.in"
 __description__ = (
@@ -41,12 +41,13 @@ from .aqi import (
     daily_aqi,
     health_impact,
     pollutant_category,
+    pollutant_name,
     sub_index,
 )
 from .client import CPCBClient
 
 # Configuration functions
-from .constants import get_config_dir, get_gee_project_file
+from .constants import get_cache_dir, get_config_dir, get_gee_project_file
 from .cpcb_historical import CPCBHistorical
 from .cpcb_live import CPCBLive
 
@@ -65,10 +66,32 @@ from .exceptions import (
     StationNotFoundError,
 )
 from .gee import setup_earth_engine
+from .geo import india_boundary
+from .oaq import OAQClient, oaq_city_tally, oaq_nearest_cpcb
+from .oaq_plots import (
+    plot_daily_record_day,
+    plot_daily_record_difference,
+    plot_daily_record_scatter,
+    plot_daily_record_series,
+    plot_daily_record_share,
+    plot_daily_record_timeline,
+)
+from .oaq_records import compare_daily_records, daily_record_summary
 from .pm25 import PM25Client
+from .sensor_qa import (
+    EPA_PM25_TARGETS,
+    collocated_precision,
+    peer_ratio,
+    ratio_by_humidity,
+    readings_mean,
+    sensor_accuracy,
+    sensor_completeness,
+    sensor_plausibility,
+)
 from .tidy import (
     TIDY_COLUMNS,
     cpcb_raw_to_long,
+    cpcb_tidy_daily,
     daily_aqi_workbook_to_long,
     live_metrics,
     live_to_long,
@@ -79,8 +102,11 @@ from .utils import (
     analyze_station_data,
     clean_station_name,
     convert_station_data_to_dataframe,
+    get_aqi_categories,
     get_aqi_category,
     haversine_distance,
+    nearest_stations,
+    stations_to_city_summary,
     stations_to_dataframe,
 )
 
@@ -91,10 +117,22 @@ __all__ = [
     "CPCBHistorical",
     "CPCBLive",
     "PM25Client",
+    "OAQClient",
+    "oaq_nearest_cpcb",
+    "oaq_city_tally",
+    "compare_daily_records",
+    "daily_record_summary",
+    "plot_daily_record_day",
+    "plot_daily_record_timeline",
+    "plot_daily_record_scatter",
+    "plot_daily_record_share",
+    "plot_daily_record_series",
+    "plot_daily_record_difference",
     # National AQI and tidy data
     "AQIResult",
     "compute_aqi",
     "sub_index",
+    "pollutant_name",
     "daily_aqi",
     "health_impact",
     "pollutant_category",
@@ -105,9 +143,21 @@ __all__ = [
     "live_metrics",
     "cpcb_raw_to_long",
     "daily_aqi_workbook_to_long",
+    "cpcb_tidy_daily",
+    "india_boundary",
+    # Sensor quality
+    "EPA_PM25_TARGETS",
+    "readings_mean",
+    "sensor_completeness",
+    "sensor_plausibility",
+    "collocated_precision",
+    "peer_ratio",
+    "sensor_accuracy",
+    "ratio_by_humidity",
     # Setup functions
     "setup_earth_engine",
     "get_config_dir",
+    "get_cache_dir",
     "get_gee_project_file",
     # Exceptions
     "CPCBError",
@@ -127,5 +177,8 @@ __all__ = [
     "convert_station_data_to_dataframe",
     "analyze_station_data",
     "get_aqi_category",
+    "get_aqi_categories",
+    "nearest_stations",
+    "stations_to_city_summary",
     "haversine_distance",
 ]

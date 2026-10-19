@@ -26,7 +26,7 @@ Numeric mean value over the bounding box.
 }
 \description{
 Reads only the pixels covering \code{shape}'s bounding box and returns the
-mean value. Useful for a quick monthly figure over a city or district.
+mean value.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

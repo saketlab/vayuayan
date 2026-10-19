@@ -11,7 +11,7 @@ oaq_get_city_latest(session, provider, city)
 
 \item{provider}{Character. Provider name (e.g. \code{"AURASSURE"}).}
 
-\item{city}{Character. City name as it appears in the provider hierarchy.}
+\item{city}{Character. City name as in the provider hierarchy (any case).}
 }
 \value{
 Parsed list of sensor readings for the city.
@@ -22,6 +22,6 @@ Get the latest air quality map readings for all sensors in a city.
 \examples{
 \dontshow{if (nzchar(Sys.getenv("OAQ_API_KEY"))) withAutoprint(\{ # examplesIf}
 session <- oaq_session()
-latest <- oaq_get_city_latest(session, "AURASSURE", "Bengaluru")
+latest <- oaq_get_city_latest(session, "airnet", "Bengaluru")
 \dontshow{\}) # examplesIf}
 }

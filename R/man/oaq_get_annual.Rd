@@ -20,10 +20,13 @@ Parsed annual aggregate record.
 }
 \description{
 Retrieve annual aggregated air quality data for a specific sensor and year.
+Since about March 2026, OAQ's daily values are often the last 15-minute
+reading of the day, not its mean; use \code{oaq_daily_means()} or \code{readings_mean()} on
+\code{oaq_readings()} for daily means.
 }
 \examples{
 \dontshow{if (nzchar(Sys.getenv("OAQ_API_KEY"))) withAutoprint(\{ # examplesIf}
 session <- oaq_session()
-annual <- oaq_get_annual(session, "AURASSURE", "sensor_001", 2024)
+annual <- oaq_get_annual(session, "airnet", "12036", 2026)
 \dontshow{\}) # examplesIf}
 }

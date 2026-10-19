@@ -1,6 +1,8 @@
 # Files in the sdist in addition to the package and the license.
 include README.md
 graft tests
-# tests/test_dump_raw_15min_pollutants.py imports this script
+# The tests import these scripts (test_dump_raw_15min_pollutants.py and
+# test_parity_fixtures.py; the parity tests skip without the R folder)
 include scripts/dump_raw_15min_pollutants.py
+include scripts/make_parity_fixtures.py
 global-exclude __pycache__ *.py[cod]

@@ -1,5 +1,4 @@
-# WUSTL ACAG PM2.5 products in the public satpmdata bucket (us-east-1),
-# matching PM25_VERSIONS in the Python package plus V5GL04
+# WUSTL ACAG PM2.5 products in the public satpmdata bucket (us-east-1)
 .pm25_bucket_url <- "https://satpmdata.s3.us-east-1.amazonaws.com/"
 
 .pm25_v5_regions <- c(GL = "Global", AS = "Asia", EU = "Europe", "NA" = "NorthAmerica")

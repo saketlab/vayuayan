@@ -36,3 +36,7 @@ vignettes/.*_files$
 ^inst/examples$
 ^vignettes/data$
 ^data-raw$
+^\.ruff_cache$
+^vayuayan_.*\.tar\.gz$
+^.*\.Rcheck$
+^\.gitignore$

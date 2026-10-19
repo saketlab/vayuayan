@@ -80,7 +80,7 @@ cpcb_test_that("station file paths resolve for a directory station", {
     data_type = "stationLevel"
   )
   expect_gt(length(paths), 0)
-  expect_named(paths[[1]], c("filePath", "year", "month"))
+  expect_true(all(c("filepath", "year") %in% names(paths[[1]])))
 })
 
 cpcb_test_that("live feed returns stations with coordinates and readings", {

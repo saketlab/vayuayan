@@ -23,11 +23,11 @@ oaq_get_daily(session, provider, sensor_id, year, month, day)
 Parsed daily data record.
 }
 \description{
-Retrieve daily aggregated air quality data for a specific sensor, date.
+Retrieve daily aggregated air quality data for a sensor and day.
 }
 \examples{
 \dontshow{if (nzchar(Sys.getenv("OAQ_API_KEY"))) withAutoprint(\{ # examplesIf}
 session <- oaq_session()
-daily <- oaq_get_daily(session, "AURASSURE", "sensor_001", 2024, 1, 15)
+daily <- oaq_get_daily(session, "airnet", "12036", 2026, 9, 14)
 \dontshow{\}) # examplesIf}
 }

@@ -1,4 +1,4 @@
-# vayuayanR <img src="man/figures/logo.png" align="right" height="139" alt="vayuayanR logo" />
+# vayuayan <img src="man/figures/logo.png" align="right" height="139" alt="vayuayan logo" />
 
 [![R-CMD-check](https://github.com/saketlab/vayuayan/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/saketlab/vayuayan/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -6,7 +6,6 @@
 `vayuayan` is an R package. It downloads and processes air quality data from three sources:
 CPCB CAAQMS monitoring stations in India, OAQ low-cost sensor networks in India, and WUSTL ACAG satellite PM2.5 estimates for the whole globe.
 The package gives an easy R interface to get daily AQI, PM2.5 and other pollutants for a city, a station, a point or a region.
-It is the R port of the Python package [vayuayan](https://github.com/saketlab/vayuayan/tree/main/python).
 The name means "the path of wind" (वायु, wind + अयन, path).
 
 ## Installation
@@ -94,10 +93,9 @@ pm25_get_stats(
 
 ## Documentation
 
-- [Introduction](https://vayuayan.saketlab.org/R/articles/introduction.html)
-- [Delhi PM2.5 Analysis](https://vayuayan.saketlab.org/R/articles/delhi_pm2.5_analysis.html)
-- [PM2.5 across five metros](https://vayuayan.saketlab.org/R/articles/metro_wide_pm2.5_analysis_comparative_2022.html)
-- [Bengaluru: CPCB vs Airnet sensors](https://vayuayan.saketlab.org/R/articles/bengaluru_cpcb_vs_airnet_2026.html)
+- Introduction: `vignette("introduction", package = "vayuayan")`
+- [Articles](https://vayuayan.saketlab.org/R/articles/index.html): analyses of
+  Delhi, five metros, and CPCB against Airnet sensors in Bengaluru
 - [Function Reference](https://vayuayan.saketlab.org/R/reference/index.html)
 
 ## Contributing

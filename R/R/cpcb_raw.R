@@ -34,7 +34,7 @@ cpcb_download_raw_station_data <- function(station_id, year, save_location = "",
       call. = FALSE
     )
   }
-  df <- .cpcb_read_repository(files[[1]]$filePath)
+  df <- .cpcb_read_repository(files[[1]][["filepath"]])
   if (tidy) {
     df <- cpcb_raw_to_long(df, station)
   }
@@ -111,11 +111,11 @@ cpcb_station_daily_aqi <- function(station_id, year, day_ends_at = 24) {
 .cpcb_combine_months <- function(files, year, month = NULL) {
   selected <- if (!is.null(month)) {
     Filter(function(e) {
-      isTRUE(tolower(e$month) == tolower(month)) ||
-        grepl(tolower(month), tolower(e$filePath), fixed = TRUE)
+      isTRUE(tolower(e[["month"]] %||% "") == tolower(month)) ||
+        grepl(tolower(month), tolower(e[["filepath"]]), fixed = TRUE)
     }, files)
   } else {
-    in_year <- Filter(function(e) isTRUE(e$year == year), files)
+    in_year <- Filter(function(e) identical(as.character(e[["year"]]), as.character(year)), files)
     if (length(in_year)) in_year else files
   }
   if (length(selected) == 0) {
@@ -125,8 +125,17 @@ cpcb_station_daily_aqi <- function(station_id, year, day_ends_at = 24) {
     ), call. = FALSE)
   }
   frames <- lapply(selected, function(e) {
-    month_name <- if (is.na(e$month)) month %||% NA_character_ else e$month
-    cbind(Year = as.integer(year), Month = month_name, .cpcb_read_repository(e$filePath))
+    month_name <- e[["month"]]
+    if (is.null(month_name) || is.na(month_name)) month_name <- month %||% NA_character_
+    entry_year <- suppressWarnings(as.integer(e[["year"]] %||% NA))
+    df <- .cpcb_read_repository(e[["filepath"]])
+    # CPCB writes missing hours as text, which makes the whole column character
+    chr <- vapply(df, is.character, logical(1))
+    df[chr] <- utils::type.convert(df[chr], as.is = TRUE)
+    cbind(
+      Year = if (length(entry_year) == 1 && !is.na(entry_year)) entry_year else as.integer(year),
+      Month = month_name, df
+    )
   })
   dplyr::bind_rows(frames)
 }
@@ -137,4 +146,38 @@ cpcb_station_daily_aqi <- function(station_id, year, day_ends_at = 24) {
     cli::cli_alert_success("Saved to {save_location}")
   }
   df
+}
+
+#' Raw 15-minute data of several stations
+#'
+#' @description
+#' \code{cpcb_download_raw_station_data(tidy = TRUE)} for several stations,
+#' as one long table. Stations without a raw file for the year are skipped
+#' with a warning.
+#'
+#' @param station_id Character vector of station IDs or names.
+#' @param year Integer year.
+#' @param pollutants Optional pollutant names to keep, such as
+#'   \code{c("PM2.5", "RH")}.
+#' @return Data frame as \code{cpcb_raw_to_long()}.
+#' @examplesIf interactive()
+#' raw <- cpcb_raw_readings(c("site_1554", "site_162"), 2025, "PM2.5")
+#' @export
+cpcb_raw_readings <- function(station_id, year, pollutants = NULL) {
+  frames <- lapply(station_id, function(id) {
+    long <- tryCatch(
+      cpcb_download_raw_station_data(id, year, tidy = TRUE),
+      error = function(e) {
+        cli::cli_alert_warning("Skipped {id}: {conditionMessage(e)}")
+        NULL
+      }
+    )
+    if (!is.null(long) && !is.null(pollutants)) long <- long[long$pollutant %in% pollutants, , drop = FALSE]
+    long
+  })
+  out <- dplyr::bind_rows(frames)
+  if (nrow(out) == 0) {
+    return(cpcb_raw_to_long(data.frame(Timestamp = character())))
+  }
+  out
 }

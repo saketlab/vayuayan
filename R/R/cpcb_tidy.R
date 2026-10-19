@@ -175,7 +175,7 @@ cpcb_station_daily <- function(station_id, year,
   }
   x <- as.character(x)
   out <- as.POSIXct(x, tz = "UTC", format = "%Y-%m-%d %H:%M:%OS")
-  for (fmt in c("%Y-%m-%d %H:%M", "%Y-%m-%d")) {
+  for (fmt in c("%Y-%m-%dT%H:%M:%OS", "%Y-%m-%d %H:%M", "%Y-%m-%d")) {
     miss <- is.na(out) & !is.na(x)
     if (!any(miss)) break
     out[miss] <- as.POSIXct(x[miss], tz = "UTC", format = fmt)
@@ -190,4 +190,76 @@ cpcb_station_daily <- function(station_id, year,
   }
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
   file.path(cache_dir, name)
+}
+
+#' Recent hours of live CPCB data in long format
+#'
+#' @description
+#' Turn the \code{last_hours} series of live station data (one series of
+#' \code{date}/\code{val} points per pollutant) into one row per time and
+#' pollutant. The CPCB feed has no recent hours, so the result is empty for
+#' feed data.
+#'
+#' @param aqi_data List from \code{cpcb_get_live_aqi_data()}.
+#' @param station_id Optional station ID for every row.
+#' @return Data frame with columns \code{station_id}, \code{timestamp}
+#'   (POSIXct, UTC), \code{pollutant} and \code{value}, sorted by pollutant
+#'   and time.
+#' @examples
+#' cpcb_live_to_long(list(station_id = "site_301", last_hours = list(
+#'   list(name = "PM2.5", data = list(list(date = "2024-01-01 10:00:00", val = 80)))
+#' )))
+#' @export
+cpcb_live_to_long <- function(aqi_data, station_id = "") {
+  field <- function(points, name) {
+    vapply(points, function(p) as.character(p[[name]] %||% NA), "")
+  }
+  rows <- lapply(aqi_data$last_hours, function(s) {
+    data.frame(
+      timestamp = field(s$data, "date"),
+      pollutant = rep(as.character(s$name %||% NA), length(s$data)),
+      value = suppressWarnings(as.numeric(field(s$data, "val")))
+    )
+  })
+  long <- do.call(rbind, c(
+    list(data.frame(timestamp = character(), pollutant = character(), value = numeric())),
+    rows
+  ))
+  long$timestamp <- .parse_timestamp(long$timestamp)
+  id <- if (nzchar(station_id)) station_id else aqi_data$station_id %||% ""
+  long <- data.frame(station_id = rep(id, nrow(long)), long, stringsAsFactors = FALSE)
+  long <- long[!is.na(long$timestamp) & !is.na(long$value), , drop = FALSE]
+  long <- long[order(long$pollutant, long$timestamp, method = "radix"), , drop = FALSE]
+  rownames(long) <- NULL
+  long
+}
+
+#' Latest pollutant averages of live CPCB data
+#'
+#' @description
+#' The \code{metrics} of live station data as a table with numeric columns.
+#'
+#' @param aqi_data List from \code{cpcb_get_live_aqi_data()}.
+#' @return Data frame with columns \code{pollutant}, \code{avg}, \code{min},
+#'   \code{max} (numeric, \code{NA} where CPCB has none) and \code{period},
+#'   one row per pollutant.
+#' @examples
+#' cpcb_live_metrics(list(metrics = data.frame(
+#'   name = "PM2.5", avg = "80", min = 60, max = "NA", avgDesc = "Over the last 24 hours"
+#' )))
+#' @export
+cpcb_live_metrics <- function(aqi_data) {
+  m <- aqi_data$metrics
+  if (!is.data.frame(m) || nrow(m) == 0) {
+    return(data.frame(
+      pollutant = character(), avg = numeric(), min = numeric(),
+      max = numeric(), period = character()
+    ))
+  }
+  num <- function(x) suppressWarnings(as.numeric(x %||% NA))
+  data.frame(
+    pollutant = as.character(m$name), avg = num(m$avg), min = num(m$min),
+    max = num(m$max), period = as.character(m$avgDesc %||% NA),
+    stringsAsFactors = FALSE
+  )
 }

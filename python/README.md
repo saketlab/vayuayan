@@ -19,6 +19,8 @@ Install from PyPI (recommended):
 pip install vayuayan
 ```
 
+The plotting functions (`plot_daily_record_*`) need matplotlib: `pip install "vayuayan[plot]"`.
+
 Install the development version from GitHub:
 
 ```bash

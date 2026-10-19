@@ -13,9 +13,8 @@ cpcb_get_nearest_station(coords = NULL)
 List with station_id, station_name, and distance_km
 }
 \description{
-Find nearest CPCB monitoring station to given coordinates. If no
-coordinates provided, uses IP-based geolocation automatically.
-Returns station ID, name, and distance in kilometers.
+Find the CPCB monitoring station nearest to given coordinates, or to the
+IP-based location when none are given.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

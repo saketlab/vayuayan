@@ -22,6 +22,6 @@ Retrieve the last 24 hours of readings for a specific sensor station.
 \examples{
 \dontshow{if (nzchar(Sys.getenv("OAQ_API_KEY"))) withAutoprint(\{ # examplesIf}
 session <- oaq_session()
-data <- oaq_get_station_24h(session, "AURASSURE", "sensor_001")
+data <- oaq_get_station_24h(session, "airnet", "12036")
 \dontshow{\}) # examplesIf}
 }

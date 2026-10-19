@@ -35,9 +35,12 @@ columns returned by the API as numbers, and \code{lat}/\code{lon}/
 \description{
 Pulls the station list for \code{provider}, optionally restricts it to one
 or more cities, then fetches monthly aggregates for every station across the
-requested months. Returns a single tidy data frame with station metadata
-(id, name, lat, lon) joined to each daily record. Stations that return no
-data for a month are skipped.
+requested months. Stations that return no data for a month are skipped.
+}
+\details{
+Since about March 2026, OAQ's daily values are often the last 15-minute
+reading of the day, not its mean; use \code{oaq_daily_means()} or \code{readings_mean()} on
+\code{oaq_readings()} for daily means.
 }
 \examples{
 \dontshow{if (nzchar(Sys.getenv("OAQ_API_KEY"))) withAutoprint(\{ # examplesIf}

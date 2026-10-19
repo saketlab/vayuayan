@@ -37,7 +37,7 @@ cpcb_get_complete_list <- function() {
 #' head(states)
 #' @export
 cpcb_get_state_list <- function() {
-  sort(.cpcb_directory()$states$state_name)
+  sort(.cpcb_directory()$states$state_name, method = "radix")
 }
 
 #' Get list of cities in a state
@@ -58,7 +58,7 @@ cpcb_get_city_list <- function(state) {
     return(character(0))
   }
   cities <- .cpcb_directory()$cities[[state_entry$state_code]]
-  sort(as.character(cities$city_name))
+  sort(as.character(cities$city_name), method = "radix")
 }
 
 #' Get station list for a city
@@ -115,9 +115,8 @@ cpcb_add_coords <- function(stations) {
     stations$lon[missing] <- suppressWarnings(as.numeric(feed$longitude[idx]))
   }
 
-  # Nominatim fallback for any remaining NAs.
-  # Stations absent from the live feed (e.g. temporarily offline) are
-  # geocoded via OpenStreetMap as a best-effort fallback
+  # stations absent from the live feed (e.g. offline) are geocoded with
+  # OpenStreetMap Nominatim
   missing_idx <- which(is.na(stations$lat))
 
   if (length(missing_idx) > 0) {
@@ -189,7 +188,7 @@ cpcb_add_coords <- function(stations) {
 #'   \code{"hourly"}, \code{"monthly"} or \code{"15_minute"}.
 #' @param data_type Character. Type of data: \code{"cityLevel"},
 #'   \code{"stationLevel"} or \code{"raw"}.
-#' @return List of file entries, each with \code{filePath}, \code{year} and
+#' @return List of file entries as CPCB sends them, each with \code{filepath}, \code{year} and
 #'   \code{month} (\code{NA} when CPCB gives none).
 #' @examplesIf interactive()
 #' paths <- cpcb_get_file_path(
@@ -252,11 +251,8 @@ cpcb_get_file_path <- function(station_id = "",
     !is.data.frame(df) || nrow(df) == 0) {
     return(list())
   }
-  years <- suppressWarnings(as.integer(.cpcb_col(df, "year")))
-  months <- as.character(.cpcb_col(df, "month"))
-  lapply(seq_len(nrow(df)), function(i) {
-    list(filePath = as.character(df$filepath[i]), year = years[i], month = months[i])
-  })
+  # fields as CPCB sends them
+  lapply(seq_len(nrow(df)), function(i) as.list(df[i, , drop = FALSE]))
 }
 
 #' Download city-level AQI data

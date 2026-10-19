@@ -26,8 +26,8 @@ when \code{nc_file} is supplied.}
 when \code{nc_file} is supplied.}
 
 \item{cache_dir}{Character. Directory to cache NetCDF files. \code{NULL}
-uses the \code{pm25} folder of \code{vayuayan_cache_dir()}, and also
-reads files from the Python package's cache.}
+uses the \code{pm25} folder of \code{vayuayan_cache_dir()} and also
+reads the Python package's cache.}
 
 \item{group_by}{Optional character. Column name(s) in the GeoJSON to
 group polygons by (comma-separated for multiple columns).}

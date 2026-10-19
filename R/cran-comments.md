@@ -1,8 +1,18 @@
+## Test environments
+
+* local macOS 27.0, R 4.6.1: `R CMD check --as-cran` on the built tarball,
+  with the CRAN incoming checks (`_R_CHECK_CRAN_INCOMING_REMOTE_=true`)
+* GitHub Actions: macOS (release), Windows (release, oldrel-1), Ubuntu
+  (devel, release, oldrel-1)
+
 ## R CMD check results
 
 0 errors | 0 warnings | 1 note
 
 * This is a new submission.
+
+URLs were checked with `urlchecker::url_check()` and spelling with
+`spelling::spell_check_package()`.
 
 ## Internet resources
 

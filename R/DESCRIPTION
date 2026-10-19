@@ -11,14 +11,17 @@ Description: Download and analyze air pollution data from three sources.
     The Central Pollution Control Board (CPCB) of India publishes historical
     and real-time particulate matter and air quality index readings from
     more than 600 continuous ambient air quality monitoring stations
-    <https://airquality.cpcb.gov.in/ccr/>. Open Air Quality (OAQ) aggregates
-    low-cost sensor networks in India. The Atmospheric Composition Analysis
-    Group at Washington University in St. Louis provides satellite-derived
-    fine particulate matter (PM2.5) estimates at 0.01 degree resolution
-    for 1998-2024 <https://www.satpm.org>. Includes station lookup,
+    <https://airquality.cpcb.gov.in/ccr/>. Open Air Quality (OAQ)
+    aggregates low-cost sensor networks in India <https://oaq.notf.in>.
+    The Atmospheric Composition Analysis Group at Washington University in
+    St. Louis provides satellite-derived fine particulate matter (PM2.5)
+    estimates at 0.01 degree resolution for 1998-2024
+    <https://www.satpm.org>. Includes station lookup,
     nearest-station matching, the CPCB National Air Quality Index computed
-    from pollutant concentrations, and regional PM2.5 summaries from
-    'NetCDF' rasters. An R port of the 'vayuayan' 'Python' package.
+    from pollutant concentrations, regional PM2.5 summaries from 'NetCDF'
+    rasters, quality checks of sensor readings against the United States
+    Environmental Protection Agency performance targets for PM2.5 sensors,
+    and checks of OAQ's daily values against their 15-minute readings.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Language: en-US
@@ -41,6 +44,7 @@ Suggests:
     knitr,
     ncdf4,
     rmarkdown,
+    scales,
     testthat (>= 3.1.7),
     tidyterra
 VignetteBuilder: knitr

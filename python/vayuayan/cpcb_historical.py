@@ -7,17 +7,33 @@ from __future__ import annotations
 import io
 import logging
 import re
+import tempfile
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    cast,
+)
 
 import requests
 
 from . import aqi, cpcb_common, http_client
 from .constants import get_cache_dir
 from .cpcb_directory import CPCBDirectory
-from .exceptions import DataNotFoundError, NetworkError, StationNotFoundError
-from .tidy import cpcb_raw_to_long
+from .exceptions import (
+    CPCBError,
+    DataNotFoundError,
+    NetworkError,
+    StationNotFoundError,
+)
+from .tidy import cpcb_raw_to_long, cpcb_tidy_daily
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -267,10 +283,10 @@ class CPCBHistorical(CPCBDirectory):
             if not filepath:
                 continue
             df = self._read_repository_excel(str(filepath))
-            if entry.get("month") and "Month" not in df.columns:
-                df.insert(0, "Month", entry.get("month"))
-            if entry.get("year") and "Year" not in df.columns:
-                df.insert(0, "Year", entry.get("year"))
+            if "Month" not in df.columns:
+                df.insert(0, "Month", entry.get("month") or month)
+            if "Year" not in df.columns:
+                df.insert(0, "Year", int(entry.get("year") or year))
             frames.append(df)
 
         if not frames:
@@ -372,6 +388,44 @@ class CPCBHistorical(CPCBDirectory):
             "city": city,
             "state": state,
         }
+
+    def raw_readings(
+        self,
+        station_ids: Iterable[str],
+        year: int,
+        pollutants: Optional[Iterable[str]] = None,
+    ) -> pd.DataFrame:
+        """Raw 15-minute data of several stations as one long table.
+
+        Stations without a raw file for the year are skipped with a warning.
+
+        Args:
+            station_ids: Station IDs or names (or one).
+            year: Year.
+            pollutants: Optional pollutant names to keep, such as ["PM2.5", "RH"].
+
+        Returns:
+            DataFrame with TIDY_COLUMNS (see cpcb_raw_to_long).
+        """
+        import pandas as pd
+
+        from .tidy import TIDY_COLUMNS
+
+        ids = [station_ids] if isinstance(station_ids, str) else list(station_ids)
+        keep = None if pollutants is None else set(pollutants)
+        frames = []
+        for station in ids:
+            try:
+                long = self.download_raw_aqi_data_station_level(
+                    station, str(year), "", tidy=True
+                )
+            except (DataNotFoundError, StationNotFoundError) as e:
+                logger.warning("Skipped %s: %s", station, e)
+                continue
+            frames.append(long if keep is None else long[long["pollutant"].isin(keep)])
+        if not frames:
+            return pd.DataFrame(columns=TIDY_COLUMNS)
+        return pd.concat(frames, ignore_index=True)
 
     def daily_aqi(
         self, station_id: str, year: str, day_ends_at: int = 24
@@ -527,3 +581,94 @@ class CPCBHistorical(CPCBDirectory):
             )
         df.to_csv(save_location, index=False)
         return df.head()
+
+    def city_daily(
+        self, cities: Iterable[str], year: int, cache_dir: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Daily city AQI in long format.
+
+        Args:
+            cities: City names (or one name).
+            year: Year.
+            cache_dir: Optional directory for CSV copies of the sheets
+                (<city>_aqi_<year>.csv), read back on later calls. The default
+                is a temporary directory of this client.
+
+        Returns:
+            DataFrame with columns city, day, month and value.
+        """
+        import pandas as pd
+
+        frames = []
+        for city in [cities] if isinstance(cities, str) else cities:
+            path = self._csv_copy(cache_dir, f"{city.lower()}_aqi_{year}.csv")
+            if not path.exists():
+                self.download_past_year_aqi_data_city_level(city, str(year), str(path))
+            sheet = pd.read_csv(path)
+            frames.append(cpcb_tidy_daily(sheet).assign(city=city))
+        return _first(pd.concat(frames, ignore_index=True), ["city"])
+
+    def station_daily(
+        self, station_ids: Iterable[str], year: int, cache_dir: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Daily station AQI in long format.
+
+        Stations that are not found or have no data are skipped with a warning.
+
+        Args:
+            station_ids: Station IDs or names (or one).
+            year: Year.
+            cache_dir: Optional directory for CSV copies (<id>_<year>.csv).
+
+        Returns:
+            DataFrame with columns station_id, station_name, day, month, value.
+        """
+        import pandas as pd
+
+        frames = []
+        ids = [station_ids] if isinstance(station_ids, str) else station_ids
+        for query in ids:
+            try:
+                info = self._resolved_station(query)
+                if not info:
+                    raise StationNotFoundError(f"Station {query} not found")
+                path = self._csv_copy(cache_dir, f"{info['station_id']}_{year}.csv")
+                if not path.exists():
+                    self.download_past_year_aqi_data_station_level(
+                        info["station_id"], str(year), str(path)
+                    )
+                frames.append(
+                    cpcb_tidy_daily(pd.read_csv(path)).assign(
+                        station_id=info["station_id"],
+                        station_name=info["station_name"],
+                    )
+                )
+            except (CPCBError, requests.RequestException, ValueError) as e:
+                logger.warning("Skipped %s: %s", query, http_client.failure_reason(e))
+        if not frames:
+            return pd.DataFrame(
+                columns=["station_id", "station_name", "day", "month", "value"]
+            )
+        return _first(
+            pd.concat(frames, ignore_index=True), ["station_id", "station_name"]
+        )
+
+    _csv_tmp: Optional[Path] = None
+
+    def _csv_copy(self, cache_dir: Optional[str], name: str) -> Path:
+        """Path of a CSV copy in cache_dir, or in a temporary folder of this
+        client, so stale or planted files in the shared temporary directory
+        are never read."""
+        if cache_dir:
+            folder = Path(cache_dir)
+            folder.mkdir(parents=True, exist_ok=True)
+        else:
+            if self._csv_tmp is None:
+                self._csv_tmp = Path(tempfile.mkdtemp(prefix="vayuayan_"))
+            folder = self._csv_tmp
+        return folder / name
+
+
+def _first(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
+    """df with the columns moved to the front."""
+    return df[columns + [c for c in df.columns if c not in columns]]

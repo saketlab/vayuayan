@@ -21,6 +21,6 @@ including their IDs, display names, and data attribution.
 \dontshow{if (nzchar(Sys.getenv("OAQ_API_KEY"))) withAutoprint(\{ # examplesIf}
 session <- oaq_session()
 providers <- oaq_list_providers(session)
-sapply(providers$providers, `[[`, "id")
+providers$providers$id
 \dontshow{\}) # examplesIf}
 }

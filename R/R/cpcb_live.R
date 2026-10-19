@@ -52,9 +52,8 @@ cpcb_get_all_india <- function() {
 #' Find nearest monitoring station
 #'
 #' @description
-#' Find nearest CPCB monitoring station to given coordinates. If no
-#' coordinates provided, uses IP-based geolocation automatically.
-#' Returns station ID, name, and distance in kilometers.
+#' Find the CPCB monitoring station nearest to given coordinates, or to the
+#' IP-based location when none are given.
 #'
 #' @param coords Optional numeric vector c(lat, lon). If NULL, uses IP location.
 #' @return List with station_id, station_name, and distance_km
@@ -191,8 +190,8 @@ cpcb_get_live_aqi_data_for_station <- function(station_id, date_time = NULL) {
 #' Get live AQI data
 #'
 #' @description
-#' Get live AQI data with flexible parameters. Automatically resolves
-#' station from coordinates or IP location if not provided.
+#' Get live AQI data of a station. Without \code{station_id}, the station
+#' nearest to \code{coords} or to the IP-based location is used.
 #'
 #' @param station_id Optional character. Station ID or name. If NULL, nearest station
 #'   is found automatically using \code{coords} or IP geolocation.

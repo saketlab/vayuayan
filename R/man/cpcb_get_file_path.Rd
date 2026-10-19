@@ -32,7 +32,7 @@ cpcb_get_file_path(
 \code{"stationLevel"} or \code{"raw"}.}
 }
 \value{
-List of file entries, each with \code{filePath}, \code{year} and
+List of file entries as CPCB sends them, each with \code{filepath}, \code{year} and
 \code{month} (\code{NA} when CPCB gives none).
 }
 \description{

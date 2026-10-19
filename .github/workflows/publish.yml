@@ -1,7 +1,7 @@
 name: Publish to PyPI
 
 # Push a version tag to release, for example:
-#   git tag v0.1.5 && git push origin v0.1.5
+#   git tag v0.3.0 && git push origin v0.3.0
 # The tag must match __version__ in vayuayan/__init__.py.
 
 on:

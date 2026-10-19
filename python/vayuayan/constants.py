@@ -42,8 +42,8 @@ PUBLIC_COOKIES: Dict[str, str] = {"ccr_public": "A"}
 # WUSTL ACAG satellite PM2.5 archive (anonymous S3 over HTTPS)
 SATPM_BASE_URL = "https://satpmdata.s3.amazonaws.com/"
 
-# The same form headers with a Referer instead of Accept (used by CPCBClient
-# before it moved to CPCBLive; kept for code that imports it)
+# The same form headers with a Referer instead of Accept; unused, kept for code
+# that imports it
 POST_HEADERS: Dict[str, str] = {
     "Content-Type": LEGACY_FORM_HEADERS["Content-Type"],
     "Referer": BASE_URL,

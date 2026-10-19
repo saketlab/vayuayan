@@ -54,7 +54,8 @@
 # CPCB dropdown shape
 .cpcb_dropdown <- function(label, value = label) {
   df <- data.frame(label = label, value = value, stringsAsFactors = FALSE)
-  df <- unique(df[order(df$label), , drop = FALSE])
+  # radix sorts in C-locale order whatever the session locale
+  df <- unique(df[order(df$label, method = "radix"), , drop = FALSE])
   rownames(df) <- NULL
   df
 }
@@ -168,6 +169,7 @@
     out
   })
   out <- do.call(rbind, per_state)
+  out <- .cpcb_sort_cities(out)
 
   .cpcb_cache$rss <- list(time = Sys.time(), cities = out)
   out
@@ -209,7 +211,7 @@
   if (is.na(out)) frequency else out
 }
 
-# Repository files of past years are cached like the Python package does
+# Repository files of past years are cached; either cache may hold them
 .cpcb_read_repository <- function(filepath, n_max = Inf) {
   name <- .cpcb_cache_name(filepath)
   path <- if (!is.null(name)) {
@@ -252,12 +254,27 @@
 
 .cpcb_save_year <- function(data_files, year, save_location, what) {
   for (entry in data_files) {
-    if (isTRUE(entry$year == year)) {
-      df <- .cpcb_read_repository(entry$filePath, n_max = 31)
+    if (identical(as.character(entry[["year"]]), as.character(year))) {
+      df <- .cpcb_read_repository(entry[["filepath"]], n_max = 31)
       utils::write.csv(df, file = save_location, row.names = FALSE)
       cli::cli_alert_success("Saved {what} {year} to {save_location}")
       return(utils::head(df))
     }
   }
   stop(sprintf("Data not found for %s in year %s", what, year), call. = FALSE)
+}
+
+# Cities by share of live stations, then name (any case); stations live
+# first, then by name.
+.cpcb_sort_cities <- function(cities) {
+  if (is.null(cities) || nrow(cities) == 0) {
+    return(cities)
+  }
+  cities$stationsInCity <- lapply(cities$stationsInCity, function(st) {
+    st[order(!st$live, st$name, method = "radix"), , drop = FALSE]
+  })
+  live_share <- vapply(cities$stationsInCity, function(st) mean(st$live), numeric(1))
+  cities <- cities[order(-live_share, tolower(cities$cityName), method = "radix"), , drop = FALSE]
+  rownames(cities) <- NULL
+  cities
 }

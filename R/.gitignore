@@ -47,3 +47,6 @@ Thumbs.db
 vignettes/articles/*_cache/
 vignettes/articles/*_files/
 vignettes/articles/*.html
+
+# R CMD build output
+vayuayan_*.tar.gz

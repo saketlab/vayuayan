@@ -44,10 +44,24 @@ jobs:
           needs: website
           working-directory: R
 
-      # articles need local data and OAQ_API_KEY, so they are knitted on the
-      # author's machine and their HTML is copied from inst/doc
+      # Downloads of the articles (CPCB city files, PM2.5 NetCDF files): later
+      # runs reuse them, and the articles read cached files before downloading
+      - name: Cache article data
+        uses: actions/cache@v4
+        with:
+          path: R/vignettes/data
+          key: article-data-${{ hashFiles('R/vignettes/articles/*.Rmd') }}
+          restore-keys: article-data-
+
+      # The analysis articles download real data and the OAQ ones need
+      # OAQ_API_KEY; pull requests from forks get no secrets, so they build
+      # only the introduction. NOT_CRAN runs the network chunks of the
+      # introduction too.
       - name: Build site
         working-directory: R
+        env:
+          OAQ_API_KEY: ${{ secrets.OAQ_API_KEY }}
+          NOT_CRAN: "true"
         run: |
           options(rmarkdown.html_vignette.check_title = FALSE)
           pkg <- pkgdown::as_pkgdown(".")
@@ -55,15 +69,32 @@ jobs:
           pkgdown::build_home(pkg)
           pkgdown::build_reference(pkg)
           pkgdown::build_news(pkg)
-          pkgdown::build_articles_index(pkg)
-          file.copy(
-            list.files("inst/doc", pattern = "\\.html$", full.names = TRUE),
-            "docs/articles/",
-            overwrite = TRUE
-          )
+          if (nzchar(Sys.getenv("OAQ_API_KEY"))) {
+            pkgdown::build_articles(pkg, lazy = FALSE)
+          } else {
+            message("::warning::OAQ_API_KEY is not available: analysis articles are not built")
+            pkgdown::build_articles_index(pkg)
+            pkgdown::build_article("introduction", pkg)
+          }
           pkgdown::build_redirects(pkg)
           pkgdown::build_search(pkg)
         shell: Rscript {0}
+
+      # Every article in the index must exist before the site goes live
+      - name: Check the articles
+        working-directory: R
+        run: |
+          missing=0
+          for rmd in vignettes/*.Rmd vignettes/articles/*.Rmd; do
+            name=$(basename "$rmd" .Rmd)
+            if [ ! -f "docs/articles/$name.html" ]; then
+              echo "::error::docs/articles/$name.html was not built"
+              missing=1
+            fi
+          done
+          if [ -n "${OAQ_API_KEY}" ]; then exit $missing; fi
+        env:
+          OAQ_API_KEY: ${{ secrets.OAQ_API_KEY }}
 
       - name: Upload the site
         if: github.event_name != 'pull_request'

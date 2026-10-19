@@ -35,10 +35,7 @@ def is_available() -> bool:
 
 
 def setup_earth_engine(project_id: Optional[str] = None) -> bool:
-    """Set up Google Earth Engine with a Cloud project.
-
-    This function sets up the Earth Engine authentication and saves the
-    project ID.
+    """Set up Google Earth Engine authentication with a Cloud project.
 
     Args:
         project_id: Optional Google Cloud project ID. If None, the
@@ -64,7 +61,6 @@ def setup_earth_engine(project_id: Optional[str] = None) -> bool:
     print("=" * 70)
     print()
 
-    # Use the authentication that exists, if there is one
     if project_id:
         print(f"Using project ID: {project_id}")
     else:
@@ -111,14 +107,11 @@ def setup_earth_engine(project_id: Optional[str] = None) -> bool:
     print()
 
     try:
-        # Authenticate
         ee.Authenticate(force=True)
 
-        # Initialize with the project
         print(f"\nInitializing Earth Engine with project '{project_id}'...")
         ee.Initialize(project=project_id)
 
-        # Do a test of the access
         print("\nTesting data access...")
         collection = ee.ImageCollection(PM25_VERSIONS["V6"].gee_monthly)
         count = collection.size().getInfo()

@@ -3,8 +3,8 @@ History
 
 Releases and changes of vayuayan.
 
-Unreleased
-----------
+v0.3.0 (unreleased)
+-------------------
 
 **Breaking changes**
 
@@ -24,6 +24,12 @@ Unreleased
 * ``CPCBHistorical.daily_aqi``, the ``daily_aqi`` CLI command, and ``tidy=True`` for raw downloads.
 * ``PM25Client.get_pm25_monthly_stats``, and ``get_pm25_stats(..., geometry=True)`` for maps.
 * A cache of past-year CPCB downloads in ``~/.cache/vayuayan`` (``VAYUAYAN_CACHE_DIR``, ``use_cache=False``).
+* New: ``OAQClient`` (OAQ low-cost sensors), ``CPCBHistorical.add_coords``, ``city_daily`` and ``station_daily``, ``cpcb_tidy_daily``, ``nearest_stations``, ``get_aqi_categories``, ``india_boundary``, and the exports ``pollutant_name``, ``get_cache_dir`` and ``stations_to_city_summary``.
+* OAQ sensor tools: ``OAQClient.sensors``, ``readings``, ``daily_means``, ``daily_records`` and ``check_daily_records``, ``oaq_nearest_cpcb`` and ``oaq_city_tally``; ``CPCBHistorical.raw_readings`` for several stations.
+* OAQ daily records: ``compare_daily_records``, ``daily_record_summary``, ``OAQClient.audit_daily_records`` and the ``plot_daily_record_*`` figures (``pip install "vayuayan[plot]"``). ``check_daily_records`` also compares with the median and the mean of the last 2 and 4 readings, and its tolerance is 0.005 (OAQ's 2 decimals).
+* OAQ data requests are retried after network errors and 5xx statuses; ``get_city_latest`` lower-cases the city, as OAQ's paths need.
+* ``vayuayan.sensor_qa``: ``readings_mean``, ``sensor_completeness``, ``sensor_plausibility``, ``collocated_precision``, ``peer_ratio``, ``sensor_accuracy``, ``ratio_by_humidity`` and ``EPA_PM25_TARGETS`` (US EPA targets for PM2.5 sensors).
+* ``PM25Client(region=...)`` and ``vayuayan pm25 --region`` for the smaller regional files (``"AS"`` covers India), and the ``V5GL04`` version (1998-2022).
 
 **Fixed**
 
@@ -37,6 +43,9 @@ Unreleased
 * ``import vayuayan`` and the CLI start in about 40 ms (from about 400 ms): heavy libraries load on first use, and Google Earth Engine starts only when needed.
 * The SSL fallback applies only to CPCB and the PM2.5 S3 download.
 * With CPCB credentials, station lookups fetch the live directory in parallel.
+* Hourly downloads always start with ``Year`` and ``Month`` columns.
+* ``stations_to_dataframe`` adds ``status`` and ``aqi_category`` columns, and ``get_pm25_stats`` adds ``count``.
+* Timestamps of raw and live data are parsed value by value (``%Y-%m-%d %H:%M:%S``, ``%H:%M`` or a date), so one value in another format no longer drops the others.
 * ``air_quality_client`` is split into smaller modules; the old import path still works.
 * CI tests Linux, macOS and Windows on Python 3.9-3.14, the lowest supported dependencies and the built wheel.
 

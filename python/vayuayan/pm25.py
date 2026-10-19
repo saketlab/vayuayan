@@ -48,7 +48,9 @@ class PM25Client:
     bucket, and falls back to Google Earth Engine.
     """
 
-    def __init__(self, version: str = "V6GL03", cache_dir: str = "pm25_data") -> None:
+    def __init__(
+        self, version: str = "V6GL03", cache_dir: str = "pm25_data", region: str = "GL"
+    ) -> None:
         """Initialize the PM2.5 Client with data paths.
 
         Args:
@@ -57,11 +59,15 @@ class PM25Client:
                 Google Earth Engine fallback. "V6" is V6.GL.02.04, the previous
                 CNN version (1998-2023), with the Google Earth Engine fallback.
                 "V5" is V5.GL.05.02, the GWR-based algorithm (1998-2023), to
-                compare with published studies.
+                compare with published studies. "V5GL04" is V5.GL.04 (1998-2022).
             cache_dir: Directory for the cache of downloaded NetCDF files.
+            region: "GL" (global, default), or a regional file: "AS", "EU",
+                "NA" (and "AF" for V6GL03). Regional files are smaller; "AS"
+                covers India.
 
         Raises:
-            ValueError: If version is not a key of PM25_VERSIONS.
+            ValueError: If version is not a key of PM25_VERSIONS, or the
+                version has no files for the region.
 
         Example:
             >>> client = PM25Client()  # V6.GL.03
@@ -75,6 +81,8 @@ class PM25Client:
 
         self.version = version
         self.spec = PM25_VERSIONS[version]
+        self.spec.check_region(region)
+        self.region = region
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -98,7 +106,7 @@ class PM25Client:
             ValueError: If the year is not in the range of the version.
         """
         self.spec.check_year(year)
-        return self.spec.filename(year, month)
+        return self.spec.filename(year, month, self.region)
 
     def _get_aws_url(self, year: int, month: Optional[int] = None) -> str:
         """S3 HTTPS URL of the NetCDF file for a year and an optional month.
@@ -107,7 +115,7 @@ class PM25Client:
             ValueError: If the year is not in the range of the version.
         """
         self.spec.check_year(year)
-        return urljoin(SATPM_BASE_URL, self.spec.key(year, month))
+        return urljoin(SATPM_BASE_URL, self.spec.key(year, month, self.region))
 
     def _gee_skip_reason(self, year: int) -> Optional[str]:
         """Why GEE cannot give data for the year, or None if it can.
@@ -207,8 +215,8 @@ class PM25Client:
         s3_url = self._get_aws_url(year, month)
         logger.info("Downloading %s", s3_url)
         try:
-            # The bucket is plain AWS, but the download had the SSL fallback
-            # before; keep it for networks that intercept TLS
+            # The bucket is plain AWS; the SSL fallback is for networks that
+            # intercept TLS
             response = http_client.request(
                 "get", s3_url, ssl_fallback=True, stream=True, timeout=300
             )
@@ -239,7 +247,7 @@ class PM25Client:
             f"  S3: {s3_error}\n"
             f"  Google Earth Engine: {gee_error}\n"
             f"Download {self.spec.name} manually from {self.spec.manual_url}\n"
-            f"  File: {self.spec.key(year, month)}\n"
+            f"  File: {self.spec.key(year, month, self.region)}\n"
             f"  Save it as: {self.get_netcdf_path(year, month)}"
         )
 
@@ -324,7 +332,8 @@ class PM25Client:
                      merged polygon of each group, ready to plot as a map.
 
         Returns:
-            If group_by is None: Dictionary with mean, std, min, and max PM2.5 values.
+            If group_by is None: Dictionary with mean, std, min, max and count
+            (number of grid cells) of the PM2.5 values.
             If group_by is given: DataFrame (GeoDataFrame if geometry is True)
             with statistics for each group.
 
@@ -335,7 +344,6 @@ class PM25Client:
         """
         gdf, nc_file = self._load_inputs(geojson_file, year, month)
 
-        # If group_by is given, use the group method
         if group_by is not None:
             group_cols = [col.strip() for col in group_by.split(",")]
 
@@ -348,10 +356,9 @@ class PM25Client:
                 )
 
             return self._get_pm25_stats_grouped(gdf, nc_file, group_cols, geometry)
-        # Combine the polygons if there is more than one
         polygon = gdf.union_all()
         pm25 = self._load_pm25(nc_file, polygon.bounds)
-        return calculate_stats(clip_geometry(pm25, polygon))
+        return calculate_stats(clip_geometry(pm25, polygon), include_count=True)
 
     def _load_inputs(
         self, geojson_file: str, year: int, month: Optional[int]
@@ -496,7 +503,6 @@ class PM25Client:
         gdf, nc_file = self._load_inputs(geojson_file, year, month)
         pm25 = self._load_pm25(nc_file, gdf.total_bounds)
 
-        # Find the column name one time, before the loop
         if id_field and id_field in gdf.columns:
             column_name = id_field
         elif "NAME_1" in gdf.columns:
@@ -508,7 +514,6 @@ class PM25Client:
 
         results = []
 
-        # Process each polygon
         for idx, row in gdf.iterrows():
             stats = self._zonal_stats(pm25, row.geometry, idx)
             mean_val, std_val = stats["mean"], stats["std"]

@@ -22,10 +22,13 @@ Parsed monthly aggregate record.
 }
 \description{
 Retrieve monthly aggregated air quality data for a specific sensor and month.
+Since about March 2026, OAQ's daily values are often the last 15-minute
+reading of the day, not its mean; use \code{oaq_daily_means()} or \code{readings_mean()} on
+\code{oaq_readings()} for daily means.
 }
 \examples{
 \dontshow{if (nzchar(Sys.getenv("OAQ_API_KEY"))) withAutoprint(\{ # examplesIf}
 session <- oaq_session()
-monthly <- oaq_get_monthly(session, "AURASSURE", "sensor_001", 2024, 1)
+monthly <- oaq_get_monthly(session, "airnet", "12036", 2026, "09")
 \dontshow{\}) # examplesIf}
 }

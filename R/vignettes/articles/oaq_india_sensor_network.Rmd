@@ -1,11 +1,11 @@
 ---
-title: "OAQ India Sensor Network Map"
+title: "OAQ India sensor network map"
 output:
   rmarkdown::html_vignette:
     toc: true
     toc_depth: 2
 vignette: >
-  %\VignetteIndexEntry{OAQ India Sensor Network Map}
+  %\VignetteIndexEntry{OAQ India sensor network map}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 ---
@@ -28,14 +28,14 @@ library(vayuayan)
 # Introduction
 
 The [OAQ platform](https://oaq.notf.in) aggregates air quality data from
-multiple networks across India. This vignette maps every monitoring station
-currently active on OAQ, split by provider:
+many networks across India. This vignette maps all monitoring stations that
+are currently active on OAQ, for each provider:
 
 | Provider | Network | Coverage |
 |---|---|---|
-| **CPCB** | Central & State Pollution Control Boards | National (cities across all states) |
-| **Airnet** | CSTEP low-cost sensor network | Bengaluru |
-| **Aurassure** | University Clean Air Network | Odisha + Bengaluru |
+| CPCB | Central and State Pollution Control Boards | National (cities in all states) |
+| Airnet | CSTEP low-cost sensor network | Bengaluru |
+| Aurassure | University Clean Air Network | Odisha and Bengaluru |
 
 ---
 
@@ -93,7 +93,7 @@ india_sf <- sf::st_read(india_geojson, quiet = TRUE) |>
 
 # Station network map
 
-```{r network-map, fig.width=13, fig.height=11, fig.cap="All OAQ monitoring stations across India, coloured by provider network. CPCB stations are the government reference network; Airnet and Aurassure are low-cost sensor networks. Filled points have a current PM2.5 reading; hollow points are offline."}
+```{r network-map, fig.width=13, fig.height=11, fig.cap="All OAQ monitoring stations across India. The color shows the provider network. CPCB stations are the government reference network. Airnet and Aurassure are low-cost sensor networks. Filled points have a current PM2.5 reading. Hollow points are offline."}
 provider_colours <- c(
   "CPCB"           = "#2166ac",
   "Airnet (CSTEP)" = "#d6604d",
@@ -105,13 +105,13 @@ stations_online <- all_stations |> filter(has_pm25)
 
 ggplot() +
   geom_sf(data = india_sf, fill = "#f5f5f5", color = "grey60", linewidth = 0.3) +
-  # Offline stations — hollow
+  # Offline stations: hollow
   geom_point(
     data = stations_offline,
     aes(x = lon, y = lat, color = provider_label),
     shape = 1, size = 1.8, alpha = 0.5, stroke = 0.5
   ) +
-  # Online stations — filled, sized by PM2.5
+  # Online stations: filled, sized by PM2.5
   geom_point(
     data = stations_online,
     aes(x = lon, y = lat, color = provider_label, size = pm25),
@@ -125,7 +125,7 @@ ggplot() +
   ) +
   coord_sf(xlim = c(67, 98), ylim = c(6, 38), expand = FALSE) +
   labs(
-    title = "OAQ Air Quality Monitoring Network — India",
+    title = "OAQ air quality monitoring network, India",
     subtitle = paste0(
       "CPCB: ", sum(all_stations$provider == "cpcb"), " stations | ",
       "Airnet: ", sum(all_stations$provider == "airnet"), " stations | ",
@@ -152,7 +152,7 @@ ggsave(file.path(fig_dir, "fig_oaq_india_network.png"), width = 13, height = 11,
 
 # Provider-faceted view
 
-```{r facet-map, fig.width=14, fig.height=5, fig.cap="Same stations faceted by provider. Note Airnet and Aurassure are concentrated in southern India while CPCB spans the full country."}
+```{r facet-map, fig.width=14, fig.height=5, fig.cap="The same stations, faceted by provider. Airnet and Aurassure stations are concentrated in southern India. CPCB stations cover the full country."}
 ggplot() +
   geom_sf(data = india_sf, fill = "#f5f5f5", color = "grey70", linewidth = 0.25) +
   geom_point(
@@ -174,7 +174,7 @@ ggplot() +
   coord_sf(xlim = c(67, 98), ylim = c(6, 38), expand = FALSE) +
   facet_wrap(~provider_label, nrow = 1) +
   labs(
-    title = "OAQ Provider Networks — Faceted",
+    title = "OAQ provider networks, faceted",
     caption = "Source: OAQ platform (oaq.notf.in)",
     x = NULL, y = NULL
   ) +
@@ -196,11 +196,12 @@ ggsave(file.path(fig_dir, "fig_oaq_india_faceted.png"), width = 14, height = 5, 
 
 ---
 
-# Nearest CPCB neighbours for non-CPCB sensors
+# Nearest CPCB neighbors for non-CPCB sensors
 
-For each Airnet and Aurassure station, we find the **3 closest CPCB reference
-stations** by haversine distance. This is useful for pairing low-cost sensors
-with nearby government monitors for calibration or cross-validation.
+For each Airnet and Aurassure station, `nearest_stations()` finds the 3
+nearest CPCB reference stations by haversine distance. You can use these pairs
+of low-cost sensors and nearby government monitors for calibration or
+cross-validation.
 
 ```{r nearest-cpcb-table}
 cpcb_stations <- all_stations |> filter(provider == "cpcb")
@@ -230,7 +231,7 @@ nearest_cpcb <- nearest_stations(
 cat("Non-CPCB stations:", n_distinct(nearest_cpcb$non_cpcb_id), "\n")
 cat(
   "Distance range to nearest CPCB:",
-  round(min(nearest_cpcb$dist_km[nearest_cpcb$rank == 1]), 2), "–",
+  round(min(nearest_cpcb$dist_km[nearest_cpcb$rank == 1]), 2), " to ",
   round(max(nearest_cpcb$dist_km[nearest_cpcb$rank == 1]), 2), "km\n"
 )
 
@@ -251,9 +252,10 @@ nearest_cpcb |>
 
 # Bengaluru: sensor network and nearest CPCB matches
 
-Airnet (47 stations) and Aurassure (1 station) are concentrated in Bengaluru,
-making it the only city where multiple low-cost networks co-exist with CPCB
-reference monitors. The map uses ward-level boundaries for spatial context.
+Airnet (47 stations) and Aurassure (1 station) are concentrated in Bengaluru.
+Thus, Bengaluru is the only city where more than one low-cost network operates
+together with CPCB reference monitors. The map shows ward-level boundaries for
+spatial context.
 
 ```{r blr-boundary}
 blr_geojson_url <- "https://geo.bharatviz.org/geojsons/cities/bengaluru.geojson"
@@ -295,7 +297,7 @@ blr_cpcb_bg <- blr_cpcb |> filter(!id %in% blr_cpcb_matched_ids)
 cat("Matched CPCB stations:", nrow(blr_cpcb_matched), "\n")
 ```
 
-```{r blr-map, fig.width=11, fig.height=10, fig.cap="Bengaluru sensor network. Triangles = Airnet (CSTEP) and Aurassure low-cost sensors. Filled circles = CPCB reference stations matched as nearest neighbours. Open circles = other CPCB stations. Lines connect each non-CPCB sensor to its 3 nearest CPCB stations; thickness and opacity ∝ 1/distance."}
+```{r blr-map, fig.width=11, fig.height=10, fig.cap="Bengaluru sensor network. Triangles = Airnet (CSTEP) and Aurassure low-cost sensors. Filled circles = CPCB reference stations matched as nearest neighbors. Open circles = other CPCB stations. Lines connect each non-CPCB sensor to its 3 nearest CPCB stations. Line thickness and opacity ∝ 1/distance."}
 provider_colours <- c(
   "CPCB"           = "#2166ac",
   "Airnet (CSTEP)" = "#d6604d",
@@ -369,7 +371,7 @@ ggplot() +
     expand = FALSE
   ) +
   labs(
-    title = "Bengaluru Air Quality Sensor Network",
+    title = "Bengaluru air quality sensor network",
     subtitle = paste0(
       "CPCB reference: ", nrow(blr_cpcb), " stations | ",
       "Airnet: ", sum(blr_non_cpcb$provider == "airnet"), " | ",

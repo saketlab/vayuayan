@@ -8,6 +8,8 @@ snapshot bundled in vayuayan/data, plus the RSS feed for newer stations.
 
 import json
 import logging
+import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from importlib import resources
@@ -35,6 +37,9 @@ DIRECTORY_QUERIES = {
     "cities": ("get-city-master-list", "state_code"),
     "stations": ("get-site-station-master-data-list", "city_code"),
 }
+
+
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
 
 @lru_cache(maxsize=1)
@@ -373,3 +378,65 @@ class CPCBDirectory(RSSFeed):
             ({"label": name, "value": sid} for sid, name in stations.items() if sid),
             key=lambda x: x["label"],
         )
+
+    def add_coords(self, stations: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        """Add lat and lon to get_station_list entries.
+
+        Coordinates come from the bundled snapshot, then from the RSS feed,
+        then from OpenStreetMap Nominatim (one request per second) for the
+        stations that are in neither. lat and lon are None if all fail.
+        """
+        known: Dict[str, Tuple[Any, Any]] = {
+            str(st["station_id"]): (st.get("latitude"), st.get("longitude"))
+            for st in chain.from_iterable(_station_directory()["stations"].values())
+        }
+        out: List[Dict[str, Any]] = []
+        for station in stations:
+            lat, lon = known.get(station["value"], (None, None))
+            out.append({**station, "lat": _float(lat), "lon": _float(lon)})
+        if any(row["lat"] is None for row in out):
+            feed = {
+                str(s.get("id")): (s.get("latitude"), s.get("longitude"))
+                for _, s in iter_city_stations(self._rss_cities())
+            }
+            for row in out:
+                if row["lat"] is None and row["value"] in feed:
+                    row["lat"], row["lon"] = map(_float, feed[row["value"]])
+        for row in out:
+            if row["lat"] is None:
+                row["lat"], row["lon"] = _nominatim(row.get("label", ""))
+        found = sum(row["lat"] is not None for row in out)
+        logger.info("%d/%d stations have coordinates", found, len(out))
+        return out
+
+
+def _float(value: Any) -> Optional[float]:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+# Agency suffix of a station label: "Bandra, Mumbai - MPCB" -> "Bandra, Mumbai"
+_AGENCY = re.compile(r"\s*-\s*(DPCC|CPCB|IMD|IITM|MPCB|BMC|APPCB|TSPCB|KSPCB).*$")
+
+
+def _nominatim(label: str) -> Tuple[Optional[float], Optional[float]]:
+    """(lat, lon) of a station label from Nominatim, or (None, None)."""
+    query = _AGENCY.sub("", label)
+    time.sleep(1)  # Nominatim allows one request per second
+    try:
+        result = http_client.request(
+            "get",
+            NOMINATIM_URL,
+            params={"q": query, "format": "json", "limit": 1},
+            headers={"User-Agent": "vayuayan-python-package"},
+            timeout=10,
+        ).json()
+    except (requests.RequestException, ValueError) as e:
+        logger.info("Nominatim failed for %s: %s", query, http_client.failure_reason(e))
+        return None, None
+    if not result:
+        logger.info("Nominatim: no result for %s", query)
+        return None, None
+    return _float(result[0].get("lat")), _float(result[0].get("lon"))

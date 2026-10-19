@@ -229,7 +229,9 @@ def test_download_hourly_city_level_can_select_single_month(monkeypatch):
         "Delhi", "2025", "", month="February", state="Delhi"
     )
 
-    assert df.to_dict("records") == [{"Month": "February", "Day": 1, "00:00:00": 123}]
+    assert df.to_dict("records") == [
+        {"Year": 2025, "Month": "February", "Day": 1, "00:00:00": 123}
+    ]
 
 
 def test_download_raw_station_level_uses_raw_file_path_and_csv_reader(

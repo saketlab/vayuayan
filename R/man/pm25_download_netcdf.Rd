@@ -22,8 +22,8 @@ pm25_download_netcdf(
 \item{month}{Optional integer (1--12). If NULL, downloads the annual file.}
 
 \item{cache_dir}{Character. Directory to cache NetCDF files. \code{NULL}
-uses the \code{pm25} folder of \code{vayuayan_cache_dir()}, and also
-reads files from the Python package's cache.}
+uses the \code{pm25} folder of \code{vayuayan_cache_dir()} and also
+reads the Python package's cache.}
 
 \item{force_download}{Logical. Download again even if the file is cached.}
 

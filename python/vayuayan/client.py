@@ -98,11 +98,9 @@ class CPCBClient:
             else:
                 filename = f"{site_id}_{station_name}_{time_period}.csv"
 
-        # Add the year to the filename if it is not there
         if not filename.endswith(f"_{year}.csv"):
             filename = filename.replace(".csv", f"_{year}.csv")
 
-        # Make sure that the extension is .csv
         if not filename.endswith(".csv"):
             filename += ".csv"
 
@@ -157,7 +155,6 @@ class CPCBClient:
             ...     return_dataframe=True
             ... )
         """
-        # Make the URL if the caller did not give one
         if url is None:
             if not all([site_id, station_name, time_period, year]):
                 raise CPCBError(
@@ -178,10 +175,8 @@ class CPCBClient:
         _log_if_verbose(f"Downloading CSV from: {url}", verbose)
 
         try:
-            # Send the request with a longer timeout for file downloads
             response = safe_get(url, timeout=60, max_retries=3, allow_ssl_fallback=True)
 
-            # Examine the content type
             content_type = response.headers.get("content-type", "").lower()
             if (
                 "text/csv" not in content_type
@@ -191,23 +186,19 @@ class CPCBClient:
                     f"Warning: Unexpected content type: {content_type}", verbose
                 )
 
-            # Make the filename
             generated_filename = self._generate_filename(
                 url, site_id, station_name, time_period, year or "", filename
             )
 
-            # Make the output directory and the file path
             Path(output_dir).mkdir(parents=True, exist_ok=True)
             file_path = Path(output_dir) / generated_filename
 
-            # Write file
             _log_if_verbose(f"Saving to: {file_path}", verbose)
             with open(file_path, "wb") as f:
                 f.write(response.content)
 
             _log_if_verbose(f"Successfully downloaded: {file_path}", verbose)
 
-            # Return a DataFrame if the caller asked for one
             if return_dataframe:
                 import pandas as pd
 

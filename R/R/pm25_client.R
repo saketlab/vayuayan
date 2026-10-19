@@ -57,7 +57,7 @@
 
         if (length(values) > 0) {
           result$mean <- mean(values)
-          result$std <- sd(values)
+          result$std <- .pop_sd(values)
           result$min <- min(values)
           result$max <- max(values)
           result$count <- length(values)
@@ -93,8 +93,8 @@
 #' @param year Integer. Year for data, within the range of \code{version}.
 #' @param month Optional integer (1--12). If NULL, downloads the annual file.
 #' @param cache_dir Character. Directory to cache NetCDF files. \code{NULL}
-#'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()}, and also
-#'   reads files from the Python package's cache.
+#'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()} and also
+#'   reads the Python package's cache.
 #' @param force_download Logical. Download again even if the file is cached.
 #' @param region Character. Spatial subset: \code{"GL"} (global, default),
 #'   \code{"AS"} (Asia), \code{"EU"}, \code{"NA"}, or \code{"AF"} (V6GL03
@@ -174,8 +174,8 @@ pm25_download_netcdf <- function(year, month = NULL,
 #' @param month Optional integer (1--12). If NULL, uses annual data. Ignored
 #'   when \code{nc_file} is supplied.
 #' @param cache_dir Character. Directory to cache NetCDF files. \code{NULL}
-#'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()}, and also
-#'   reads files from the Python package's cache.
+#'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()} and also
+#'   reads the Python package's cache.
 #' @param group_by Optional character. Column name(s) in the GeoJSON to
 #'   group polygons by (comma-separated for multiple columns).
 #' @param nc_file Optional character. Path to a local NetCDF file to use
@@ -216,15 +216,12 @@ pm25_get_stats <- function(geojson_file, year = NULL, month = NULL,
                            cache_dir = NULL,
                            group_by = NULL, nc_file = NULL, region = "GL",
                            version = "V6GL03") {
-  # geojson_file may be a local path or a remote URL (read directly by
-  # sf::st_read via GDAL). Only validate existence for local paths.
+  # a URL goes to sf::st_read, which reads it through GDAL
   is_url <- grepl("^(https?|ftp)://", geojson_file)
   if (!is_url && !file.exists(geojson_file)) {
     stop(sprintf("GeoJSON file not found: %s", geojson_file))
   }
 
-  # When nc_file is supplied, use that local NetCDF directly and skip the
-  # download. Otherwise fetch (or reuse a cached copy) for year/month.
   if (is.null(nc_file)) {
     if (is.null(year)) {
       stop("Either 'year' or 'nc_file' must be supplied.")
@@ -288,7 +285,7 @@ pm25_get_stats <- function(geojson_file, year = NULL, month = NULL,
 
   return(list(
     mean = mean(values),
-    std = sd(values),
+    std = .pop_sd(values),
     min = min(values),
     max = max(values),
     count = length(values)
@@ -337,7 +334,7 @@ pm25_list_cached_files <- function(cache_dir = NULL) {
 #' Clear PM2.5 cache
 #'
 #' @description
-#' Delete all cached NetCDF files from the cache directory to free disk space.
+#' Delete all cached NetCDF files from the cache directory.
 #'
 #' @param cache_dir Character. Directory containing cached files. \code{NULL}
 #'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()}.
@@ -374,11 +371,9 @@ pm25_clear_cache <- function(cache_dir = NULL) {
   invisible(NULL)
 }
 
-# Bounding-box readers for gridded PM2.5 NetCDF (e.g. WUSTL ACAG). These files
-# store data in [lon, lat] order; the functions read only the pixels covering a
-# region's bounding box, avoiding a full global array load. Defaults match the
-# WUSTL V5GL04 product (variable "GWRPM25"); override var/lon_name/lat_name for
-# other products.
+# Bounding-box readers for gridded PM2.5 NetCDF (e.g. WUSTL ACAG), stored in
+# [lon, lat] order. They read only the pixels of a region's bounding box, not
+# the global array. Defaults fit the WUSTL V5GL04 product (variable "GWRPM25").
 
 #' Build the file path for a WUSTL V5GL04 monthly NetCDF
 #'
@@ -422,7 +417,7 @@ pm25_v5gl04_path <- function(year, month, base_dir) {
 #' Mean gridded PM2.5 over a region's bounding box
 #'
 #' Reads only the pixels covering \code{shape}'s bounding box and returns the
-#' mean value. Useful for a quick monthly figure over a city or district.
+#' mean value.
 #'
 #' @param nc_path Path to a gridded PM2.5 NetCDF file.
 #' @param shape An \code{sf} object defining the region.
@@ -471,3 +466,6 @@ pm25_load_netcdf_bbox <- function(nc_path, shape, var = "GWRPM25",
   }
   r
 }
+
+# population standard deviation of a polygon's pixels (denominator n)
+.pop_sd <- function(x) sqrt(mean((x - mean(x))^2))

@@ -1,11 +1,11 @@
 ---
-title: "Delhi PM2.5 Analysis: CPCB + OAQ Monitor Comparison"
+title: "Delhi PM2.5 analysis: CPCB + OAQ monitor comparison"
 output:
   rmarkdown::html_vignette:
     toc: true
     toc_depth: 3
 vignette: >
-  %\VignetteIndexEntry{Delhi PM2.5 Analysis: CPCB + OAQ Monitor Comparison}
+  %\VignetteIndexEntry{Delhi PM2.5 analysis: CPCB + OAQ monitor comparison}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 ---
@@ -28,25 +28,28 @@ options(exactextractr.progress = FALSE)
 
 # Introduction
 
-This vignette extends the [Delhi PM2.5 Analysis (2022)](delhi_pm2.5_analysis.html)
-by layering in a third data source: the **OAQ (Open Air Quality) platform**, which
-aggregates real-time sensor readings from CPCB reference stations with much richer
-pollutant coverage than the historical CPCB data repository.
+This article adds a third data source to the
+[Delhi PM2.5 Analysis (2022)](delhi_pm2.5_analysis.html). The third source is the
+OAQ (Open Air Quality) platform. OAQ collects real-time sensor readings from CPCB
+reference stations. Its pollutant coverage is much larger than the coverage of
+the historical CPCB data repository.
 
-The original analysis used CPCB's historical data repository (daily city/station-level
-PM2.5 CSVs) alongside WUSTL ACAG satellite data to ask: *where in Delhi are
-monitoring gaps largest?* Here we extend that with two new questions:
+The original analysis used the historical CPCB data repository (daily
+city/station-level PM2.5 CSVs) and WUSTL ACAG satellite data. Its question was:
+*where in Delhi are monitoring gaps largest?* This article adds two new
+questions:
 
-> **Q1:** Does the full multi-pollutant OAQ picture change our understanding of
-> Delhi's current monitoring network, compared to using PM2.5 alone?
+> **Q1:** Does the full multi-pollutant OAQ data change our understanding of the
+> current monitoring network in Delhi, compared with PM2.5 alone?
 
-> **Q2:** After adding the OAQ CPCB stations (which include richer pollutant
-> metadata and coordinates directly from the platform), does the monitoring gap
-> analysis change?
+> **Q2:** When we add the OAQ CPCB stations, does the result of the monitoring
+> gap analysis change? These stations have more pollutant metadata, and their
+> coordinates come directly from the platform.
 
-The key difference is that OAQ provides live, multi-pollutant readings (PM2.5,
-PM10, NO2, CO, O3, NOx) via the `oaq_get_stations_latest()` endpoint, with
-station coordinates already embedded. No geocoding step needed.
+The primary difference is that OAQ supplies live, multi-pollutant readings
+(PM2.5, PM10, NO2, CO, O3, NOx) through the `oaq_get_stations_latest()`
+endpoint. The data includes the station coordinates, so a geocoding step is not
+necessary.
 
 ---
 
@@ -92,11 +95,11 @@ nc_dir <- file.path(vignettes_dir, "data/pm25")
 
 ---
 
-# Replicating the baseline (historical CPCB + satellite)
+# Baseline reproduction (historical CPCB + satellite)
 
-We reproduce the seasonal trend and ward-level choropleth from the original
-vignette so both analyses are directly comparable. If you have already run
-the original vignette, the cached CSV files will be reused.
+We reproduce the seasonal trend and the ward-level choropleth from the original
+article. Thus, you can compare the two analyses directly. If you ran the
+original article before, this article uses its cached CSV files again.
 
 ```{r delhi-shape}
 delhi_shape <- sf::st_read(
@@ -136,22 +139,23 @@ delhi_wards$sat_pm25 <- exactextractr::exact_extract(
 
 # OAQ station data
 
-## Connecting to the OAQ platform
+## Connect to the OAQ platform
 
-The OAQ API uses a 2-step handshake: call the Data Broker with your API key to
-get a signed session, then append that signature to all data requests. The API
-key can be supplied directly or via the `OAQ_API_KEY` environment variable.
+The OAQ API uses a 2-step handshake. First, a call to the Data Broker with your
+API key gets a signed session. Then, all data requests include that signature.
+You can give the API key directly or through the `OAQ_API_KEY` environment
+variable.
 
 ```{r oaq-session}
 session <- oaq_session()
 ```
 
-## Fetching Delhi stations from OAQ
+## Get the Delhi stations from OAQ
 
-`oaq_get_stations_latest()` returns the most recent reading for every station
-under a provider. The `"cpcb"` provider includes all 46 Delhi CAAQMS stations
-with full pollutant coverage and coordinates directly embedded, no geocoding
-required.
+`oaq_get_stations_latest()` returns the most recent reading for all stations of
+a provider. The `"cpcb"` provider includes all 46 Delhi CAAQMS stations, with
+full pollutant coverage. The data includes the coordinates, so geocoding is not
+necessary.
 
 ```{r oaq-stations}
 oaq_delhi <- oaq_stations_table(session, "cpcb") %>%
@@ -170,8 +174,9 @@ oaq_delhi_sf <- oaq_delhi %>%
 
 ## Live pollutant snapshot
 
-The OAQ platform provides a richer pollutant picture than the historical CPCB
-CSVs. Below is the current readings summary across all active Delhi stations.
+The OAQ platform has data for more pollutants than the historical CPCB CSVs.
+The table below is a summary of the current readings for all active Delhi
+stations.
 
 ```{r pollutant-summary}
 oaq_delhi %>%
@@ -195,14 +200,14 @@ oaq_delhi %>%
 
 ---
 
-# Comparing station networks
+# Station network comparison
 
-## Side-by-side: historical CPCB vs OAQ coverage
+## Historical CPCB vs OAQ coverage
 
-The historical CPCB analysis in the original vignette sourced station
-coordinates via `cpcb_add_coords()`, querying the CPCB live feed with
-Nominatim as fallback. OAQ provides coordinates directly in its response.
-Here we compare the two networks to check for any discrepancies.
+In the original article, the historical CPCB analysis got the station
+coordinates from `cpcb_add_coords()`. This function queries the CPCB live feed
+and uses Nominatim as a fallback. OAQ supplies the coordinates directly in its
+response. We compare the two networks to find differences.
 
 ```{r cpcb-stations}
 station_file <- file.path(data_dir, "delhi_stations_with_coords.csv")
@@ -222,7 +227,7 @@ oaq_compare_sf <- oaq_delhi_sf %>%
   mutate(source = "OAQ live")
 ```
 
-```{r network-comparison, fig.height=7, fig.cap="Station network comparison: CPCB historical (from cpcb_add_coords) vs OAQ live platform. Both sources cover the same 46 stations; OAQ coordinates come directly from the platform without geocoding."}
+```{r network-comparison, fig.height=7, fig.cap="Station network comparison: CPCB historical (from cpcb_add_coords) vs OAQ live platform. Both sources cover the same 46 stations. OAQ coordinates come directly from the platform, without geocoding."}
 delhi_boundary <- sf::st_union(delhi_shape)
 
 ggplot() +
@@ -254,8 +259,8 @@ ggplot() +
     name = "Data source"
   ) +
   labs(
-    title    = "Delhi CAAQMS: CPCB Historical vs OAQ Live Station Locations",
-    subtitle = "Circles = CPCB historical (cpcb_add_coords) | Triangles = OAQ live platform\nBoth cover the same 46 stations; OAQ coordinates require no geocoding step",
+    title    = "Delhi CAAQMS: CPCB historical vs OAQ live station locations",
+    subtitle = "Circles = CPCB historical (cpcb_add_coords) | Triangles = OAQ live platform\nBoth cover the same 46 stations. OAQ coordinates require no geocoding step",
     caption  = "Source: CPCB data repository + OAQ platform (oaq.notf.in)"
   ) +
   xlab(NULL) +
@@ -276,10 +281,10 @@ ggsave(file.path(fig_dir, "fig_oaq1_network_comparison.png"), width = 9, height 
 
 # Multi-pollutant choropleth (OAQ)
 
-The original vignette used satellite-derived PM2.5 to colour wards. Here
-we use the **live OAQ PM2.5 readings** at each station and interpolate to
-wards using nearest-station assignment. This gives a ground-measured ward
-picture complementary to the satellite view.
+The original article used satellite-derived PM2.5 to color the wards. In this
+article, we use the live OAQ PM2.5 readings at each station. Each ward gets the
+reading of its nearest station. The result is a ground-measured ward map that
+adds to the satellite view.
 
 ```{r oaq-ward-pm25}
 # For each ward centroid, find the nearest OAQ station and its live PM2.5
@@ -294,7 +299,7 @@ delhi_wards$oaq_dist_km <- apply(dist_oaq, 1, min) / 1000
 delhi_wards$oaq_station <- oaq_pm25_sf$name[nearest_oaq_idx]
 ```
 
-```{r oaq-choropleth, fig.height=7, fig.cap="Ward-level PM2.5 from nearest OAQ station (live reading). Blue triangles = OAQ CPCB stations. Colour reflects the current reading at the nearest station."}
+```{r oaq-choropleth, fig.height=7, fig.cap="Ward-level PM2.5 from the nearest OAQ station (live reading). Blue triangles are OAQ CPCB stations. The color shows the current reading at the nearest station."}
 ggplot() +
   geom_sf(
     data = delhi_wards,
@@ -317,7 +322,7 @@ ggplot() +
     name = expression(paste("OAQ PM"[2.5] ~ (mu * g / m^3)))
   ) +
   labs(
-    title = "Delhi Ward-Level PM2.5 — OAQ Live Readings",
+    title = "Delhi ward-level PM2.5: OAQ live readings",
     subtitle = "Ward shading = nearest OAQ station PM2.5 | Blue triangles = OAQ CPCB stations",
     caption = paste0(
       "Live data from OAQ platform (oaq.notf.in)\n",
@@ -360,7 +365,7 @@ cat("Mean satellite PM2.5:", round(mean(comparison_df$sat_pm25, na.rm = TRUE), 1
 cat("Mean OAQ ground PM2.5:", round(mean(comparison_df$oaq_pm25, na.rm = TRUE), 1), "\n")
 ```
 
-```{r sat-oaq-scatter, fig.height=5, fig.cap="Satellite (WUSTL Nov 2022) vs OAQ live ground PM2.5 by ward. The satellite data is from November 2022; OAQ readings are current. Temporal mismatch explains variance beyond the point-to-area measurement difference."}
+```{r sat-oaq-scatter, fig.height=5, fig.cap="Satellite (WUSTL Nov 2022) vs OAQ live ground PM2.5 by ward. The satellite data is from November 2022. The OAQ readings are current. The time mismatch explains the variance that the point-to-area measurement difference does not explain."}
 ggplot(comparison_df, aes(x = oaq_pm25, y = sat_pm25)) +
   geom_point(aes(color = oaq_dist_km), size = 2.5, alpha = 0.7) +
   geom_abline(
@@ -384,8 +389,8 @@ ggplot(comparison_df, aes(x = oaq_pm25, y = sat_pm25)) +
     name      = "Dist. to nearest\nOAQ station (km)"
   ) +
   labs(
-    title    = "Satellite (Nov 2022) vs OAQ Live Ground PM2.5 by Ward",
-    subtitle = "Dashed line = 1:1 | LOESS fit in red | Colour = distance to nearest OAQ station",
+    title    = "Satellite (Nov 2022) vs OAQ live ground PM2.5 by ward",
+    subtitle = "Dashed line = 1:1 | Linear fit in red | Color = distance to nearest OAQ station",
     x        = expression(paste("OAQ live PM"[2.5] ~ (mu * g / m^3))),
     y        = expression(paste("Satellite PM"[2.5] ~ (mu * g / m^3) ~ "(Nov 2022)")),
     caption  = "Note: temporal mismatch (2022 satellite vs live readings) contributes to variance"
@@ -405,10 +410,10 @@ ggsave(file.path(fig_dir, "fig_oaq3_sat_vs_oaq.png"), width = 9, height = 5.5, d
 
 # Updated gap analysis with OAQ stations
 
-The original gap analysis used CPCB historical station coordinates. Here we
-repeat it with OAQ station coordinates and compare the priority maps. Because
-OAQ provides coordinates directly (no Nominatim fallback), this is the more
-authoritative station location source.
+The original gap analysis used the CPCB historical station coordinates. We do
+the analysis again with the OAQ station coordinates and compare the priority
+maps. OAQ supplies the coordinates directly, without a Nominatim fallback. Thus,
+OAQ is the more authoritative source of station locations.
 
 ```{r oaq-gap-analysis}
 dist_matrix_oaq <- sf::st_distance(ward_centroids, oaq_pm25_sf)
@@ -432,7 +437,7 @@ cat("Priority breakdown (OAQ-based):\n")
 print(table(delhi_wards$priority_oaq))
 ```
 
-```{r oaq-gap-map, fig.height=8, fig.cap="Updated monitoring gap map using OAQ station coordinates. Ward colour shows satellite minus nearest OAQ station live PM2.5. Blue triangles = OAQ station locations."}
+```{r oaq-gap-map, fig.height=8, fig.cap="Updated monitoring gap map with OAQ station coordinates. The ward color shows the satellite PM2.5 minus the live PM2.5 at the nearest OAQ station. Blue triangles are OAQ station locations."}
 centroid_coords_oaq <- sf::st_coordinates(ward_centroids)
 oaq_station_coords <- sf::st_coordinates(oaq_pm25_sf)[nearest_oaq, ]
 
@@ -475,8 +480,8 @@ ggplot() +
     name = expression(paste(Delta ~ PM[2.5] ~ (mu * g / m^3)))
   ) +
   labs(
-    title    = "Delhi: Satellite vs Nearest OAQ Station PM2.5 by Ward",
-    subtitle = "Dashed lines connect each ward centroid to its nearest OAQ station\nColour shows satellite − OAQ live reading | Blue triangles = OAQ stations",
+    title    = "Delhi: satellite vs nearest OAQ station PM2.5 by ward",
+    subtitle = "Dashed lines connect each ward centroid to its nearest OAQ station\nColor shows satellite − OAQ live reading | Blue triangles = OAQ stations",
     caption  = "Delta = satellite PM2.5 (Nov 2022) − nearest OAQ live reading\nSource: WUSTL ACAG V5GL04 + OAQ platform (oaq.notf.in)"
   ) +
   xlab(NULL) +
@@ -500,7 +505,7 @@ ggsave(file.path(fig_dir, "fig_oaq4_gap_map_oaq.png"), width = 9, height = 7.5, 
 
 ## Priority map comparison
 
-```{r priority-comparison, fig.height=7, fig.width=12, fig.cap="Priority map comparison: CPCB historical coordinates (left, from original vignette) vs OAQ live coordinates (right). Differences between the maps indicate where coordinate sourcing affects gap analysis conclusions."}
+```{r priority-comparison, fig.height=7, fig.width=12, fig.cap="Priority map comparison: CPCB historical coordinates (left, from the original article) vs OAQ live coordinates (right). Differences between the maps show where the coordinate source changes the conclusions of the gap analysis."}
 # Load original CPCB-based priority from the original analysis, if available
 # (Recompute here for self-containedness)
 cpcb_sf_pm25 <- cpcb_sf %>%
@@ -590,11 +595,11 @@ p_cpcb + p_oaq + patchwork::plot_layout(ncol = 2)
 
 # Multi-pollutant station profile
 
-One of the key advantages of OAQ over the historical CPCB CSVs is access to
-multiple co-located pollutants. Below we visualize the full pollutant profile
-across active Delhi stations as a ranked bubble chart.
+An advantage of OAQ over the historical CPCB CSVs is data for many co-located
+pollutants. The ranked bubble chart below shows the full pollutant profile for
+the active Delhi stations.
 
-```{r pollutant-profile, fig.height=8, fig.cap="Multi-pollutant profile for Delhi CPCB stations via OAQ. Each row is a station, each column a pollutant. Circle size and colour reflect concentration. Grey = not measured or offline."}
+```{r pollutant-profile, fig.height=8, fig.cap="Multi-pollutant profile for Delhi CPCB stations from OAQ. Each row is a station. Each column is a pollutant. Circle size and color show concentration. Gray shows a pollutant that the station does not measure, or a station that is offline."}
 # Tidy to long format, normalise within each pollutant for colour scaling
 oaq_long <- oaq_delhi %>%
   select(id, name, city, pm25, pm10, no2, o3, co, nox) %>%
@@ -645,8 +650,8 @@ ggplot(oaq_long, aes(x = pollutant, y = name_short)) +
     name      = "Relative concentration\n(normalised within pollutant)"
   ) +
   labs(
-    title = "Multi-Pollutant Profile — Delhi CPCB Stations via OAQ",
-    subtitle = "Stations ordered by PM2.5 (top = highest) | Circle size and colour = relative concentration",
+    title = "Multi-pollutant profile: Delhi CPCB stations via OAQ",
+    subtitle = "Stations ordered by PM2.5 (top = highest) | Circle size and color = relative concentration",
     x = NULL,
     y = NULL,
     caption = paste0(
@@ -677,41 +682,43 @@ ggsave(file.path(fig_dir, "fig_oaq5_pollutant_profile.png"), width = 10, height 
 
 ## What OAQ adds
 
-The OAQ platform provides three things the historical CPCB data repository
-does not:
+The OAQ platform supplies three items that the historical CPCB data repository
+does not supply:
 
-1. **Authoritative coordinates** embedded in the station metadata, no geocoding
-   step, no Nominatim fallback, no missing coordinates.
+1. Authoritative coordinates in the station metadata. There is no geocoding
+   step, no Nominatim fallback, and no missing coordinates.
 
-2. **Multi-pollutant readings** (PM2.5, PM10, NO2, O3, CO, NOx) from the same
+2. Multi-pollutant readings (PM2.5, PM10, NO2, O3, CO, NOx) from the same
    station at the same timestamp. The historical API returns only PM2.5.
 
-3. **Live readings** at 15-minute resolution via `oaq_get_station_24h()`,
-   enabling time-of-day analysis and near-real-time monitoring gap assessment.
+3. Live readings at 15-minute resolution through `oaq_get_station_24h()`. These
+   readings make time-of-day analysis and near-real-time assessment of
+   monitoring gaps possible.
 
 ## Station network agreement
 
-The network comparison map shows that CPCB historical coordinates (sourced via
-`cpcb_add_coords()`) and OAQ coordinates agree closely for most stations.
-Discrepancies, where they exist, are small and likely due to the Nominatim
-geocoding fallback used for stations temporarily absent from the CPCB live feed.
-For the gap analysis, using OAQ coordinates is preferred as the ground truth.
+The network comparison map shows that the CPCB historical coordinates (from
+`cpcb_add_coords()`) and the OAQ coordinates agree closely for most stations.
+Where differences occur, they are small. Their probable cause is the Nominatim
+geocoding fallback. `cpcb_add_coords()` uses this fallback for stations that are
+temporarily absent from the CPCB live feed. For the gap analysis, we prefer the
+OAQ coordinates as the ground truth.
 
 ## Temporal caveat
 
-The satellite data is from November 2022; OAQ readings are live. The comparison
-in Part 5 is therefore not a strict validation, seasonal and year-to-year
-variation in Delhi's PM2.5 (which can exceed 30%) means the satellite and ground
-readings will diverge on absolute values. The analysis is most useful for
-*relative* spatial patterns: which wards are systematically under-monitored,
-regardless of the absolute PM2.5 level.
+The satellite data is from November 2022, but the OAQ readings are live. Thus,
+the comparison in Part 5 is not a strict validation. Seasonal and year-to-year
+variation in Delhi PM2.5 can be more than 30%. Because of this variation, the
+satellite and ground readings will have different absolute values. The analysis
+is most useful for *relative* spatial patterns. These patterns show which wards
+have too few monitors, independent of the absolute PM2.5 level.
 
 ## Priority wards
 
-The priority map comparison shows that the gap analysis conclusions are robust
-to the choice of coordinate source, wards classified as "High priority" by the
-CPCB historical analysis are largely the same as those flagged by the OAQ
-analysis. This validates the original methodology.
+The priority map comparison shows that the conclusions of the gap analysis do
+not change much with the coordinate source. Most wards that the CPCB historical
+analysis classified as "High priority" are also "High priority" in the OAQ
+analysis. This result validates the original method.
 
 ---
 

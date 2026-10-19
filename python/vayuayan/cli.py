@@ -186,9 +186,17 @@ Examples:
             for key, v in PM25_VERSIONS.items()
         ),
     )
+    cmd.add_argument(
+        "--region",
+        type=str,
+        choices=["GL", "AS", "EU", "NA", "AF"],
+        default="GL",
+        help="Region file (default: GL, global). AS (Asia) is smaller and covers "
+        "India; AF is V6GL03 only.",
+    )
     cmd.set_defaults(
         run=lambda a: get_pm25_data(
-            PM25Client(version=a.version),
+            PM25Client(version=a.version, region=a.region),
             a.geojson_path,
             a.year,
             a.month,

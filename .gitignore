@@ -1,0 +1,13 @@
+build/
+dist/
+*.egg-info/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+CLAUDE.md
+.claude/
+
+# --dump files of the report scripts hold all the OAQ readings
+reports/**/*_20??.json

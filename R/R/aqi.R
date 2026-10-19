@@ -1,7 +1,6 @@
 # CPCB National AQI breakpoints (cpcb.gov.in, "About National Air Quality
-# Index"), as in the Python package. CPCB gives no upper concentration for
-# Severe (401-500); the last band extends it by the width of Very Poor and the
-# index is capped at 500.
+# Index"). CPCB gives no upper concentration for Severe (401-500); the last
+# band extends it by the width of Very Poor and the index is capped at 500.
 .aqi_pollutants <- list(
   PM10 = list(unit = "ug", hours = 24, bp = c(0, 50, 51, 100, 101, 250, 251, 350, 351, 430, 430, 510)),
   PM2.5 = list(unit = "ug", hours = 24, bp = c(0, 30, 31, 60, 61, 90, 91, 120, 121, 250, 250, 380)),
@@ -127,4 +126,51 @@ compute_aqi <- function(concentrations) {
 .aqi_sufficient <- function(pollutants) {
   length(pollutants) >= .aqi_min_pollutants &&
     any(c("PM2.5", "PM10") %in% pollutants)
+}
+
+# "Possible health impacts" of each category, from the CPCB National AQI
+# bulletin
+.aqi_health_impacts <- c(
+  Good = "Minimal impact",
+  Satisfactory = "Minor breathing discomfort to sensitive people",
+  Moderate = paste(
+    "Breathing discomfort to the people with lung, heart disease,",
+    "children and older adults"
+  ),
+  Poor = "Breathing discomfort to people on prolonged exposure",
+  "Very Poor" = "Respiratory illness to the people on prolonged exposure",
+  Severe = "Respiratory effects even on healthy people"
+)
+
+#' Possible health impact of an AQI value
+#'
+#' @description
+#' CPCB's "possible health impacts" text for the category of each AQI value.
+#'
+#' @param aqi_value Numeric vector of AQI values.
+#' @return Character vector, \code{"No Data"} for missing values.
+#' @examples
+#' aqi_health_impact(c(250, NA))
+#' @export
+aqi_health_impact <- function(aqi_value) {
+  out <- unname(.aqi_health_impacts[get_aqi_categories(aqi_value)])
+  out[is.na(out)] <- "No Data"
+  out
+}
+
+#' AQI category of a pollutant concentration
+#'
+#' @description
+#' The category of the sub-index of each concentration, for example of a
+#' PM2.5 mean from satellite data. The breakpoints are for 24-hour averages
+#' (8-hour for CO and O3), so for an annual or monthly mean the category is an
+#' indication only.
+#'
+#' @inheritParams aqi_sub_index
+#' @return Character vector of AQI categories.
+#' @examples
+#' aqi_pollutant_category("PM2.5", c(20, 75))
+#' @export
+aqi_pollutant_category <- function(pollutant, concentration) {
+  get_aqi_categories(aqi_sub_index(pollutant, concentration))
 }

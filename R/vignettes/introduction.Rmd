@@ -31,10 +31,10 @@ knitr::opts_chunk$set(
 
 # Introduction
 
-**vayuayan** (वायुअयन) is an R package for fetching and analyzing air quality data from WUSTL ACAG satellite PM2.5 (global) and CPCB & OAQ monitoring networks (India). The name combines two Sanskrit words:
+**vayuayan** (वायुअयन) is an R package that downloads and analyzes air quality data. The data comes from WUSTL ACAG satellite PM2.5 (global) and the CPCB and OAQ monitoring networks (India). The name combines two Sanskrit words:
 
-- **Vayu** (वायु): Wind, air
-- **Ayan** (अयन): Path, journey, movement
+- Vayu (वायु) means wind or air.
+- Ayan (अयन) means path, journey or movement.
 
 Together, "Vayuayan" means "the path of wind."
 
@@ -47,18 +47,18 @@ devtools::install_github("saketlab/vayuayan", subdir = "R")
 
 ## Data sources
 
-The package provides access to:
+The package gives access to three data sources:
 
-1. **WUSTL ACAG**: Washington University satellite PM2.5 data
-   - Global coverage at 0.01 degree (about 1 km) resolution
-   - Monthly and annual data (1998-2024, product V6.GL.03)
+1. WUSTL ACAG satellite PM2.5 data from Washington University
+   - Global coverage at 0.01 degree (approximately 1 km) resolution
+   - Monthly and annual data (1998 to 2024, product V6.GL.03)
 
-2. **CPCB**: Central Pollution Control Board monitoring network (India)
+2. The CPCB (Central Pollution Control Board) monitoring network in India
    - Historical and real-time AQI data
    - Station-level and city-level data
 
-3. **OAQ**: Open Air Quality low-cost sensor networks (India)
-   - Multiple providers including Airnet
+3. The OAQ (Open Air Quality) low-cost sensor networks in India
+   - Many providers, for example Airnet
    - Daily, monthly, and annual data
 
 ## Quick start
@@ -74,10 +74,10 @@ vayuayan_welcome()
 
 The `cpcb_` functions provide access to historical air quality data from the Central Pollution Control Board.
 
-## Exploring available data
+## Available data
 
-States, cities and stations come from a CPCB station directory bundled with
-the package, so these calls work offline.
+The lists of states, cities and stations come from a CPCB station directory
+in the package. Thus, these calls work offline.
 
 ```{r historical_explore, eval = TRUE}
 states <- cpcb_get_state_list()
@@ -90,7 +90,7 @@ stations <- cpcb_get_station_list("Mumbai")
 head(stations)
 ```
 
-### Adding coordinates to stations
+### Station coordinates
 
 ```{r add_coords, eval = TRUE}
 delhi_stations <- cpcb_add_coords(cpcb_get_station_list("Delhi"))
@@ -100,7 +100,8 @@ head(delhi_stations)
 ## Daily data in long format
 
 `cpcb_city_daily()` downloads the CPCB daily file for each city and returns
-one row per day. Files are cached, so later calls read from disk.
+one row per day. The package caches the files, so later calls read them from
+disk.
 
 ```{r city_daily}
 daily <- cpcb_city_daily(c("Delhi", "Mumbai"), 2024, cache_dir = tempdir())
@@ -120,13 +121,13 @@ station_daily <- cpcb_station_daily(
 count(station_daily, station_id)
 ```
 
-`cpcb_download_city_data()` and `cpcb_download_station_data()` save the raw
-CPCB sheet when you want the file itself.
+If you want the file itself, `cpcb_download_city_data()` and
+`cpcb_download_station_data()` save the raw CPCB sheet.
 
-# Live AQI monitoring
+# Live AQI data
 
-Live readings come from the public station feed, which holds only the latest
-hour.
+The live readings come from the public station feed. The feed holds only the
+latest hour.
 
 ```{r live_aqi}
 nearest <- cpcb_get_nearest_station(coords = c(19.0760, 72.8777))
@@ -187,11 +188,11 @@ live %>%
 
 # PM2.5 satellite data
 
-The `pm25_` functions process satellite-based PM2.5 data from WUSTL ACAG
-(product V6.GL.03, hosted on the AWS Open Data registry). The Asia subset
-(`region = "AS"`) covers India in a smaller file than the global one. Files
-are cached in `tools::R_user_dir("vayuayan", "cache")`.
-These chunks are not run when the vignette is built.
+The `pm25_` functions process satellite PM2.5 data from WUSTL ACAG
+(product V6.GL.03 on the AWS Open Data registry). The Asia subset
+(`region = "AS"`) includes India, and its file is smaller than the global
+file. The package caches the files in `tools::R_user_dir("vayuayan", "cache")`.
+The vignette build does not run these chunks.
 
 ```{r pm25_setup, eval = FALSE}
 pm25_nc <- pm25_download_netcdf(2023, 11, region = "AS")

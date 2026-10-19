@@ -1,11 +1,11 @@
 ---
-title: "Bengaluru Air Quality: CPCB Reference vs Airnet Low-Cost Sensors (2026)"
+title: "Bengaluru air quality: CPCB reference vs Airnet low-cost sensors (2026)"
 output:
   rmarkdown::html_vignette:
     toc: true
     toc_depth: 3
 vignette: >
-  %\VignetteIndexEntry{Bengaluru Air Quality: CPCB Reference vs Airnet Low-Cost Sensors (2026)}
+  %\VignetteIndexEntry{Bengaluru air quality: CPCB reference vs Airnet low-cost sensors (2026)}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 ---
@@ -27,26 +27,28 @@ library(vayuayan)
 
 # Introduction
 
-Bengaluru is the one Indian city where the OAQ platform carries two independent
-PM2.5 monitoring networks at once. One is CPCB, the government reference network
-of regulatory-grade Continuous Ambient Air Quality Monitoring Stations. The
-other is Airnet, a dense network of low-cost sensors run by CSTEP.
+Bengaluru is the only Indian city where the OAQ platform has two independent
+PM2.5 monitor networks at the same time. The first network is CPCB, the
+government reference network of regulatory-grade Continuous Ambient Air Quality
+Monitoring Stations. The second network is Airnet, a dense network of low-cost
+sensors that CSTEP operates.
 
-This vignette puts them head to head over the same months (March–April 2026) in
-the same city. Do the low-cost Airnet sensors reproduce the signal the CPCB
-reference network measures? A sensor network can get the daily trend right and
-still report the wrong level, so we look at trend, level, and spatial coverage
-separately.
+This article compares the two networks in the same city for the same months
+(March to April 2026). The question is whether the low-cost Airnet sensors give
+the same signal as the CPCB reference network. A sensor network can show the
+correct daily trend but report an incorrect level. Thus, we examine the trend,
+the level, and the spatial coverage separately.
 
-The reason it matters: if dense low-cost sensors hold up, they can extend
-reference monitoring into the gaps a sparse official network leaves behind.
+If the dense low-cost sensors give accurate data, they can supply data for the
+areas that the sparse official network does not monitor.
 
 ---
 
 # Data sources
 
-Both networks are read from the OAQ platform via the same functions, differing
-only in the `provider` argument. Both return daily means per station.
+The same functions read the two networks from the OAQ platform. Only the
+`provider` argument is different. For each station, the functions return daily
+means.
 
 | Network | `provider` | Role | Pollutants | Density |
 |---|---|---|---|---|
@@ -81,9 +83,9 @@ dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 session <- oaq_session()
 ```
 
-`oaq_fetch_monthly_stations()` pulls every station for each provider in a city
-across the chosen months and returns one tidy table of daily readings, already
-joined to station coordinates.
+`oaq_fetch_monthly_stations()` gets the data for all stations of each provider
+in a city for the selected months. It returns one tidy table of daily readings,
+with the station coordinates.
 
 ```{r fetch-data, cache=TRUE}
 both <- oaq_fetch_monthly_stations(
@@ -106,10 +108,10 @@ both |>
     iqr_high     = round(quantile(pm25, 0.75), 1),
     .groups      = "drop"
   ) |>
-  knitr::kable(caption = "Bengaluru PM2.5 coverage, March–April 2026")
+  knitr::kable(caption = "Bengaluru PM2.5 coverage, March to April 2026")
 ```
 
-Network colours used throughout:
+The figures use these colors for the networks:
 
 ```{r colours}
 net_colors <- c(
@@ -122,9 +124,10 @@ net_colors <- c(
 
 # Daily city trend
 
-For each network we take the cross-station median per day (the city signal) and
-the inter-quartile range (the spread between sensors). If the low-cost network
-reproduces the reference signal, the two median lines should track together.
+For each network and day, we calculate the median of all stations (the city
+signal). We also calculate the inter-quartile range (the spread between sensors).
+If the low-cost network gives the same signal as the reference network, the two
+median lines will move together.
 
 ```{r daily-summary}
 daily <- both |>
@@ -139,7 +142,7 @@ daily <- both |>
   )
 ```
 
-```{r daily-plot, fig.height=5, fig.cap="Daily city-median PM2.5 in Bengaluru, March–April 2026. Lines = cross-station median per network; ribbons = inter-quartile range. The two networks follow the same day-to-day trend, but Airnet (blue) sits consistently below the CPCB reference (red), with the gap largest on high-pollution days."}
+```{r daily-plot, fig.height=5, fig.cap="Daily city-median PM2.5 in Bengaluru, March to April 2026. Lines show the cross-station median for each network. Ribbons show the inter-quartile range. The two networks have the same day-to-day trend. Airnet (blue) stays below the CPCB reference (red) for the full period. The difference is largest on days with high pollution."}
 ggplot(daily, aes(x = date, colour = network, fill = network)) +
   geom_ribbon(aes(ymin = p25, ymax = p75), alpha = 0.18, colour = NA) +
   geom_line(aes(y = median), linewidth = 1) +
@@ -157,7 +160,7 @@ ggplot(daily, aes(x = date, colour = network, fill = network)) +
     subtitle = "Line = cross-station median | ribbon = inter-quartile range",
     x        = NULL,
     y        = expression(paste("PM2.5 (", mu, "g/m"^3, ")")),
-    caption  = "Source: OAQ platform (oaq.notf.in) — providers cpcb + airnet"
+    caption  = "Source: OAQ platform (oaq.notf.in), providers cpcb + airnet"
   ) +
   theme_minimal(base_size = 11) +
   theme(
@@ -174,10 +177,11 @@ ggsave(file.path(fig_dir, "fig1_daily_trend.png"), width = 9, height = 5, dpi = 
 
 # Day-matched agreement
 
-Aligning the two networks by day, we plot the Airnet city median against the
-CPCB city median for the same date. Points on the 1:1 line mean the low-cost
-network reproduces the reference reading. A fit line below 1:1 means Airnet reads
-low, and a slope under 1 means it under-responds as pollution rises.
+For each day, we plot the Airnet city median against the CPCB city median.
+Points on the 1:1 line show that the low-cost network gives the same value as
+the reference network. A fit line below the 1:1 line shows that Airnet reads
+low. A slope less than 1 shows that the Airnet response is too small when
+pollution increases.
 
 ```{r day-matched}
 matched <- daily |>
@@ -196,7 +200,7 @@ cat("Mean bias (Airnet − CPCB):", round(bias, 1), "µg/m³\n")
 cat("Slope:", round(coef(fit)[2], 2), "\n")
 ```
 
-```{r day-matched-plot, fig.height=5.5, fig.width=6, fig.cap="Airnet vs CPCB city-median PM2.5, day-matched (March–April 2026). Each point is one day. Dashed line = 1:1; red line = linear fit."}
+```{r day-matched-plot, fig.height=5.5, fig.width=6, fig.cap="Airnet vs CPCB city-median PM2.5, day-matched (March to April 2026). Each point is one day. The dashed line is 1:1. The red line is the linear fit."}
 ggplot(matched, aes(x = cpcb, y = airnet)) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey50") +
   geom_point(colour = "#4575b4", size = 2.4, alpha = 0.8) +
@@ -216,7 +220,7 @@ ggplot(matched, aes(x = cpcb, y = airnet)) +
     title = "Day-matched agreement: Airnet vs CPCB",
     x = expression(paste("CPCB city median PM"[2.5])),
     y = expression(paste("Airnet city median PM"[2.5])),
-    caption = "Source: OAQ platform | Bengaluru | March–April 2026"
+    caption = "Source: OAQ platform | Bengaluru | March to April 2026"
   ) +
   theme_minimal(base_size = 11) +
   theme(plot.title = element_text(face = "bold"))
@@ -228,8 +232,9 @@ ggsave(file.path(fig_dir, "fig2_day_matched.png"), width = 6, height = 5.5, dpi 
 
 # Spatial coverage
 
-The two networks differ most in density. The map shows every station, sized by
-its mean PM2.5 over the period, over Bengaluru's ward boundaries.
+The largest difference between the two networks is density. The map shows all
+stations on the ward boundaries of Bengaluru. The size of each point shows the
+mean PM2.5 of the station for the period.
 
 ```{r blr-boundary}
 blr_boundary <- sf::st_read(
@@ -248,7 +253,7 @@ station_means <- both |>
 station_sf <- sf::st_as_sf(station_means, coords = c("lon", "lat"), crs = 4326)
 ```
 
-```{r station-map, fig.height=7, fig.width=9, fig.cap="Monitoring network density in Bengaluru. Red = CPCB reference stations, blue = Airnet low-cost sensors. Point size = mean PM2.5 (March–April 2026). The low-cost network is roughly 4x denser."}
+```{r station-map, fig.height=7, fig.width=9, fig.cap="Density of the monitor networks in Bengaluru. Red points are CPCB reference stations. Blue points are Airnet low-cost sensors. Point size shows mean PM2.5 (March to April 2026). The low-cost network is approximately 4x denser."}
 ggplot() +
   geom_sf(data = blr_boundary, fill = "grey97", colour = "grey85", linewidth = 0.2) +
   geom_sf(
@@ -280,18 +285,18 @@ ggsave(file.path(fig_dir, "fig3_network_map.png"), width = 9, height = 7, dpi = 
 
 ---
 
-# Controlling for location
+# Control for location
 
-The city-median comparison has a confound: the two networks do not cover the
-same ground. CPCB stations cluster in central Bengaluru, while Airnet reaches
-the periphery. If the outskirts are genuinely cleaner, Airnet would read lower
-even with a perfect sensor, and the bias above would be a sampling artefact
-rather than a sensor effect.
+The city-median comparison has a confound. The two networks do not cover the
+same areas. Most CPCB stations are in central Bengaluru, but Airnet also has
+sensors at the periphery. If the air at the periphery is cleaner, Airnet will
+read lower, even with a perfect sensor. In that case, the bias above is an
+effect of the station locations, not of the sensors.
 
-To separate the two, we pair each Airnet sensor with its nearest CPCB station
-and keep only pairs within a short distance, so each comparison is effectively
-same-location. If the low bias survives this control, it comes from the sensors,
-not the geography.
+To separate the two effects, we pair each Airnet sensor with its nearest CPCB
+station. We keep only the pairs that are a short distance apart, so that the two
+stations in each pair have almost the same location. If the low bias stays after
+this control, the cause is the sensors, not the geography.
 
 ```{r distance-control}
 cpcb_st <- station_means |> filter(network == "CPCB reference")
@@ -333,20 +338,21 @@ knitr::kable(control_table,
 )
 ```
 
-The median Airnet sensor sits about 3 km from a CPCB station, so the pairing is
-tight. The low bias hardly moves when we restrict to co-located pairs, which
-means it is a property of the sensors rather than of where they happen to sit.
+The median distance from an Airnet sensor to a CPCB station is approximately
+3 km, so the pairs are close. In the table above, the low bias changes very
+little when we keep only the co-located pairs. Thus, the bias is a property of
+the sensors, not of their locations.
 
 ---
 
 # Distribution comparison
 
-The daily median hides the shape of the readings. Plotting the full
-distribution of station-days for each network shows where they overlap and
-where they part. A tighter low-cost distribution can mean genuinely lower
-variability or sensor smoothing.
+The daily median does not show the shape of the readings. A plot of the full
+distribution of station-days for each network shows where the networks overlap
+and where they are different. A narrower low-cost distribution can show lower
+real variability, or sensors that smooth the data.
 
-```{r distribution-plot, fig.height=5, fig.cap="Distribution of daily station PM2.5 readings by network, March–April 2026. Each observation is one station on one day."}
+```{r distribution-plot, fig.height=5, fig.cap="Distribution of daily station PM2.5 readings by network, March to April 2026. Each observation is one station on one day."}
 obs <- both |> filter(!is.na(pm25))
 
 ggplot(obs, aes(x = pm25, fill = network, colour = network)) +
@@ -363,7 +369,7 @@ ggplot(obs, aes(x = pm25, fill = network, colour = network)) +
     subtitle = "Dashed lines = network medians",
     x        = expression(paste("Daily station PM"[2.5])),
     y        = "Density",
-    caption  = "Source: OAQ platform | Bengaluru | March–April 2026"
+    caption  = "Source: OAQ platform | Bengaluru | March to April 2026"
   ) +
   theme_minimal(base_size = 11) +
   theme(
@@ -388,31 +394,36 @@ n_cpcb <- sum(station_means$network == "CPCB reference")
 n_airnet <- sum(station_means$network == "Airnet low-cost")
 ```
 
-Over March–April 2026 in Bengaluru, the Airnet low-cost network gets the timing
-right and the magnitude wrong.
+In Bengaluru, for March to April 2026, the day-to-day pattern of the Airnet
+low-cost network is correct, but its magnitude is incorrect.
 
-On timing, the agreement is strong. The two city-median lines rise and fall on
-the same days, with a day-matched correlation of `r r_round`, so a low-cost
-network reliably captures when Bengaluru's air gets worse. On magnitude, Airnet
-reads low. Its network-median PM2.5 is `r airnet_med` µg/m³ against
-`r cpcb_med` µg/m³ for CPCB, a mean bias of `r bias_round` µg/m³, and the
-regression slope of `r slope_round` shows the gap widening as concentrations
-climb. The two networks agree on clean days, but Airnet increasingly under-reads
-the pollution peaks that CPCB records. The cause is the sensors, not the
-geography: pairing each Airnet sensor with a CPCB station within a few
-kilometres leaves the low bias almost unchanged. Range compression like this is
-a familiar low-cost-sensor trait, and it is the main reason raw Airnet values
-should not be read as absolute levels.
+The day-to-day patterns of the two networks agree well. The two city-median lines increase
+and decrease on the same days. The day-matched correlation is `r r_round`.
+Thus, a low-cost network can show reliably when the air in Bengaluru becomes
+worse.
 
-Where the low-cost network clearly wins is coverage. Airnet contributes
-`r n_airnet` usable stations to CPCB's `r n_cpcb`, reaching the city's periphery
-where the reference network has no monitors at all.
+The Airnet magnitude is too low. The network-median PM2.5 of Airnet is
+`r airnet_med` µg/m³, and the value for CPCB is `r cpcb_med` µg/m³. The mean
+bias is `r bias_round` µg/m³. The regression slope of `r slope_round` shows that
+the difference increases when concentrations increase. The two networks agree on
+clean days. On the pollution peaks that CPCB records, the Airnet values are
+lower by larger amounts.
 
-So the two are complementary rather than interchangeable. Airnet is reliable for
-trend and for filling spatial gaps, but its readings need calibration against
-the CPCB reference before they stand in as absolute concentrations, especially
-during high-pollution episodes. And the reference network is still the only
-source for NO2, SO2, CO, and O3, which Airnet does not measure at all.
+The cause is the sensors, not the geography. When we pair each Airnet sensor
+with a CPCB station a few kilometers away, the low bias stays almost the same.
+Range compression of this type is a known property of low-cost sensors. It is
+the primary reason not to use raw Airnet values as absolute levels.
+
+The advantage of the low-cost network is coverage. Airnet has `r n_airnet`
+usable stations, and CPCB has `r n_cpcb`. The Airnet stations are also at the
+periphery of the city, where the reference network has no monitors.
+
+Thus, the two networks supply different information, and one network cannot
+replace the other. Airnet is reliable for trends and for data in areas without
+reference stations. Before you use Airnet readings as absolute concentrations,
+you must calibrate them against the CPCB reference. This calibration is most
+necessary during periods of high pollution. Also, only the reference network
+measures NO2, SO2, CO, and O3. Airnet does not measure these pollutants.
 
 ---
 

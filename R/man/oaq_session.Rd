@@ -18,9 +18,6 @@ query-string to append to every data URL).
 Performs the OAQ 2-step handshake: calls the Data Broker with your API key
 and returns the signed-URL parameters needed for all subsequent data
 requests. Sessions are valid for 24 hours.
-
-The API key is read from the \code{OAQ_API_KEY} environment variable if
-\code{api_key} is not supplied.
 }
 \examples{
 \dontshow{if (nzchar(Sys.getenv("OAQ_API_KEY"))) withAutoprint(\{ # examplesIf}

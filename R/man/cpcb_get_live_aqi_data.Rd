@@ -24,8 +24,8 @@ nearest station if \code{station_id} is not provided.}
 List as returned by \code{cpcb_get_live_aqi_data_for_station()}.
 }
 \description{
-Get live AQI data with flexible parameters. Automatically resolves
-station from coordinates or IP location if not provided.
+Get live AQI data of a station. Without \code{station_id}, the station
+nearest to \code{coords} or to the IP-based location is used.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

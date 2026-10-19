@@ -42,6 +42,35 @@ CPCBClient
    :show-inheritance:
    :no-index:
 
+OAQClient
+~~~~~~~~~
+
+.. autoclass:: vayuayan.OAQClient
+   :members:
+   :undoc-members:
+   :no-index:
+
+National AQI
+------------
+
+.. automodule:: vayuayan.aqi
+   :members:
+   :no-index:
+
+Tidy Data
+---------
+
+.. automodule:: vayuayan.tidy
+   :members:
+   :no-index:
+
+India Boundaries
+----------------
+
+.. automodule:: vayuayan.geo
+   :members:
+   :no-index:
+
 Utility Functions
 -----------------
 

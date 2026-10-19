@@ -19,18 +19,18 @@ template:
       <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
       <meta name="description" content="R package to download and analyze air pollution data. Access CPCB monitoring stations and OAQ low-cost sensors for India, plus WUSTL ACAG satellite PM2.5 globally at 1 km resolution.">
       <meta property="og:type" content="website">
-      <meta property="og:title" content="vayuayanR - Air Quality Data in R | CPCB, OAQ, WUSTL Satellite PM2.5">
+      <meta property="og:title" content="vayuayan - Air Quality Data in R | CPCB, OAQ, WUSTL Satellite PM2.5">
       <meta property="og:description" content="R package for air quality data from CPCB and OAQ sensors (India) and WUSTL ACAG satellite PM2.5 (global, 1 km resolution).">
-      <meta property="og:site_name" content="vayuayanR">
+      <meta property="og:site_name" content="vayuayan">
       <meta property="og:locale" content="en_US">
       <meta name="twitter:card" content="summary_large_image">
-      <meta name="twitter:title" content="vayuayanR - Air Quality Data in R | CPCB, OAQ, WUSTL Satellite PM2.5">
+      <meta name="twitter:title" content="vayuayan - Air Quality Data in R | CPCB, OAQ, WUSTL Satellite PM2.5">
       <meta name="twitter:description" content="R package for air quality data from CPCB and OAQ sensors (India) and WUSTL ACAG satellite PM2.5 (global, 1 km resolution).">
       <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        "name": "vayuayanR",
+        "name": "vayuayan",
         "applicationCategory": "DeveloperApplication",
         "applicationSubCategory": "Environmental Data Analysis",
         "operatingSystem": "Windows, macOS, Linux",
@@ -39,7 +39,7 @@ template:
           "price": "0",
           "priceCurrency": "USD"
         },
-        "description": "R package for air quality data from CPCB monitoring stations (India), OAQ low-cost sensor networks (India), and WUSTL ACAG satellite PM2.5 (global, 1 km resolution, 1998-2022).",
+        "description": "R package for air quality data from CPCB monitoring stations (India), OAQ low-cost sensor networks (India), and WUSTL ACAG satellite PM2.5 (global, 1 km resolution, 1998-2024).",
         "author": {
           "@type": "Person",
           "name": "Saket Choudhary",
@@ -47,7 +47,7 @@ template:
         },
         "url": "https://vayuayan.saketlab.org/R/",
         "downloadUrl": "https://github.com/saketlab/vayuayan",
-        "softwareVersion": "0.2.0",
+        "softwareVersion": "0.3.0",
         "programmingLanguage": "R",
         "keywords": "air quality, PM2.5, CPCB, India pollution, AQI, satellite data, environmental data, OAQ, air pollution analysis"
       }
@@ -56,7 +56,7 @@ template:
       {
         "@context": "https://schema.org",
         "@type": "Dataset",
-        "name": "Air Quality Data via vayuayanR",
+        "name": "Air Quality Data via vayuayan",
         "description": "Programmatic access to air pollution datasets: CPCB CAAQMS monitoring stations (India), OAQ low-cost sensor networks (India), and WUSTL ACAG satellite-derived PM2.5 at 0.01 degree resolution globally (V6.GL.03, 1998-2024).",
         "url": "https://vayuayan.saketlab.org/R/",
         "license": "https://opensource.org/licenses/MIT",
@@ -96,7 +96,7 @@ template:
             "name": "How do I download CPCB air quality data in R?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Install the vayuayanR package and use cpcb_download_city_data() or cpcb_download_station_data() to download historical daily PM2.5 data for any CPCB CAAQMS station in India."
+              "text": "Install the vayuayan package and use cpcb_download_city_data() or cpcb_download_station_data() to download historical daily PM2.5 data for any CPCB CAAQMS station in India."
             }
           },
           {
@@ -104,7 +104,7 @@ template:
             "name": "How can I get satellite PM2.5 data for any region?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Use vayuayanR's pm25_get_stats() function to extract WUSTL ACAG satellite PM2.5 estimates at 1 km resolution for any region using a GeoJSON boundary file. Coverage is global (1998-2022)."
+              "text": "Use vayuayan's pm25_get_stats() function to extract WUSTL ACAG satellite PM2.5 estimates at 1 km resolution for any region using a GeoJSON boundary file. Coverage is global (1998-2024)."
             }
           },
           {
@@ -112,7 +112,7 @@ template:
             "name": "How do I access real-time AQI data from CPCB?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Use cpcb_get_live_aqi_data() or cpcb_get_all_india() from the vayuayanR package to fetch live AQI readings from all CPCB CAAQMS monitoring stations across India."
+              "text": "Use cpcb_get_live_aqi_data() or cpcb_get_all_india() from the vayuayan package to fetch live AQI readings from all CPCB CAAQMS monitoring stations across India."
             }
           },
           {
@@ -120,7 +120,7 @@ template:
             "name": "What is the OAQ platform and how do I access it in R?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "OAQ (Open Air Quality) is a platform aggregating data from low-cost air quality sensors across India including Airnet. Use oaq_session() and oaq_get_daily() from vayuayanR to access historical and live data."
+              "text": "OAQ (Open Air Quality) is a platform aggregating data from low-cost air quality sensors across India including Airnet. Use oaq_session() and oaq_get_daily() from vayuayan to access historical and live data."
             }
           }
         ]
@@ -147,11 +147,11 @@ template:
       });
       </script>
 home:
-  title: "vayuayanR - Air Quality Data in R | CPCB, OAQ, WUSTL Satellite PM2.5"
+  title: "vayuayan - Air Quality Data in R | CPCB, OAQ, WUSTL Satellite PM2.5"
   description: >
     R package for air quality data from CPCB CAAQMS stations and OAQ
     low-cost sensors (India), plus WUSTL ACAG satellite PM2.5 at 1 km
-    resolution (global, 1998-2022).
+    resolution (global, 1998-2024).
 
   links:
   - text: Browse source code
@@ -217,6 +217,7 @@ reference:
   - cpcb_city_daily
   - cpcb_station_daily
   - cpcb_download_raw_station_data
+  - cpcb_raw_readings
   - cpcb_download_hourly
   - cpcb_raw_to_long
   - cpcb_station_daily_aqi
@@ -227,6 +228,8 @@ reference:
   - compute_aqi
   - aqi_sub_index
   - aqi_pollutant_name
+  - aqi_health_impact
+  - aqi_pollutant_category
   - daily_aqi
 
 - title: "CPCB Real-Time AQI Data"
@@ -238,6 +241,8 @@ reference:
   - cpcb_get_nearest_stations
   - cpcb_get_live_aqi_data
   - cpcb_get_live_aqi_data_for_station
+  - cpcb_live_to_long
+  - cpcb_live_metrics
 
 - title: "OAQ Low-Cost Sensor Network Data"
   desc: "Access air quality data from the Open Air Quality platform, including Airnet and other low-cost sensor providers across India"
@@ -253,6 +258,22 @@ reference:
   - oaq_get_annual
   - oaq_fetch_monthly_stations
   - oaq_stations_table
+  - oaq_sensors
+  - oaq_nearest_cpcb
+  - oaq_city_tally
+  - oaq_daily_means
+  - oaq_readings
+  - oaq_daily_records
+  - oaq_check_daily_records
+  - oaq_audit_daily_records
+  - compare_daily_records
+  - daily_record_summary
+  - plot_daily_record_day
+  - plot_daily_record_timeline
+  - plot_daily_record_scatter
+  - plot_daily_record_share
+  - plot_daily_record_series
+  - plot_daily_record_difference
 
 - title: "Satellite PM2.5 Data (WUSTL ACAG)"
   desc: "Download and analyze WUSTL ACAG satellite-derived PM2.5 estimates at 1 km resolution globally (V6GL03, V6, V5 and V5GL04)"
@@ -268,6 +289,17 @@ reference:
   - pm25_load_netcdf_bbox
   - pm25_monthly
   - pm25_map
+
+- title: "Sensor Quality"
+  desc: "Checks of sensor readings against the US EPA targets for PM2.5 sensors"
+  contents:
+  - readings_mean
+  - sensor_completeness
+  - sensor_plausibility
+  - collocated_precision
+  - peer_ratio
+  - sensor_accuracy
+  - ratio_by_humidity
 
 - title: "Utility Functions"
   desc: "Helper functions for AQI categorization, station geolocation, spatial nearest-station matching, and data processing"

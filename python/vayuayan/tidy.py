@@ -8,6 +8,7 @@ vayuayan.aqi.daily_aqi.
 
 from __future__ import annotations
 
+import calendar
 import re
 from datetime import date
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Tuple
@@ -35,6 +36,36 @@ def split_label(label: str) -> Tuple[str, str]:
     if not match:
         return label.strip(), ""
     return (match.group(1) or label).strip(), (match.group(2) or "").strip()
+
+
+# Timestamp formats of CPCB data, tried in order
+_TIMESTAMP_FORMATS = (
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%Y-%m-%d",
+)
+
+
+def parse_timestamps(values: pd.Series) -> pd.Series:
+    """Timestamps of CPCB data, NaT where no format matches.
+
+    Each value is parsed on its own, so one value in another format does not
+    turn the others into NaT, as pandas' format inference can.
+    """
+    import pandas as pd
+
+    if pd.api.types.is_datetime64_any_dtype(values):
+        return values
+    text = values.astype("string").str.strip()
+    out = pd.Series(pd.NaT, index=values.index, dtype="datetime64[ns]")
+    for fmt in _TIMESTAMP_FORMATS:
+        missing = out.isna() & text.notna()
+        if not missing.any():
+            break
+        out[missing] = pd.to_datetime(text[missing], format=fmt, errors="coerce")
+    return out
 
 
 def cpcb_raw_to_long(
@@ -65,7 +96,7 @@ def cpcb_raw_to_long(
     if "Timestamp" not in raw.columns:
         raise ValueError("Raw CPCB data did not contain a Timestamp column")
 
-    wide = raw.assign(timestamp=pd.to_datetime(raw["Timestamp"], errors="coerce"))
+    wide = raw.assign(timestamp=parse_timestamps(raw["Timestamp"]))
     wide = wide.dropna(subset=["timestamp"])
     if start_date is not None:
         wide = wide[wide["timestamp"] >= pd.Timestamp(start_date)]
@@ -126,6 +157,51 @@ def daily_aqi_workbook_to_long(workbook: pd.DataFrame, year: int) -> pd.DataFram
     return out.dropna(subset=["date"]).sort_values("date", ignore_index=True)
 
 
+def cpcb_tidy_daily(sheet: pd.DataFrame, year: Optional[int] = None) -> pd.DataFrame:
+    """Turn a CPCB daily sheet (Day x month columns) into one row per day.
+
+    Args:
+        sheet: A Day column and one column per month name.
+        year: Optional year. With it, a date column is added and impossible
+            dates (31 February) are dropped.
+
+    Returns:
+        DataFrame with integer day and month, numeric value, and date
+        (datetime.date) when year is given, sorted by date. Days without a
+        reading are dropped.
+    """
+    import pandas as pd
+
+    months = {name: i for i, name in enumerate(calendar.month_name) if name}
+    day = pd.to_numeric(sheet.iloc[:, 0], errors="coerce")
+    frames = [
+        pd.DataFrame(
+            {
+                "day": day,
+                "month": months[column],
+                "value": pd.to_numeric(sheet[column], errors="coerce"),
+            }
+        )
+        for column in sheet.columns[1:]
+        if column in months
+    ]
+    columns = ["day", "month", "value"]
+    out = (
+        pd.concat(frames, ignore_index=True)
+        if frames
+        else pd.DataFrame(columns=columns)
+    )
+    out = out.dropna(subset=["day", "value"]).astype({"day": int, "month": int})
+    if year is not None:
+        dates = pd.to_datetime(
+            pd.DataFrame({"year": int(year), "month": out["month"], "day": out["day"]}),
+            errors="coerce",
+        )
+        out = out.assign(date=dates.dt.date)[dates.notna()]
+        out = out.sort_values("date", kind="stable")
+    return out.reset_index(drop=True)
+
+
 def live_to_long(aqi_data: Mapping[str, Any], station_id: str = "") -> pd.DataFrame:
     """Turn the recent hours of CPCBLive.get_live_aqi_data into tidy rows.
 
@@ -151,7 +227,7 @@ def live_to_long(aqi_data: Mapping[str, Any], station_id: str = "") -> pd.DataFr
         for point in series.get("data", [])
     ]
     long = pd.DataFrame(rows, columns=["timestamp", "pollutant", "value"])
-    long["timestamp"] = pd.to_datetime(long["timestamp"], errors="coerce")
+    long["timestamp"] = parse_timestamps(long["timestamp"])
     long["value"] = pd.to_numeric(long["value"], errors="coerce")
     long.insert(0, "station_id", station_id or aqi_data.get("station_id", ""))
     return long.dropna(subset=["timestamp", "value"]).sort_values(

@@ -71,21 +71,14 @@ def clean_station_name(station_name: str) -> str:
 
     cleaned = station_name.strip()
 
-    # Change the "City - Organization" pattern
     cleaned = re.sub(r"\s*-\s*", " ", cleaned)
-    # Replace commas with a space
     cleaned = re.sub(r",\s*", " ", cleaned)
-    # Remove dots but keep the text
+    # Dots go without a space: "St." -> "St"
     cleaned = re.sub(r"\.", "", cleaned)
-    # Remove the other punctuation and special characters
     cleaned = re.sub(r"[^\w\s]", " ", cleaned)
-    # Replace two or more spaces with one space
     cleaned = re.sub(r"\s+", " ", cleaned)
-    # Replace spaces with underscores
     cleaned = cleaned.replace(" ", "_")
-    # Replace two or more consecutive underscores with one
     cleaned = re.sub(r"_+", "_", cleaned)
-    # Remove leading and trailing underscores
     cleaned = cleaned.strip("_")
 
     return cleaned
@@ -111,16 +104,13 @@ def sort_station_data(data: List[Dict]) -> List[Dict]:
         live_count = sum(1 for station in stations if station.get("live", False))
         total_count = len(stations)
 
-        # Calculate live percentage (0-100)
         live_percentage = (live_count / total_count * 100) if total_count > 0 else 0
 
         # Sort key: (live_percentage descending, city_name ascending)
         return (-live_percentage, city_dict.get("cityName", "").lower())
 
-    # Sort the cities
     sorted_data = sorted(data, key=get_live_status_priority)
 
-    # Sort the stations in each city by live status
     for city in sorted_data:
         if "stationsInCity" in city:
             city["stationsInCity"] = sorted(
@@ -330,7 +320,8 @@ def stations_to_dataframe(data: List[Dict]) -> pd.DataFrame:
 
     Returns:
         DataFrame with columns: city_name, city_id, state_id, station_id,
-                               station_name, longitude, latitude, live, avg_aqi.
+                               station_name, longitude, latitude, live, avg_aqi,
+                               status ("Live"/"Offline"), aqi_category.
     """
     import pandas as pd
 
@@ -342,6 +333,8 @@ def stations_to_dataframe(data: List[Dict]) -> pd.DataFrame:
         state_id = city.get("stateID", "")
 
         for station in city.get("stationsInCity", []):
+            live = station.get("live", False)
+            avg_aqi = _safe_float_conversion(station.get("avg"))
             rows.append(
                 {
                     "city_name": city_name,
@@ -351,8 +344,10 @@ def stations_to_dataframe(data: List[Dict]) -> pd.DataFrame:
                     "station_name": station.get("name", ""),
                     "longitude": _safe_float_conversion(station.get("longitude")),
                     "latitude": _safe_float_conversion(station.get("latitude")),
-                    "live": station.get("live", False),
-                    "avg_aqi": _safe_float_conversion(station.get("avg")),
+                    "live": live,
+                    "avg_aqi": avg_aqi,
+                    "status": "Live" if live else "Offline",
+                    "aqi_category": get_aqi_category(avg_aqi),
                 }
             )
 
@@ -378,7 +373,6 @@ def stations_to_city_summary(data: List[Dict]) -> pd.DataFrame:
         total_stations = len(stations)
         live_stations = sum(1 for station in stations if station.get("live", False))
 
-        # Calculate the average AQI of the live stations
         live_aqi_values = [
             _safe_float_conversion(station.get("avg"))
             for station in stations
@@ -511,7 +505,6 @@ def analyze_station_data(data: List[Dict]) -> Dict[str, Any]:
         ),
     }
 
-    # Add the distribution of AQI categories
     df_with_categories = df.copy()
     df_with_categories["aqi_category"] = df_with_categories["avg_aqi"].apply(
         get_aqi_category
@@ -669,9 +662,6 @@ def decode_b64_json_response(response: requests.Response) -> Any:
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate the great circle distance between two points (haversine formula).
 
-    For locations on the globe, this distance is more accurate than the
-    Euclidean distance.
-
     Args:
         lat1, lon1: Latitude and longitude of first point.
         lat2, lon2: Latitude and longitude of second point.
@@ -679,10 +669,8 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     Returns:
         Distance in kilometers.
     """
-    # Convert to radians
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
 
-    # Haversine formula
     dlat = lat2 - lat1
     dlon = lon2 - lon1
     a = (
@@ -693,3 +681,44 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
     # Earth's radius in kilometers
     return c * 6371
+
+
+def get_aqi_categories(aqi_values: Iterable[float]) -> List[str]:
+    """get_aqi_category of each value."""
+    return [get_aqi_category(v) for v in aqi_values]
+
+
+def nearest_stations(
+    from_df: pd.DataFrame,
+    to_df: pd.DataFrame,
+    k: int = 1,
+    from_id: str = "id",
+    to_id: str = "id",
+) -> pd.DataFrame:
+    """The k nearest rows of to_df for each row of from_df, by haversine distance.
+
+    Both tables need lat and lon columns.
+
+    Returns:
+        DataFrame with columns from_id, to_id, rank (1 = nearest) and dist_km.
+    """
+    import numpy as np
+    import pandas as pd
+
+    for df in (from_df, to_df):
+        if not {"lat", "lon"} <= set(df.columns):
+            raise ValueError("Both tables need lat and lon columns")
+    k = min(k, len(to_df))
+    lat2 = np.radians(to_df["lat"].to_numpy(dtype=float))
+    lon2 = np.radians(to_df["lon"].to_numpy(dtype=float))
+    rows = []
+    for fid, lat, lon in zip(from_df[from_id], from_df["lat"], from_df["lon"]):
+        lat1, lon1 = math.radians(lat), math.radians(lon)
+        a = (
+            np.sin((lat2 - lat1) / 2) ** 2
+            + math.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+        )
+        dist = 2 * np.arcsin(np.sqrt(a)) * 6371
+        for rank, idx in enumerate(np.argsort(dist, kind="stable")[:k], start=1):
+            rows.append((fid, to_df[to_id].iloc[idx], rank, float(dist[idx])))
+    return pd.DataFrame(rows, columns=["from_id", "to_id", "rank", "dist_km"])
