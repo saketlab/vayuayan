@@ -142,3 +142,10 @@ smv_remote_whitelist = os.environ.get("SMV_REMOTE_WHITELIST", r"^origin$")
 smv_outputdir_format = "{ref.refname}"
 smv_latest_version = os.environ.get("SMV_LATEST_VERSION", "master")
 smv_rename_latest_version = "latest"
+
+
+def setup(app):  # type: ignore[no-untyped-def]
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from llms_txt import write
+
+    app.connect("build-finished", write)

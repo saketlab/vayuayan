@@ -1,0 +1,21 @@
+# vayuayan
+
+> Python and R packages that download air quality data: CPCB CAAQMS stations and OAQ low-cost sensors in India, and WUSTL ACAG satellite PM2.5 for the globe. They compute the CPCB National AQI and the US EPA AQI, and check low-cost sensors against the EPA PM2.5 targets. Both packages have the same functions.
+
+- Install: `pip install vayuayan` (Python 3.9+) or `remotes::install_github("saketlab/vayuayan", subdir = "R")` in R.
+- CPCB and WUSTL PM2.5 need no credentials.
+- OAQ needs an API key. Ask the user for it and set `OAQ_API_KEY`. Never invent one.
+
+## Python
+
+- [Python llms.txt](https://vayuayan.saketlab.org/python/llms.txt): data sources, credentials and every public function with its signature
+- [Python docs](https://vayuayan.saketlab.org/python/)
+
+## R
+
+- [R llms.txt](https://vayuayan.saketlab.org/R/llms.txt): README, function reference and articles
+- [R docs](https://vayuayan.saketlab.org/R/): every page also has a Markdown copy (replace `.html` with `.md`)
+
+## Optional
+
+- [Source code](https://github.com/saketlab/vayuayan)

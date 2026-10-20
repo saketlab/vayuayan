@@ -88,6 +88,7 @@ jobs:
           }
           pkgdown::build_redirects(pkg)
           pkgdown::build_search(pkg)
+          pkgdown::build_llm_docs(pkg)
         shell: Rscript {0}
 
       # Every article in the index must exist before the site goes live
