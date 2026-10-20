@@ -48,6 +48,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        # ubuntu-latest (26.04) has no Python 3.9 build; test 3.9 on 24.04.
+        exclude:
+          - {os: ubuntu-latest, python-version: "3.9"}
+        include:
+          - {os: ubuntu-24.04, python-version: "3.9"}
 
     steps:
     - uses: actions/checkout@v4
@@ -75,8 +80,9 @@ jobs:
 
   lowest-deps:
     # The oldest versions that pyproject.toml allows. pandas 2.0 wheels do not
-    # work with numpy 2, so numpy is held below 2 here.
-    runs-on: ubuntu-latest
+    # work with numpy 2, so numpy is held below 2 here. Pinned to 24.04, the
+    # last Ubuntu image with a Python 3.9 build.
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
 
