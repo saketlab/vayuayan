@@ -95,7 +95,6 @@ def plot_aqi_radial(
     """
     import numpy as np
     import pandas as pd
-    from matplotlib import rc_context
 
     if "date" in daily:
         dates = pd.to_datetime(daily["date"], errors="coerce")
@@ -113,7 +112,7 @@ def plot_aqi_radial(
     cmap, norm = _aqi_cmap()
     month_angles = (np.arange(12) + 0.5) * 2 * math.pi / 12
 
-    with theme_context(), rc_context(theme or {}):
+    with theme_context(theme=theme):
         fig, axes = _radial_axes(panels, ncol)
         for ax, name in zip(axes, panels):
             for year in range(first, last + 1):
@@ -168,7 +167,6 @@ def plot_aqi_radial_hourly(
     """
     import numpy as np
     import pandas as pd
-    from matplotlib import rc_context
 
     if rings not in ("month", "day"):
         raise ValueError('rings must be "month" or "day"')
@@ -211,7 +209,7 @@ def plot_aqi_radial_hourly(
     r = np.arange(len(keys) + 1) + HOLE
     hours = np.arange(0, 24, 3)
 
-    with theme_context(), rc_context(theme or {}):
+    with theme_context(theme=theme):
         fig, axes = _radial_axes(panels, ncol)
         for ax, name in zip(axes, panels):
             index = pd.MultiIndex.from_product([[name], keys, range(24)])

@@ -25,44 +25,37 @@ knitr::opts_chunk$set(
 library(vayuayan)
 ```
 
-In this vignette, we show PM2.5 for each hour of 2023 at two CPCB stations.
-We use `plot_aqi_radial_hourly()` to show the daily cycle in each month and on each day.
-The two stations are:
-
-- Powai, Mumbai (MPCB)
-- RVCE-Mailasandra, Bengaluru (KSPCB). In 2023, this station had the highest
-  median PM2.5 in Bengaluru.
+In this vignette, we show the hourly PM2.5 of 2023 at two CPCB stations: Powai
+in Mumbai, and Silk Board, a busy traffic junction in Bengaluru. We use
+`plot_aqi_radial_hourly()`, which draws each hour on a 24-hour clock in IST.
 
 ## Download the data
 
-We download the raw 15-minute values of the two stations with `cpcb_raw_readings()`.
-All times are in Indian Standard Time (IST).
+We download the raw 15-minute values with `cpcb_raw_readings()`. CPCB times are
+in IST.
 
-```{r download}
-raw <- cpcb_raw_readings(c("site_5112", "site_5678"), 2023, "PM2.5")
-table(raw$station_name)
+```{r cached, include=FALSE}
+raw_file <- here::here("vignettes/data/diurnal/raw_pm25_2023.csv")
+cached <- file.exists(raw_file)
+if (cached) {
+  raw <- read.csv(raw_file)
+  raw$timestamp <- as.POSIXct(raw$timestamp, tz = "UTC", format = "%Y-%m-%d %H:%M:%S")
+}
 ```
 
-## Remove the suspect values
+```{r download, eval = !cached}
+raw <- cpcb_raw_readings(c("site_5112", "site_1558"), 2023, "PM2.5")
+```
 
-From 30 July to 1 September, the Bengaluru station recorded a smaller number of values than
-usual. The highest value was 923 µg/m³, approximately three times the values in the
-weeks before and after. Rain removes particles from the air in the monsoon. Thus,
-we think that an instrument fault caused these high values. We remove these weeks.
-
-```{r clean}
-suspect <- raw$station_id == "site_5678" &
-  raw$timestamp >= as.POSIXct("2023-07-30", tz = "UTC") &
-  raw$timestamp < as.POSIXct("2023-09-02", tz = "UTC")
-raw <- raw[!suspect, ]
+```{r stations}
+table(raw$station_name)
 ```
 
 ## Calculate the hourly sub-index
 
-We calculate the mean of the four 15-minute values in each hour. Then we use
-`aqi_sub_index()` to change each hourly mean to the CPCB PM2.5 sub-index. CPCB defines
-the sub-index for a 24-hour mean. Thus, the hourly sub-index is not an official
-AQI. We use it to put each hour on the scale of the AQI categories.
+We take the mean of each hour and convert it to the CPCB PM2.5 sub-index with
+`aqi_sub_index()`. CPCB defines the sub-index for a 24-hour mean, so the hourly
+value is not an official AQI. It puts each hour on the AQI category scale.
 
 ```{r hourly}
 raw$hour <- as.POSIXct(format(raw$timestamp, "%Y-%m-%d %H:00:00"), tz = "UTC")
@@ -75,37 +68,29 @@ head(hourly)
 
 ## Show the daily cycle in each month
 
-If you do not set rings, `plot_aqi_radial_hourly()` shows one ring for each month. January is at the
-center and midnight is at the top.
+By default, each ring is a month, with January at the centre and midnight at the
+top.
 
 ```{r clock}
 plot_aqi_radial_hourly(hourly)
 ```
 
-We see these results:
-
-- In Powai, PM2.5 is highest from October to March. The mean is 87 µg/m³ in
-  January. From May to September, the mean is 13 to 20 µg/m³ and all hours are
-  Good.
-- In winter, PM2.5 in Powai is highest at 09:00 to 10:00. In January, all hours
-  from 06:00 to 12:00 are Poor. At night, a thin layer of cold air stays near
-  the ground. Morning traffic adds particles to this layer. When the sun heats
-  the ground, the layer becomes thicker and the particles mix into more air.
-- In Bengaluru, the change between the seasons is smaller. The monthly mean is
-  23 µg/m³ in October and 60 µg/m³ in January. No month is Good at all hours.
-- In Bengaluru from December to February, PM2.5 stays high for most of the
-  night. The mean is 54 to 59 µg/m³ from 21:00 to 08:00 and 32 to 36 µg/m³ from
-  10:00 to 15:00.
+Powai is cleanest from May to September, when every hour is Good. In winter it
+peaks at 09:00 to 10:00, when morning traffic adds to the shallow night-time air
+layer; in January, 06:00 to 12:00 is Poor. Silk Board changes less with the
+season and is Good at every hour only in June and July. Its winter day has two
+peaks, 64 to 65 µg/m³ at 07:00 to 08:00 and 61 µg/m³ at 20:00, against 34 µg/m³
+at 14:00 to 15:00. The peaks match the morning and evening traffic at the
+junction.
 
 ## Show one ring for each day
 
-Set `rings = "day"` to show one ring for each date. Then we can see
-events of one or two days. For example, Diwali was on 12 November 2023.
+Set `rings = "day"` for one ring per date. Short events become visible, such as
+Diwali on 12 November 2023.
 
 ```{r days, fig.height = 7}
 plot_aqi_radial_hourly(hourly, rings = "day")
 ```
 
-At the two stations, the mean PM2.5 from 19:00 to 02:00 was 35 to 53 µg/m³ on
-8 to 10 November. On the nights of 12 and 13 November, the mean was 103 to
-127 µg/m³.
+At both stations, the night-time PM2.5 rose from 21 to 50 µg/m³ on 8 to 10
+November to 104 to 152 µg/m³ on 12 and 13 November.

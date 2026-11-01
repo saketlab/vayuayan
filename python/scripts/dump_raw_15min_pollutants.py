@@ -235,16 +235,13 @@ def write_sorted_parquet(
     con = duckdb.connect()
     try:
         _register_raw_view(con, inputs, temp_dir, memory_limit)
-        con.execute(
+        con.sql(
             f"""
-            COPY (
-                SELECT {", ".join(OUTPUT_COLUMNS)}
-                FROM raw_15min
-                ORDER BY {", ".join(SORT_COLUMNS)}
-            ) TO $1 (FORMAT PARQUET, COMPRESSION ZSTD)
-            """,
-            [str(tmp_out)],
-        )
+            SELECT {", ".join(OUTPUT_COLUMNS)}
+            FROM raw_15min
+            ORDER BY {", ".join(SORT_COLUMNS)}
+            """
+        ).write_parquet(str(tmp_out), compression="zstd")
     finally:
         con.close()
 
@@ -271,15 +268,19 @@ def write_sorted_parquet_by_month(
             start = date(int(year), int(month), 1)
             end = date(start.year + start.month // 12, start.month % 12 + 1, 1)
             # A date range, not month(date), so DuckDB skips row groups by date
-            reader = con.execute(
+            # a relation streams batches without the copy a DB-API result makes
+            rel = con.sql(
                 f"""
                 SELECT {", ".join(OUTPUT_COLUMNS)}
                 FROM raw_15min
                 WHERE date >= $1 AND date < $2
                 ORDER BY {", ".join(SORT_COLUMNS)}
                 """,
-                [start, end],
-            ).fetch_record_batch(rows_per_batch=131072)
+                params=[start, end],
+            )
+            # duckdb 2.0 renamed record_batch to to_arrow_reader
+            fetch = getattr(rel, "to_arrow_reader", None) or rel.record_batch
+            reader = fetch(131072)
             for batch in reader:
                 if writer is None:
                     writer = pq.ParquetWriter(tmp_out, batch.schema, compression="zstd")

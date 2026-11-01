@@ -95,11 +95,12 @@ def set_theme(dpi: int = DPI) -> None:
         pass
 
 
-def theme_context(dpi: int = DPI) -> Any:
-    """The theme for the figures made inside a with block."""
+def theme_context(dpi: int = DPI, theme: Optional[Dict[str, Any]] = None) -> Any:
+    """The theme, with the rcParams of theme over it, for the figures made
+    inside a with block."""
     from matplotlib import rc_context
 
-    return rc_context(cast(Any, theme_rc(dpi)))
+    return rc_context(cast(Any, {**theme_rc(dpi), **(theme or {})}))
 
 
 def new_figure(size: Tuple[float, float]) -> Figure:
