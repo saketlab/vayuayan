@@ -385,3 +385,14 @@ def test_repository_files_of_past_years_are_cached(monkeypatch, tmp_path):
 
     CPCBHistorical(use_cache=False)._read_repository_csv(past)
     assert len(calls) == 4
+
+
+def test_cpcb_send_retries_get_but_not_post(monkeypatch):
+    sent = []
+    monkeypatch.setattr(
+        cpcb_common.http_client, "request", lambda m, u, **k: sent.append((m, k))
+    )
+    cpcb_common.send("get", "https://cpcb.example/file")
+    cpcb_common.send("post", "https://cpcb.example/token")
+    assert sent[0][1]["retries"] == 3  # CPCB often times out on one request
+    assert "retries" not in sent[1][1]  # a POST may not be safe to repeat

@@ -1,6 +1,11 @@
 # vayuayan (development version)
 
 * Added `plot_aqi_radial()` to draw daily AQI as a radial calendar
+* New `plot_aqi_radial_hourly()`: hourly AQI on a 24-hour clock in IST.
+* CPCB repository downloads retry timeouts and 5xx errors.
+* `cpcb_get_live_aqi_data()` returns a numeric `airQualityIndex`, `NA` when
+  CPCB has no AQI for the hour.
+* New article "PM2.5 by hour of the day: Mumbai and Bengaluru (2023)".
 * `cpcb_city_daily()` returns `year` and `date` columns and takes several
   years at once.
 * Added `aqi_color()` for CPCB colour of an AQI value.

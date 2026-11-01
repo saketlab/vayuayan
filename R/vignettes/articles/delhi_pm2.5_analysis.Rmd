@@ -41,17 +41,17 @@ data for one policy question:
 
 > Do the 46 CPCB ground monitoring stations give sufficient coverage of the
 > full spatial extent of pollution in Delhi? Or do some regions not have
-> sufficient monitors, so that the network systematically misses their PM2.5?
+> sufficient stations, so that the network systematically misses their PM2.5?
 
 The analysis has four steps:
 
 1. The seasonal trend shows if the satellite data and the ground data agree on
    the pollution cycle of Delhi.
 2. The spatial heatmap shows where pollution in Delhi is highest.
-3. The station network map shows the locations of the 46 sensors in relation
+3. The station network map shows the locations of the 46 stations in relation
    to that pollution.
 4. The monitoring gap analysis finds the wards (of the 290 wards) that are
-   farthest from their nearest sensor. It also finds if there is a relation
+   farthest from their nearest station. It also finds if there is a relation
    between that distance and the disagreement between ground and satellite
    data.
 
@@ -346,16 +346,16 @@ ggsave(file.path(fig_dir, "fig3_choropleth_stations.png"), width = 9, height = 7
 ```
 
 The choropleth shows a high concentration of stations in central and south
-Delhi. Some outer wards have relatively high PM2.5, but they have no sensors
-or only a small number of sensors near them.
+Delhi. Some outer wards have relatively high PM2.5, but they have no stations
+or only a small number of stations near them.
 
 ---
 
 ## Monitoring gap analysis
 
-This section examines the primary question. Which wards do not have sufficient
-monitors? Is there a relation between the distance to a sensor and the
-disagreement between ground and satellite data?
+The gap analysis finds the wards that do not have sufficient stations. It also
+tests for a relation between the distance to a station and the disagreement
+between ground and satellite data.
 
 ### Concept
 
@@ -486,7 +486,7 @@ ggsave(file.path(fig_dir, "fig4_monitoring_gap_map.png"), width = 9, height = 7.
 
 ### Priority map
 
-```{r priority-map, fig.height=7, fig.cap="Priority wards for new CPCB stations. Red = high pollution and poor sensor coverage (>2 km from nearest station). Orange = poor coverage only. Green = well monitored."}
+```{r priority-map, fig.height=7, fig.cap="Priority wards for new CPCB stations. Red = high pollution and poor station coverage (>2 km from nearest station). Orange = poor coverage only. Green = well monitored."}
 ggplot() +
   geom_sf(
     data = delhi_wards, aes(fill = priority),
@@ -523,9 +523,9 @@ ggplot() +
 ggsave(file.path(fig_dir, "fig5_priority_map.png"), width = 9, height = 7, dpi = 300)
 ```
 
-### Sensor distance vs disagreement
+### Station distance vs disagreement
 
-```{r scatter, fig.height=5, fig.cap="Relation between sensor distance and ground-satellite disagreement across 290 Delhi wards. The LOESS fit with 95% CI can show a non-linear trend."}
+```{r scatter, fig.height=5, fig.cap="Relation between station distance and ground-satellite disagreement across 290 Delhi wards. The LOESS fit with 95% CI can show a non-linear trend."}
 cor_val <- cor(
   delhi_wards$nearest_winter_km,
   abs(delhi_wards$delta),
@@ -612,7 +612,7 @@ largest disagreement between satellite estimates and ground readings (refer to
 the scatter plot). With 290 data points, the LOESS fit is statistically
 meaningful. It shows the non-linear structure of this relation. The priority
 map shows the wards where a new station will have the largest effect. These
-wards have above-median satellite PM2.5 and low sensor coverage (>2 km from
+wards have above-median satellite PM2.5 and low station coverage (>2 km from
 the nearest station).
 
 ---

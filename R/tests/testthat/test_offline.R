@@ -84,3 +84,33 @@ test_that("get_aqi_categories always returns a character vector", {
   expect_identical(get_aqi_categories(numeric(0)), character(0))
   expect_identical(get_aqi_categories(c(10, NA)), c("Good", "No Data"))
 })
+
+test_that("CPCB repository downloads retry, but not on 4xx", {
+  args <- NULL
+  local_mocked_bindings(
+    RETRY = function(verb, url, ..., times, terminate_on, quiet) {
+      args <<- list(times = times, terminate_on = terminate_on)
+      structure(list(status_code = 200L), class = "response")
+    },
+    stop_for_status = function(x, ...) invisible(x),
+    .package = "httr"
+  )
+  old <- options(vayuayan.cache_dir = tempfile())
+  on.exit(options(old), add = TRUE)
+  # the mock writes no file; only the call matters
+  suppressWarnings(.cpcb_download_repository("/AQI_daily/x.xlsx", "x.xlsx"))
+  expect_gt(args$times, 1)
+  expect_true(all(c(404L, 403L) %in% args$terminate_on))
+})
+
+test_that("the live AQI is numeric, NA when CPCB sends NA", {
+  station <- function(avg) {
+    st <- data.frame(id = "site_1", name = "A", avg = avg, lastUpdate = "x")
+    st$pollutants <- list(NULL)
+    st
+  }
+  local_mocked_bindings(.cpcb_rss_stations = function() station("NA"))
+  expect_identical(cpcb_get_live_aqi_data_for_station("site_1")$airQualityIndex, NA_real_)
+  local_mocked_bindings(.cpcb_rss_stations = function() station("87"))
+  expect_identical(cpcb_get_live_aqi_data_for_station("site_1")$airQualityIndex, 87)
+})

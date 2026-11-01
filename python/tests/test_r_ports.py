@@ -288,11 +288,16 @@ def test_raw_readings_skip_stations_without_data(monkeypatch):
     def fake_raw(station, year, save_location, tidy=False):
         if station == "site_2":
             raise DataNotFoundError("none")
+        if station == "site_3":
+            raise requests.exceptions.ReadTimeout("CPCB did not answer")
         return pd.DataFrame({"station_id": [station] * 2, "pollutant": ["PM2.5", "RH"],
                              "value": [1.0, 2.0]})  # fmt: skip
 
     monkeypatch.setattr(client, "download_raw_aqi_data_station_level", fake_raw)
-    out = client.raw_readings(["site_1", "site_2"], 2026, pollutants=["PM2.5"])
+    # a station that keeps timing out is skipped; the others are kept
+    out = client.raw_readings(
+        ["site_1", "site_2", "site_3"], 2026, pollutants=["PM2.5"]
+    )
     assert out.to_dict("list") == {
         "station_id": ["site_1"],
         "pollutant": ["PM2.5"],

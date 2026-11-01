@@ -136,8 +136,10 @@ cpcb_city_daily <- function(city, year,
     }))
     .cpcb_prefetch(wanted)
     for (i in missing) {
-      .cpcb_save_year(listings[[sheets$city[i]]], sheets$year[i], sheets$path[i],
-        paste("city", sheets$city[i]))
+      .cpcb_save_year(
+        listings[[sheets$city[i]]], sheets$year[i], sheets$path[i],
+        paste("city", sheets$city[i])
+      )
     }
   }
   per_sheet <- Map(function(name, y, path) {

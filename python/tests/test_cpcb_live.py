@@ -62,3 +62,31 @@ def test_get_live_aqi_data_for_station_falls_back_to_rss_metrics(monkeypatch, rs
             "avgDesc": "28-06-2026 18:00:00",
         },
     ]
+
+
+def test_live_aqi_is_a_number_or_none(monkeypatch, rss_feed):
+    import copy
+
+    client = CPCBLive()
+    monkeypatch.setattr(client, "_make_request", raise_connection_error)
+    offline = copy.deepcopy(RSS_STATIONS)
+    offline[0]["stationsInCity"][0]["airQualityIndex"] = {"value": "NA"}
+    rss_feed(offline)
+    assert client.get_live_aqi_data_for_station("site_5587", "x")[
+        "airQualityIndex"
+    ] == {"value": None}
+
+    client = CPCBLive()  # the client keeps the feed it read first
+    monkeypatch.setattr(client, "_make_request", raise_connection_error)
+    rss_feed(RSS_STATIONS)
+    data = client.get_live_aqi_data_for_station("site_5587", "x")
+    assert data["airQualityIndex"] == {"value": 56.0}
+
+
+def test_live_aqi_from_the_dashboard_is_a_number_or_none(monkeypatch):
+    client = CPCBLive()
+    reply = {"station_id": "site_1", "airQualityIndex": {"value": "NA"}}
+    monkeypatch.setattr(client, "_make_request", lambda url, payload: reply)
+    data = client.get_live_aqi_data_for_station("site_1", "x")
+    assert data["airQualityIndex"]["value"] is None
+    assert reply["airQualityIndex"]["value"] == "NA"  # the reply is not changed

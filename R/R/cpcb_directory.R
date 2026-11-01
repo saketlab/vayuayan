@@ -241,11 +241,13 @@
   dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
   partial <- paste0(dest, ".part")
   on.exit(unlink(partial))
-  res <- httr::GET(
-    .cpcb_new_api("download-excel-file"),
+  # CPCB often times out on one request; 4xx is not retried
+  res <- httr::RETRY(
+    "GET", .cpcb_new_api("download-excel-file"),
     query = list(file_name = filepath),
     httr::write_disk(partial, overwrite = TRUE),
-    httr::timeout(120)
+    httr::timeout(120),
+    times = 4, pause_base = 1, pause_cap = 8, terminate_on = 400:499, quiet = TRUE
   )
   httr::stop_for_status(res)
   file.rename(partial, dest)

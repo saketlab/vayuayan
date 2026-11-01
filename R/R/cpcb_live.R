@@ -142,9 +142,10 @@ cpcb_get_nearest_stations <- function(coords = NULL, k = 5, max_distance_km = In
 #'   name is enough when it picks one station (e.g. \code{"Anand Vihar, Delhi"}).
 #' @param date_time Ignored; the feed holds only the latest reading.
 #' @return List with \code{station_id}, \code{station_name},
-#'   \code{lastUpdate}, \code{airQualityIndex} and a \code{metrics} data
-#'   frame of pollutant readings (\code{name}, \code{avg}, \code{min},
-#'   \code{max}, \code{avgDesc}).
+#'   \code{lastUpdate}, \code{airQualityIndex} (numeric; \code{NA} when CPCB
+#'   has no AQI for the hour) and a \code{metrics} data frame of pollutant
+#'   readings (\code{name}, \code{avg}, \code{min}, \code{max},
+#'   \code{avgDesc}).
 #' @examplesIf interactive()
 #' aqi <- cpcb_get_live_aqi_data_for_station(station_id = "site_103")
 #' @export
@@ -182,7 +183,7 @@ cpcb_get_live_aqi_data_for_station <- function(station_id, date_time = NULL) {
     station_id = st$id,
     station_name = st$name,
     lastUpdate = st$lastUpdate,
-    airQualityIndex = st$avg,
+    airQualityIndex = suppressWarnings(as.numeric(st$avg %||% NA)), # "NA" -> NA
     metrics = metrics
   )
 }

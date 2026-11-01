@@ -121,6 +121,7 @@ class CPCBDirectory(RSSFeed):
             params=params,
             json=json_data,
             timeout=30,
+            retries=0,  # callers fall back to the snapshot or the legacy API
         )
         # CPCB answers 204 with an empty body when a query matches nothing
         if not response.content:

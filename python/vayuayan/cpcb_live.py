@@ -175,7 +175,8 @@ class CPCBLive(RSSFeed):
             date_time: Date and time in 'YYYY-MM-DDTHH:00:00Z' format.
 
         Returns:
-            Live air quality data dictionary.
+            Live air quality data dictionary. airQualityIndex["value"] is a
+            float, or None when CPCB has no AQI for the hour ("NA").
 
         Raises:
             ValueError: If a parameter is not valid.
@@ -194,29 +195,31 @@ class CPCBLive(RSSFeed):
             "CPCB live parameters failed (%s)",
         )
         if data is not None:
-            return data
+            return _with_numeric_aqi(data)
 
         cities = self._rss_cities()
         if not cities:
             raise NetworkError("No CPCB live data source is available")
         for _, station in iter_city_stations(cities):
             if station_id in (station.get("id"), station.get("name")):
-                return {
-                    "station_id": station.get("id"),
-                    "station_name": station.get("name"),
-                    "lastUpdate": station.get("lastUpdate"),
-                    "airQualityIndex": station.get("airQualityIndex", {}),
-                    "metrics": [
-                        {
-                            "name": pollutant.get("indexId"),
-                            "avg": pollutant.get("avg"),
-                            "min": pollutant.get("min"),
-                            "max": pollutant.get("max"),
-                            "avgDesc": station.get("lastUpdate", date_time),
-                        }
-                        for pollutant in station.get("pollutants", [])
-                    ],
-                }
+                return _with_numeric_aqi(
+                    {
+                        "station_id": station.get("id"),
+                        "station_name": station.get("name"),
+                        "lastUpdate": station.get("lastUpdate"),
+                        "airQualityIndex": station.get("airQualityIndex", {}),
+                        "metrics": [
+                            {
+                                "name": pollutant.get("indexId"),
+                                "avg": pollutant.get("avg"),
+                                "min": pollutant.get("min"),
+                                "max": pollutant.get("max"),
+                                "avgDesc": station.get("lastUpdate", date_time),
+                            }
+                            for pollutant in station.get("pollutants", [])
+                        ],
+                    }
+                )
         raise StationNotFoundError(f"Station {station_id} not in the CPCB RSS feed")
 
     def get_live_aqi_data(
@@ -253,3 +256,13 @@ class CPCBLive(RSSFeed):
         )
         aqi_data = self.get_live_aqi_data_for_station(station_id, date_time)
         return self._clean_pollution_data(aqi_data)
+
+
+def _with_numeric_aqi(data: Dict[str, Any]) -> Dict[str, Any]:
+    """airQualityIndex value as a float; None where CPCB sends "NA" or nothing."""
+    aqi = dict(data.get("airQualityIndex") or {})
+    try:
+        aqi["value"] = float(aqi["value"])
+    except (KeyError, TypeError, ValueError):
+        aqi["value"] = None
+    return {**data, "airQualityIndex": aqi}

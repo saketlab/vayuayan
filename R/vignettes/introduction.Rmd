@@ -43,7 +43,6 @@ Together, "Vayuayan" means "the path of wind."
 ## Installation
 
 ```{r install, eval=FALSE}
-# Install from GitHub
 devtools::install_github("saketlab/vayuayan", subdir = "R")
 ```
 
@@ -51,7 +50,7 @@ devtools::install_github("saketlab/vayuayan", subdir = "R")
 
 The package gives access to three data sources:
 
-1. WUSTL ACAG satellite PM2.5 data from Washington University
+1. The WUSTL ACAG satellite PM2.5 data from Washington University
    - Global coverage at 0.01 degree (approximately 1 km) resolution
    - Monthly and annual data (1998 to 2024, product V6.GL.03)
 

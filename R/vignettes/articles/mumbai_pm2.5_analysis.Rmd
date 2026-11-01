@@ -45,7 +45,7 @@ help with one policy question:
 
 > Do the 30 CPCB ground monitoring stations give sufficient coverage of the
 > full spatial extent of pollution in Mumbai? Or do some localities have an
-> insufficient number of monitors? If so, is the PM2.5 of these localities
+> insufficient number of stations? If so, is the PM2.5 of these localities
 > systematically missing from the network data?
 
 The analysis has four steps:
@@ -53,10 +53,10 @@ The analysis has four steps:
 1. The seasonal trend shows if the satellite data and the ground data agree on
    the pollution cycle of Mumbai.
 2. The spatial heatmap shows where pollution in Mumbai is highest.
-3. The station network map shows the locations of the 30 sensors in relation
+3. The station network map shows the locations of the 30 stations in relation
    to that pollution.
 4. The gap analysis finds the localities that are farthest from their nearest
-   sensor. The gap analysis also finds if that distance predicts the
+   station. The gap analysis also finds if that distance predicts the
    disagreement between ground data and satellite data.
 
 ---
@@ -232,7 +232,7 @@ ggplot(mumbai_final, aes(x = month)) +
 ggsave(file.path(fig_dir, "fig1_mumbai_seasonal_trend.png"), width = 9, height = 6, dpi = 300)
 ```
 
-The line chart shows a clear seasonal cycle in Mumbai. PM2.5 is highest from
+The line chart shows the seasonal cycle of Mumbai. PM2.5 is highest from
 October to January. PM2.5 decreases by a large quantity during the southwest
 monsoon (June to September). In Mumbai, heavy rain cleans the air, and PM2.5 in
 the monsoon months comes near safe levels. Delhi does not have this effect.
@@ -372,7 +372,7 @@ ggsave(file.path(fig_dir, "fig3_mumbai_choropleth_stations.png"), width = 9, hei
 ```
 
 The choropleth shows that most stations are in south and central Mumbai.
-Some northern localities have high PM2.5 but only a small number of sensors.
+Some northern localities have high PM2.5 but only a small number of stations.
 Most of these localities are in wards R and S.
 
 ---
@@ -382,8 +382,7 @@ Most of these localities are in wards R and S.
 ### Per-station winter ground data
 
 ```{r winter-ground}
-# Per-station 2022 data, averaged over winter months: Oct, Nov, Dec, Jan
-# Station CSVs cached to station_data_mumbai/
+# The station CSVs are cached in station_data_mumbai/
 station_ground <- cpcb_station_daily(
   mumbai_station_list$value, 2022,
   cache_dir = station_dir
@@ -417,9 +416,10 @@ nearest_idx <- apply(dist_matrix_winter, 1, which.min)
 mumbai_localities$nearest_ground_pm25 <- station_ground_sf$ground_pm25[nearest_idx]
 mumbai_localities$nearest_winter_km <- apply(dist_matrix_winter, 1, min) / 1000
 
-# Delta = satellite at locality centroid − nearest station ground reading
-# All values expected to be negative; ground stations read higher (point-source bias)
-# Analysis focuses on *relative* disagreement across localities
+# Delta = satellite at locality centroid - nearest station ground reading.
+# All values are expected to be negative, because ground stations read higher
+# (point-source bias). The analysis uses the relative disagreement across
+# localities.
 mumbai_localities$delta <- mumbai_localities$sat_pm25_centroid -
   mumbai_localities$nearest_ground_pm25
 
@@ -504,7 +504,7 @@ ggsave(file.path(fig_dir, "fig4_mumbai_monitoring_gap_map.png"), width = 9, heig
 
 ### Priority map
 
-```{r priority-map, fig.height=8, fig.cap="Priority localities for new CPCB stations in Mumbai. Red = high pollution and poor sensor coverage (>2 km from nearest station). The priority map uses all 29 stations with valid coordinates."}
+```{r priority-map, fig.height=8, fig.cap="Priority localities for new CPCB stations in Mumbai. Red = high pollution and poor station coverage (>2 km from nearest station). The priority map uses all 29 stations with valid coordinates."}
 ggplot() +
   geom_sf(
     data = mumbai_localities, aes(fill = priority),
@@ -545,9 +545,9 @@ ggplot() +
 ggsave(file.path(fig_dir, "fig5_mumbai_priority_map.png"), width = 9, height = 8, dpi = 300)
 ```
 
-### Sensor distance vs disagreement
+### Station distance vs disagreement
 
-```{r scatter, fig.height=5, fig.cap="Relation between sensor distance and ground-satellite disagreement across 227 Mumbai localities. The LOESS fit shows the non-linear trend."}
+```{r scatter, fig.height=5, fig.cap="Relation between station distance and ground-satellite disagreement across 227 Mumbai localities. The LOESS fit shows the non-linear trend."}
 cor_val <- cor(
   mumbai_localities$nearest_winter_km,
   abs(mumbai_localities$delta),
@@ -607,7 +607,7 @@ keep pollutants near the surface.
 
 ## Spatial differences
 
-The heatmap shows a clear north-south gradient. The northern suburbs have
+The heatmap shows a north-south gradient. The northern suburbs have
 higher satellite PM2.5 than the southern peninsula. This gradient agrees with
 the concentration of industrial zones, construction activity, and traffic
 corridors in the north. The southern peninsula receives sea breezes from three
@@ -632,10 +632,8 @@ is highest in the outer northern wards.
   values.
 
 - 12 of the 30 registered Mumbai stations have no downloadable historical data
-  in the CPCB repository for any year. But these stations are in the station
-  registry. MPCB and BMC operate these stations. These stations are in central,
-  western, and eastern Mumbai. Thus, the delta map uses only the 18 stations
-  with 2022 readings. The priority map uses all 29 stations with valid
+  in the CPCB repository for any year (refer to Ground data). Thus, the delta
+  map uses only the 18 stations with 2022 readings. The priority map uses all 29 stations with valid
   coordinates.
 
 - `site_5102` (Vasai West) is outside the Mumbai city limits, in Palghar

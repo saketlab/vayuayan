@@ -29,12 +29,15 @@ def send(method: str, url: str, **kwargs: Any) -> requests.Response:
         method: HTTP method ('get' or 'post').
         url: Request URL.
         **kwargs: Arguments for http_client.request, such as headers, data,
-            session or timeout (default 30 seconds).
+            session, timeout (default 30 seconds) or retries (default 3 for
+            GET: CPCB often times out on one request; POST is not retried).
 
     Raises:
         requests.RequestException: If the request fails.
     """
     kwargs.setdefault("timeout", 30)
+    if method.lower() == "get":
+        kwargs.setdefault("retries", 3)
     return http_client.request(method, url, ssl_fallback=True, **kwargs)
 
 

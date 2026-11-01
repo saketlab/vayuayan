@@ -179,6 +179,8 @@ navbar:
         href: articles/mumbai_pm2.5_analysis.html
       - text: PM2.5 Comparison Across Metros (2022)
         href: articles/metro_wide_pm2.5_analysis_comparative_2022.html
+      - text: PM2.5 by Hour of the Day (2023)
+        href: articles/diurnal_pm25.html
       - text: Delhi PM2.5 - CPCB vs OAQ Monitors
         href: articles/delhi_pm25_oaq.html
       - text: Bengaluru - CPCB vs Airnet Sensors (2026)
@@ -287,6 +289,7 @@ reference:
   - plot_daily_record_difference
   - plot_sensor_vs_reference
   - plot_aqi_radial
+  - plot_aqi_radial_hourly
   - theme_vayuayan
 
 - title: "Satellite PM2.5 Data (WUSTL ACAG)"

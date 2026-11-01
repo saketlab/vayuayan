@@ -6,6 +6,14 @@ Releases and changes of vayuayan.
 v0.3.0 (unreleased)
 -------------------
 
+* New ``plot_aqi_radial_hourly``: hourly AQI on a 24-hour clock in IST.
+* CPCB GET requests retry timeouts and 5xx errors. ``raw_readings`` skips a
+  station that keeps failing, as in R.
+* ``get_live_aqi_data`` returns the AQI value as a float, ``None`` when CPCB
+  has no AQI for the hour.
+* The plot theme uses an installed font with a bold face (Arial on macOS).
+* New notebook ``08_diurnal_pm25``.
+
 **Breaking changes**
 
 * ``PM25Client()`` and ``vayuayan pm25`` default to V6.GL.03 (1998-2024). Use ``version="V6"`` for V6.GL.02.04, the only version with the Google Earth Engine fallback.

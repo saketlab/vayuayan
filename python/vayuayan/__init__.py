@@ -34,7 +34,7 @@ from .aqi import (
     pollutant_name,
     sub_index,
 )
-from .aqi_plots import plot_aqi_radial
+from .aqi_plots import plot_aqi_radial, plot_aqi_radial_hourly
 from .client import CPCBClient
 
 # Configuration functions
@@ -135,6 +135,7 @@ __all__ = [
     "plot_daily_record_difference",
     "plot_sensor_vs_reference",
     "plot_aqi_radial",
+    "plot_aqi_radial_hourly",
     "set_theme",
     # National AQI and tidy data
     "AQIResult",

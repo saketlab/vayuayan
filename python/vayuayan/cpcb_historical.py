@@ -20,6 +20,7 @@ from typing import (
     List,
     Optional,
     Tuple,
+    Type,
     Union,
     cast,
 )
@@ -417,14 +418,17 @@ class CPCBHistorical(CPCBDirectory):
 
         ids = [station_ids] if isinstance(station_ids, str) else list(station_ids)
         keep = None if pollutants is None else set(pollutants)
+        skip: Tuple[Type[BaseException], ...] = (
+            DataNotFoundError, StationNotFoundError, *cpcb_common.SOURCE_ERRORS
+        )  # fmt: skip
         frames = []
         for station in ids:
             try:
                 long = self.download_raw_aqi_data_station_level(
                     station, str(year), "", tidy=True
                 )
-            except (DataNotFoundError, StationNotFoundError) as e:
-                logger.warning("Skipped %s: %s", station, e)
+            except skip as e:
+                logger.warning("Skipped %s: %s", station, http_client.failure_reason(e))
                 continue
             frames.append(long if keep is None else long[long["pollutant"].isin(keep)])
         if not frames:

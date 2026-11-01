@@ -37,13 +37,12 @@ the historical CPCB data repository.
 The first article used the historical CPCB data repository (daily
 city/station-level PM2.5 CSVs) and WUSTL ACAG satellite data. Its question was:
 *where in Delhi are the largest monitoring gaps?* This article adds two new
-
 questions:
 
-> **Q1:** Does the full multi-pollutant OAQ data change what we know about the
+> Q1: Does the full multi-pollutant OAQ data change what we know about the
 > monitoring network that Delhi has now, in comparison with PM2.5 only?
 
-> **Q2:** When we add the OAQ CPCB stations, does the result of the monitoring
+> Q2: When we add the OAQ CPCB stations, does the result of the monitoring
 > gap analysis change? These stations have more pollutant metadata. Their
 > coordinates come directly from the platform.
 
@@ -156,8 +155,7 @@ session <- oaq_session()
 
 `oaq_get_stations_latest()` returns the last reading for all stations of a
 provider. The `"cpcb"` provider includes all 46 Delhi CAAQMS stations, with
-full pollutant coverage. The data includes the coordinates. Thus, it is not
-necessary to geocode the stations.
+full pollutant coverage. The data includes the coordinates.
 
 ```{r oaq-stations}
 oaq_delhi <- oaq_stations_table(session, "cpcb") %>%
@@ -289,7 +287,6 @@ ward gets the reading of its nearest station. The result is a ward map of
 ground measurements. This map adds to the satellite view.
 
 ```{r oaq-ward-pm25}
-# For each ward centroid, find the nearest OAQ station and its live PM2.5
 oaq_pm25_sf <- oaq_delhi_sf %>% filter(!is.na(pm25))
 ward_centroids <- sf::st_centroid(delhi_wards)
 
@@ -508,8 +505,7 @@ ggsave(file.path(fig_dir, "fig_oaq4_gap_map_oaq.png"), width = 9, height = 7.5, 
 ## Priority map comparison
 
 ```{r priority-comparison, fig.height=7, fig.width=12, fig.cap="Priority map comparison: CPCB historical coordinates (left, from the original article) vs OAQ live coordinates (right). Differences between the maps show where the coordinate source changes the conclusions of the gap analysis."}
-# Load original CPCB-based priority from the original analysis, if available
-# (Recompute here for self-containedness)
+# Recompute the CPCB-based priority so that this article runs alone
 cpcb_sf_pm25 <- cpcb_sf %>%
   left_join(
     delhi_station_list %>%
@@ -602,14 +598,13 @@ not. The ranked bubble chart that follows shows the full pollutant profile for
 the Delhi stations in operation.
 
 ```{r pollutant-profile, fig.height=8, fig.cap="Multi-pollutant profile for Delhi CPCB stations from OAQ. Each row is a station. Each column is a pollutant. Circle size and color show concentration. Gray shows a pollutant that the station does not measure, or a station that is offline."}
-# Tidy to long format, normalise within each pollutant for colour scaling
 oaq_long <- oaq_delhi %>%
   select(id, name, city, pm25, pm10, no2, o3, co, nox) %>%
   pivot_longer(
     cols = c(pm25, pm10, no2, o3, co, nox),
     names_to = "pollutant", values_to = "value"
   ) %>%
-  # Normalise within each pollutant so different units are comparable visually
+  # Pollutants have different units, so scale each pollutant to 0-1
   group_by(pollutant) %>%
   mutate(value_norm = (value - min(value, na.rm = TRUE)) /
     (max(value, na.rm = TRUE) - min(value, na.rm = TRUE))) %>%
@@ -619,7 +614,6 @@ oaq_long <- oaq_delhi %>%
       levels = c("pm25", "pm10", "no2", "o3", "co", "nox"),
       labels = c("PM2.5", "PM10", "NO₂", "O₃", "CO", "NOx")
     ),
-    # Shorten station names for the axis
     name_short = stringr::str_remove(name, ", Delhi.*$") %>%
       stringr::str_remove(", New Delhi.*$") %>%
       stringr::str_trunc(30)
@@ -710,12 +704,12 @@ we select the OAQ coordinates as the ground truth.
 ## Temporal caveat
 
 The satellite data is from November 2022, but the OAQ readings are live. Thus,
-the comparison in Part 5 is not a strict validation. Seasonal and year-to-year
+the satellite vs OAQ ground comparison is not a strict validation. Seasonal and year-to-year
 variation in Delhi PM2.5 can be more than 30%. Because of this variation, the
 satellite and ground readings will have different absolute values.
 
 The analysis gives the best results for *relative* spatial patterns. These
-patterns show the wards that do not have sufficient monitors. The absolute
+patterns show the wards that do not have sufficient stations. The absolute
 PM2.5 level does not change this result.
 
 ## Priority wards

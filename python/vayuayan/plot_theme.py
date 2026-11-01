@@ -33,11 +33,18 @@ DPI = 150
 
 
 def _installed_fonts() -> List[str]:
-    """The installed FONTS; a missing font in font.family warns on every text."""
+    """The installed FONTS; a missing font in font.family warns on every text.
+
+    Only fonts with a bold face count; macOS Helvetica loads as regular only."""
     from matplotlib import font_manager
 
-    installed = {f.name for f in font_manager.fontManager.ttflist}
-    return [f for f in FONTS if f in installed] or ["sans-serif"]
+    bold = {
+        f.name
+        for f in font_manager.fontManager.ttflist
+        if (f.weight if isinstance(f.weight, int)
+            else font_manager.weight_dict.get(f.weight, 400)) >= 600
+    }  # fmt: skip
+    return [f for f in FONTS if f in bold] or ["sans-serif"]
 
 
 def theme_rc(dpi: int = DPI) -> Dict[str, Any]:

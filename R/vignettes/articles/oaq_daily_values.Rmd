@@ -32,7 +32,7 @@ readings of that day.
 
 This article shows that the daily value is the mean until the last days of
 February 2026. From approximately 1 March 2026, the daily value is usually the
-**last 15-minute reading of the day**. The date of the change is not the same
+last 15-minute reading of the day. The date of the change is not the same
 for all sensors, but the differences are small. We see the change on all three
 providers (`cpcb`, `airnet`, `aurassure`), in Bengaluru, Delhi and Cuttack. For
 daily means from March 2026, use `oaq_daily_means()`.
@@ -54,7 +54,7 @@ labels <- c(
 
 # One day in detail
 
-This section uses `cpcb` sensor 103 (CRRI Mathura Road, Delhi) on 7 March
+The example is `cpcb` sensor 103 (CRRI Mathura Road, Delhi) on 7 March
 2026. `oaq_check_daily_records()` compares the daily value of OAQ (`record`)
 with the statistics of the readings of that day.
 

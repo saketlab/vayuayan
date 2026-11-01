@@ -106,13 +106,11 @@ stations_online <- all_stations |> filter(has_pm25)
 
 ggplot() +
   geom_sf(data = india_sf, fill = "#f5f5f5", color = "grey60", linewidth = 0.3) +
-  # Offline stations: hollow
   geom_point(
     data = stations_offline,
     aes(x = lon, y = lat, color = provider_label),
     shape = 1, size = 1.8, alpha = 0.5, stroke = 0.5
   ) +
-  # Online stations: filled, sized by PM2.5
   geom_point(
     data = stations_online,
     aes(x = lon, y = lat, color = provider_label, size = pm25),
@@ -197,12 +195,12 @@ ggsave(file.path(fig_dir, "fig_oaq_india_faceted.png"), width = 14, height = 5, 
 
 ---
 
-# Nearest CPCB neighbors for non-CPCB sensors
+# Nearest CPCB neighbors for non-CPCB stations
 
 For each Airnet and Aurassure station, `nearest_stations()` finds the 3
 nearest CPCB reference stations. It uses the haversine distance. You can use
-these pairs of low-cost sensors and near government monitors for calibration
-or cross-validation.
+these pairs of low-cost stations and nearby CPCB stations for calibration or
+cross-validation.
 
 ```{r nearest-cpcb-table}
 cpcb_stations <- all_stations |> filter(provider == "cpcb")
@@ -251,11 +249,11 @@ nearest_cpcb |>
 
 ---
 
-# Bengaluru: sensor network and nearest CPCB matches
+# Bengaluru: station network and nearest CPCB matches
 
 Airnet (47 stations) and Aurassure (1 station) have a high concentration in
 Bengaluru. Thus, Bengaluru is the only city where more than one low-cost
-network operates together with CPCB reference monitors. The map shows
+network operates together with CPCB reference stations. The map shows
 ward-level boundaries to give spatial context.
 
 
@@ -287,7 +285,6 @@ cat(
   "| Aurassure:", sum(blr_non_cpcb$provider == "aurassure"), ")\n"
 )
 
-# Nearest-CPCB pairs restricted to Bengaluru non-CPCB stations
 blr_segments <- nearest_cpcb |>
   filter(non_cpcb_id %in% blr_non_cpcb$id) |>
   mutate(inv_dist = 1 / dist_km)
@@ -299,14 +296,13 @@ blr_cpcb_bg <- blr_cpcb |> filter(!id %in% blr_cpcb_matched_ids)
 cat("Matched CPCB stations:", nrow(blr_cpcb_matched), "\n")
 ```
 
-```{r blr-map, fig.width=11, fig.height=10, fig.cap="Bengaluru sensor network. Triangles = Airnet (CSTEP) and Aurassure low-cost sensors. Filled circles = CPCB reference stations matched as nearest neighbors. Open circles = other CPCB stations. Lines connect each non-CPCB sensor to its 3 nearest CPCB stations. Line thickness and opacity ∝ 1/distance."}
+```{r blr-map, fig.width=11, fig.height=10, fig.cap="Bengaluru station network. Triangles = Airnet (CSTEP) and Aurassure low-cost stations. Filled circles = CPCB reference stations matched as nearest neighbors. Open circles = other CPCB stations. Lines connect each non-CPCB station to its 3 nearest CPCB stations. Line thickness and opacity ∝ 1/distance."}
 provider_colours <- c(
   "CPCB"           = "#2166ac",
   "Airnet (CSTEP)" = "#d6604d",
   "Aurassure"      = "#4dac26"
 )
 
-# Short name: strip city suffix for labels
 blr_non_cpcb <- blr_non_cpcb |>
   mutate(name_short = name |>
     stringr::str_remove(",?\\s*(Bengaluru|Bangalore).*$") |>
@@ -322,13 +318,11 @@ ggplot() +
     data = blr_boundary, fill = "#f7f7f7", color = "grey65",
     linewidth = 0.3
   ) +
-  # Background CPCB (unmatched)
   geom_point(
     data = blr_cpcb_bg,
     aes(x = lon, y = lat),
     shape = 1, size = 3, color = "grey70", stroke = 0.6
   ) +
-  # Connecting segments
   geom_segment(
     data = blr_segments,
     aes(
@@ -339,7 +333,6 @@ ggplot() +
     ),
     lineend = "round"
   ) +
-  # Matched CPCB stations
   geom_point(
     data = blr_cpcb_matched,
     aes(x = lon, y = lat),
@@ -352,7 +345,6 @@ ggplot() +
     segment.size = 0.3, box.padding = 0.4, force = 1.2,
     show.legend = FALSE
   ) +
-  # Non-CPCB sensors
   geom_point(
     data = blr_non_cpcb,
     aes(x = lon, y = lat, color = provider_label),
@@ -406,13 +398,12 @@ sf::sf_use_s2(FALSE)
 stations_sf <- all_stations |>
   sf::st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
-# Find name column in the GeoJSON
 state_col <- names(india_sf)[grep("name|NAME|state|STATE", names(india_sf),
   ignore.case = TRUE
 )[1]]
 cat("Using state name column:", state_col, "\n")
 
-# Snap coordinates to 0.0001-degree grid to eliminate floating-point topology errors
+# Snap coordinates to a 0.0001-degree grid to remove floating-point topology errors
 india_sf_snapped <- sf::st_set_precision(india_sf, 1e4) |> sf::st_make_valid()
 
 stations_with_state <- tryCatch(

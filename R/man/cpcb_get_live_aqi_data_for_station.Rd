@@ -14,9 +14,10 @@ name is enough when it picks one station (e.g. \code{"Anand Vihar, Delhi"}).}
 }
 \value{
 List with \code{station_id}, \code{station_name},
-\code{lastUpdate}, \code{airQualityIndex} and a \code{metrics} data
-frame of pollutant readings (\code{name}, \code{avg}, \code{min},
-\code{max}, \code{avgDesc}).
+\code{lastUpdate}, \code{airQualityIndex} (numeric; \code{NA} when CPCB
+has no AQI for the hour) and a \code{metrics} data frame of pollutant
+readings (\code{name}, \code{avg}, \code{min}, \code{max},
+\code{avgDesc}).
 }
 \description{
 Get the latest AQI reading for a station from the public CPCB station
