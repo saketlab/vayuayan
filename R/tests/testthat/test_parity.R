@@ -60,6 +60,7 @@ test_that("AQI categories match Python", {
   values <- .vec(lapply(parity$aqi_category, `[[`, "aqi"))
   want <- vapply(parity$aqi_category, `[[`, "", "category")
   expect_equal(get_aqi_categories(values), want)
+  expect_equal(aqi_color(values), .vec(lapply(parity$aqi_category, `[[`, "color")))
 })
 
 test_that("haversine distances match Python", {

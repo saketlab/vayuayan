@@ -59,6 +59,13 @@ AQI_CATEGORIES: Dict[str, Dict[str, int]] = {
     "Severe": {"min": 401, "max": 500},
 }
 
+AQI_COLORS: Dict[str, str] = dict(
+    zip(
+        AQI_CATEGORIES,
+        ("#00B050", "#92D050", "#FFFF00", "#FF9900", "#FF0000", "#C00000"),
+    )
+)
+
 # Default File Paths
 DEFAULT_DOWNLOAD_DIR: str = "downloads"
 

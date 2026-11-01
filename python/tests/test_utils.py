@@ -4,7 +4,9 @@ import numpy as np
 import pytest
 
 from vayuayan.utils import (
+    aqi_color,
     clean_station_name,
+    get_aqi_categories,
     get_aqi_category,
     haversine_distance,
     parse_cpcb_rss_station_data,
@@ -54,6 +56,18 @@ def test_get_aqi_category(value, category):
 
 def test_get_aqi_category_nan():
     assert get_aqi_category(np.nan) == "No Data"
+
+
+def test_get_aqi_categories_matches_the_scalar_version():
+    values = [-5, 0, 50, 50.4, 100, 100.5, 200, 300.2, 400, 401, 500, 900, np.nan, None]
+    expected = [get_aqi_category(np.nan if v is None else v) for v in values]
+    assert get_aqi_categories(values) == expected
+
+
+def test_aqi_color():
+    assert [aqi_color(v) for v in (42, 180, None, 450)] == [
+        "#00B050", "#FFFF00", None, "#C00000"
+    ]  # fmt: skip
 
 
 def test_haversine_zero_distance():

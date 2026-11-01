@@ -53,6 +53,7 @@ API = {
     "analyze_station_data": "analyze_station_data",
     "get_aqi_category": "get_aqi_category",
     "get_aqi_categories": "get_aqi_categories",
+    "aqi_color": "aqi_color",
     "haversine_distance": "haversine_distance",
     "nearest_stations": "nearest_stations",
     "india_boundary": "india_boundary",
@@ -113,6 +114,7 @@ API = {
     "plot_daily_record_series": "plot_daily_record_series",
     "plot_daily_record_difference": "plot_daily_record_difference",
     "plot_sensor_vs_reference": "plot_sensor_vs_reference",
+    "plot_aqi_radial": "plot_aqi_radial",
     "set_theme": "theme_vayuayan",
     "readings_mean": "readings_mean",
     "sensor_completeness": "sensor_completeness",
@@ -495,7 +497,11 @@ def build() -> Dict[str, Any]:
         "sub_index": _sub_index_cases(),
         "compute_aqi": [_aqi_case(aqi.compute_aqi, c) for c in AQI_CASES],
         "aqi_category": [
-            {"aqi": v, "category": utils.get_aqi_category(math.nan if v is None else v)}
+            {
+                "aqi": v,
+                "category": utils.get_aqi_category(math.nan if v is None else v),
+                "color": utils.aqi_color(v),
+            }
             for v in CATEGORY_VALUES
         ],
         "haversine": [

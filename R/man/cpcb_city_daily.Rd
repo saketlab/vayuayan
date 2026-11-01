@@ -9,13 +9,13 @@ cpcb_city_daily(city, year, cache_dir = NULL)
 \arguments{
 \item{city}{Character vector of city names.}
 
-\item{year}{Integer year.}
+\item{year}{Integer year, or a vector of years.}
 
 \item{cache_dir}{Optional directory for CSV copies of the sheets.}
 }
 \value{
-Data frame with columns \code{city}, \code{day}, \code{month} and
-\code{value}.
+Data frame with columns \code{city}, \code{year}, \code{day},
+\code{month}, \code{value} and \code{date}, sorted by city and date.
 }
 \description{
 Download (or reuse) the CPCB daily city file for each city and year and
@@ -27,5 +27,6 @@ saved as \code{<city>_aqi_<year>.csv} there and read back on later calls.
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 daily <- cpcb_city_daily(c("Delhi", "Mumbai"), 2022)
 aggregate(value ~ city + month, daily, mean)
+plot_aqi_radial(cpcb_city_daily("Delhi", 2018:2025))
 \dontshow{\}) # examplesIf}
 }

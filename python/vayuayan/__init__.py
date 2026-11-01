@@ -34,6 +34,7 @@ from .aqi import (
     pollutant_name,
     sub_index,
 )
+from .aqi_plots import plot_aqi_radial
 from .client import CPCBClient
 
 # Configuration functions
@@ -103,6 +104,7 @@ from .us_aqi import (
 # Utility functions for users
 from .utils import (
     analyze_station_data,
+    aqi_color,
     clean_station_name,
     convert_station_data_to_dataframe,
     get_aqi_categories,
@@ -132,6 +134,7 @@ __all__ = [
     "plot_daily_record_series",
     "plot_daily_record_difference",
     "plot_sensor_vs_reference",
+    "plot_aqi_radial",
     "set_theme",
     # National AQI and tidy data
     "AQIResult",
@@ -193,6 +196,7 @@ __all__ = [
     "analyze_station_data",
     "get_aqi_category",
     "get_aqi_categories",
+    "aqi_color",
     "nearest_stations",
     "stations_to_city_summary",
     "haversine_distance",

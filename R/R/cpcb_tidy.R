@@ -107,24 +107,43 @@ cpcb_raw_to_long <- function(raw, station = NULL, start_date = NULL, end_date = 
 #' saved as \code{<city>_aqi_<year>.csv} there and read back on later calls.
 #'
 #' @param city Character vector of city names.
-#' @param year Integer year.
+#' @param year Integer year, or a vector of years.
 #' @param cache_dir Optional directory for CSV copies of the sheets.
-#' @return Data frame with columns \code{city}, \code{day}, \code{month} and
-#'   \code{value}.
+#' @return Data frame with columns \code{city}, \code{year}, \code{day},
+#'   \code{month}, \code{value} and \code{date}, sorted by city and date.
 #' @examplesIf interactive()
 #' daily <- cpcb_city_daily(c("Delhi", "Mumbai"), 2022)
 #' aggregate(value ~ city + month, daily, mean)
+#' plot_aqi_radial(cpcb_city_daily("Delhi", 2018:2025))
 #' @export
 cpcb_city_daily <- function(city, year,
                             cache_dir = NULL) {
-  per_city <- lapply(city, function(name) {
-    path <- .cpcb_csv_copy(cache_dir, sprintf("%s_aqi_%s.csv", tolower(name), year))
-    if (!file.exists(path)) {
-      cpcb_download_city_data(name, year, path)
+  sheets <- expand.grid(year = as.integer(year), city = city, stringsAsFactors = FALSE)
+  sheets$path <- .cpcb_csv_copy(cache_dir, sprintf("%s_aqi_%s.csv", tolower(sheets$city), sheets$year))
+  missing <- which(!file.exists(sheets$path))
+  if (length(missing) > 0) {
+    # one listing per city covers all its years
+    cities <- unique(sheets$city[missing])
+    listings <- stats::setNames(lapply(cities, function(name) {
+      cpcb_get_file_path(city = name, frequency = "daily", data_type = "cityLevel")
+    }), cities)
+    wanted <- unlist(lapply(missing, function(i) {
+      for (entry in listings[[sheets$city[i]]]) {
+        if (identical(as.character(entry[["year"]]), as.character(sheets$year[i]))) {
+          return(entry[["filepath"]])
+        }
+      }
+    }))
+    .cpcb_prefetch(wanted)
+    for (i in missing) {
+      .cpcb_save_year(listings[[sheets$city[i]]], sheets$year[i], sheets$path[i],
+        paste("city", sheets$city[i]))
     }
-    cbind(city = name, cpcb_tidy_daily(path))
-  })
-  do.call(rbind, per_city)
+  }
+  per_sheet <- Map(function(name, y, path) {
+    cbind(city = name, year = y, cpcb_tidy_daily(path, year = y))
+  }, sheets$city, sheets$year, sheets$path)
+  do.call(rbind, unname(per_sheet))
 }
 
 #' Daily station-level AQI in long format

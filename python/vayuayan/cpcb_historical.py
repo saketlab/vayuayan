@@ -8,6 +8,7 @@ import io
 import logging
 import re
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 from typing import (
@@ -19,6 +20,7 @@ from typing import (
     List,
     Optional,
     Tuple,
+    Union,
     cast,
 )
 
@@ -39,6 +41,8 @@ if TYPE_CHECKING:
     import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+DOWNLOAD_WORKERS = 6
 
 
 # A four-digit year in a repository file path
@@ -583,30 +587,54 @@ class CPCBHistorical(CPCBDirectory):
         return df.head()
 
     def city_daily(
-        self, cities: Iterable[str], year: int, cache_dir: Optional[str] = None
+        self,
+        cities: Iterable[str],
+        year: Union[int, Iterable[int]],
+        cache_dir: Optional[str] = None,
     ) -> pd.DataFrame:
         """Daily city AQI in long format.
 
         Args:
             cities: City names (or one name).
-            year: Year.
+            year: Year, or several years.
             cache_dir: Optional directory for CSV copies of the sheets
                 (<city>_aqi_<year>.csv), read back on later calls. The default
                 is a temporary directory of this client.
 
         Returns:
-            DataFrame with columns city, day, month and value.
+            DataFrame with columns city, year, day, month, value and date
+            (datetime.date), sorted by city and date.
         """
         import pandas as pd
 
-        frames = []
-        for city in [cities] if isinstance(cities, str) else cities:
-            path = self._csv_copy(cache_dir, f"{city.lower()}_aqi_{year}.csv")
-            if not path.exists():
-                self.download_past_year_aqi_data_city_level(city, str(year), str(path))
-            sheet = pd.read_csv(path)
-            frames.append(cpcb_tidy_daily(sheet).assign(city=city))
-        return _first(pd.concat(frames, ignore_index=True), ["city"])
+        years = [int(year)] if isinstance(year, int) else [int(y) for y in year]
+        sheets = [
+            (city, y, self._csv_copy(cache_dir, f"{city.lower()}_aqi_{y}.csv"))
+            for city in ([cities] if isinstance(cities, str) else cities)
+            for y in years
+        ]
+        missing = [sheet for sheet in sheets if not sheet[2].exists()]
+        # one listing per city covers all its years
+        listings = {
+            city: self.get_file_path("", "", "", city, "", "daily", "cityLevel")
+            for city in dict.fromkeys(city for city, _, _ in missing)
+        }
+
+        def fetch(sheet: Tuple[str, int, Path]) -> None:
+            city, y, path = sheet
+            df = self._read_year_excel(listings[city], str(y))
+            if df is None:
+                raise DataNotFoundError(f"Data not found for city {city} in year {y}")
+            _save_csv(df, str(path))
+
+        # the shared Session is thread-safe for these cookie-less requests
+        with ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS) as pool:
+            list(pool.map(fetch, missing))
+        frames = [
+            cpcb_tidy_daily(pd.read_csv(path), y).assign(city=city, year=y)
+            for city, y, path in sheets
+        ]
+        return _first(pd.concat(frames, ignore_index=True), ["city", "year"])
 
     def station_daily(
         self, station_ids: Iterable[str], year: int, cache_dir: Optional[str] = None

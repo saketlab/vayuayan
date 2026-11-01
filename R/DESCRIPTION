@@ -23,6 +23,7 @@ Depends:
     R (>= 4.0.0)
 Imports:
     cli,
+    curl (>= 5.0.0),
     dplyr,
     httr,
     jsonlite,

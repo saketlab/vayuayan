@@ -21,6 +21,7 @@
   "analyze_station_data": "analyze_station_data",
   "get_aqi_category": "get_aqi_category",
   "get_aqi_categories": "get_aqi_categories",
+  "aqi_color": "aqi_color",
   "haversine_distance": "haversine_distance",
   "nearest_stations": "nearest_stations",
   "india_boundary": "india_boundary",
@@ -81,6 +82,7 @@
   "plot_daily_record_series": "plot_daily_record_series",
   "plot_daily_record_difference": "plot_daily_record_difference",
   "plot_sensor_vs_reference": "plot_sensor_vs_reference",
+  "plot_aqi_radial": "plot_aqi_radial",
   "set_theme": "theme_vayuayan",
   "readings_mean": "readings_mean",
   "sensor_completeness": "sensor_completeness",
@@ -2088,71 +2090,88 @@
  "aqi_category": [
   {
    "aqi": 0,
-   "category": "Good"
+   "category": "Good",
+   "color": "#00B050"
   },
   {
    "aqi": 1,
-   "category": "Good"
+   "category": "Good",
+   "color": "#00B050"
   },
   {
    "aqi": 50,
-   "category": "Good"
+   "category": "Good",
+   "color": "#00B050"
   },
   {
    "aqi": 50.4,
-   "category": "Satisfactory"
+   "category": "Satisfactory",
+   "color": "#92D050"
   },
   {
    "aqi": 50.6,
-   "category": "Satisfactory"
+   "category": "Satisfactory",
+   "color": "#92D050"
   },
   {
    "aqi": 51,
-   "category": "Satisfactory"
+   "category": "Satisfactory",
+   "color": "#92D050"
   },
   {
    "aqi": 100,
-   "category": "Satisfactory"
+   "category": "Satisfactory",
+   "color": "#92D050"
   },
   {
    "aqi": 101,
-   "category": "Moderate"
+   "category": "Moderate",
+   "color": "#FFFF00"
   },
   {
    "aqi": 200,
-   "category": "Moderate"
+   "category": "Moderate",
+   "color": "#FFFF00"
   },
   {
    "aqi": 250,
-   "category": "Poor"
+   "category": "Poor",
+   "color": "#FF9900"
   },
   {
    "aqi": 300,
-   "category": "Poor"
+   "category": "Poor",
+   "color": "#FF9900"
   },
   {
    "aqi": 301,
-   "category": "Very Poor"
+   "category": "Very Poor",
+   "color": "#FF0000"
   },
   {
    "aqi": 400,
-   "category": "Very Poor"
+   "category": "Very Poor",
+   "color": "#FF0000"
   },
   {
    "aqi": 401,
-   "category": "Severe"
+   "category": "Severe",
+   "color": "#C00000"
   },
   {
    "aqi": 500,
-   "category": "Severe"
+   "category": "Severe",
+   "color": "#C00000"
   },
   {
    "aqi": 999,
-   "category": "Severe"
+   "category": "Severe",
+   "color": "#C00000"
   },
   {
    "aqi": null,
-   "category": "No Data"
+   "category": "No Data",
+   "color": null
   }
  ],
  "haversine": [

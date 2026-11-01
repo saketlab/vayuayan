@@ -1,3 +1,13 @@
+# vayuayan (development version)
+
+* Added `plot_aqi_radial()` to draw daily AQI as a radial calendar
+* `cpcb_city_daily()` returns `year` and `date` columns and takes several
+  years at once.
+* Added `aqi_color()` for CPCB colour of an AQI value.
+* `cpcb_city_daily()` fetches each city's file list once and downloads
+  uncached workbooks in parallel. 
+* Imports curl (>= 5.0.0).
+
 # vayuayan 0.3.0
 
 ## Breaking changes

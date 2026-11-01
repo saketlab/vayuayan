@@ -31,6 +31,7 @@ import requests
 from . import http_client
 from .constants import (
     AQI_CATEGORIES,
+    AQI_COLORS,
     DEFAULT_HEADERS,
     DEFAULT_MAX_RETRIES,
     DEFAULT_TIMEOUT,
@@ -683,9 +684,42 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return c * 6371
 
 
+def aqi_category_index(aqi_values: Iterable[float]) -> Any:
+    """Position in AQI_CATEGORIES of each value as a float array, NaN if missing."""
+    import numpy as np
+    import pandas as pd
+
+    numeric = pd.to_numeric(pd.Series(list(aqi_values), dtype=object), errors="coerce")
+    values = numeric.to_numpy(dtype=float)
+    # a value on a bound belongs to the lower band
+    upper = [band["max"] for band in AQI_CATEGORIES.values()][:-1]
+    index = np.searchsorted(upper, values, side="left").astype(float)
+    index[np.isnan(values)] = np.nan
+    return index
+
+
 def get_aqi_categories(aqi_values: Iterable[float]) -> List[str]:
     """get_aqi_category of each value."""
-    return [get_aqi_category(v) for v in aqi_values]
+    import numpy as np
+
+    names = np.array([*AQI_CATEGORIES, "No Data"])
+    index = aqi_category_index(aqi_values)
+    return cast(
+        List[str],
+        names[np.nan_to_num(index, nan=len(AQI_CATEGORIES)).astype(int)].tolist(),
+    )
+
+
+def aqi_color(aqi_value: Optional[float]) -> Optional[str]:
+    """The CPCB colour of an AQI value as a hex code, or None if missing.
+
+    Example:
+        >>> aqi_color(180)
+        '#FFFF00'
+    """
+    return AQI_COLORS.get(
+        get_aqi_category(math.nan if aqi_value is None else aqi_value)
+    )
 
 
 def nearest_stations(

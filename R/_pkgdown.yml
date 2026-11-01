@@ -230,6 +230,7 @@ reference:
   - aqi_sub_index
   - aqi_pollutant_name
   - aqi_health_impact
+  - aqi_color
   - aqi_pollutant_category
   - daily_aqi
 
@@ -285,6 +286,7 @@ reference:
   - plot_daily_record_series
   - plot_daily_record_difference
   - plot_sensor_vs_reference
+  - plot_aqi_radial
   - theme_vayuayan
 
 - title: "Satellite PM2.5 Data (WUSTL ACAG)"

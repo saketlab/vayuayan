@@ -18,16 +18,42 @@ test_that("cpcb_tidy_daily reshapes a CPCB daily sheet", {
   unlink(path)
 })
 
+test_that("cpcb_city_daily lists each city once and prefetches all sheets", {
+  dir <- tempfile("vayuayan-")
+  listed <- character(0)
+  prefetched <- NULL
+  local_mocked_bindings(
+    cpcb_get_file_path = function(city, ...) {
+      listed <<- c(listed, city)
+      lapply(2022:2023, function(y) list(year = y, filepath = sprintf("/%s/%d.xlsx", city, y)))
+    },
+    .cpcb_prefetch = function(filepaths) prefetched <<- filepaths,
+    .cpcb_save_year = function(files, year, path, what) {
+      utils::write.csv(data.frame(Day = 1, March = year), path, row.names = FALSE)
+    }
+  )
+  out <- cpcb_city_daily(c("Pune", "Agra"), 2022:2023, cache_dir = dir)
+  expect_equal(listed, c("Pune", "Agra"))
+  expect_equal(prefetched, c("/Pune/2022.xlsx", "/Pune/2023.xlsx", "/Agra/2022.xlsx", "/Agra/2023.xlsx"))
+  expect_equal(out$value, c(2022, 2023, 2022, 2023))
+  unlink(dir, recursive = TRUE)
+})
+
 test_that("cached city and station files are read without downloading", {
   dir <- tempfile("vayuayan-")
   dir.create(dir)
   sheet <- data.frame(Day = 1:2, January = c(100, 120))
   utils::write.csv(sheet, file.path(dir, "delhi_aqi_2022.csv"), row.names = FALSE)
+  utils::write.csv(sheet, file.path(dir, "delhi_aqi_2023.csv"), row.names = FALSE)
   utils::write.csv(sheet, file.path(dir, "site_1_2022.csv"), row.names = FALSE)
 
   city <- cpcb_city_daily("Delhi", 2022, cache_dir = dir)
   expect_equal(unique(city$city), "Delhi")
   expect_equal(city$value, c(100, 120))
+  expect_equal(city$date, as.Date(c("2022-01-01", "2022-01-02")))
+  years <- cpcb_city_daily("Delhi", 2022:2023, cache_dir = dir)
+  expect_equal(years$year, c(2022L, 2022L, 2023L, 2023L))
+  expect_equal(format(years$date, "%Y"), c("2022", "2022", "2023", "2023"))
 
   local_mocked_bindings(
     .cpcb_require_station = function(name) list(station_id = name, station_name = name)

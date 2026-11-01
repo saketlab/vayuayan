@@ -164,6 +164,27 @@ compute_aqi <- function(concentrations) {
   Severe = "Respiratory effects even on healthy people"
 )
 
+# in category order; get_aqi_categories indexes into the names
+.aqi_colours <- stats::setNames(
+  c("#00B050", "#92D050", "#FFFF00", "#FF9900", "#FF0000", "#C00000"),
+  names(.aqi_health_impacts)
+)
+
+#' CPCB colour of an AQI value
+#'
+#' @description
+#' The colour CPCB uses for the National AQI category of each value, from
+#' green (Good) to dark red (Severe).
+#'
+#' @param aqi_value Numeric vector of AQI values.
+#' @return Character vector of hex colours, \code{NA} for missing values.
+#' @examples
+#' aqi_color(c(42, 180, NA, 450))
+#' @export
+aqi_color <- function(aqi_value) {
+  unname(.aqi_colours[get_aqi_categories(aqi_value)])
+}
+
 #' Possible health impact of an AQI value
 #'
 #' @description

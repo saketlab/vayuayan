@@ -252,6 +252,30 @@
   dest
 }
 
+# failures fall through to the sequential download, which reports them
+.cpcb_prefetch <- function(filepaths) {
+  names <- vapply(filepaths, function(f) .cpcb_cache_name(f) %||% NA_character_, "",
+    USE.NAMES = FALSE
+  )
+  roots <- c(vayuayan_cache_dir(), .python_cache_dir())
+  todo <- !is.na(names) & !duplicated(names)
+  todo[todo] <- vapply(names[todo], function(n) is.null(.cache_lookup(roots, n)), TRUE)
+  if (sum(todo) < 2) {
+    return(invisible())
+  }
+  dest <- file.path(vayuayan_cache_dir(), names[todo])
+  for (dir in unique(dirname(dest))) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  part <- paste0(dest, ".part")
+  urls <- paste0(
+    .cpcb_new_api("download-excel-file"), "?file_name=", curl::curl_escape(filepaths[todo])
+  )
+  res <- curl::multi_download(urls, part, progress = FALSE, timeout = 120)
+  ok <- res$success %in% TRUE & res$status_code %in% 200
+  file.rename(part[ok], dest[ok])
+  unlink(part[!ok])
+  invisible()
+}
+
 .cpcb_save_year <- function(data_files, year, save_location, what) {
   for (entry in data_files) {
     if (identical(as.character(entry[["year"]]), as.character(year))) {

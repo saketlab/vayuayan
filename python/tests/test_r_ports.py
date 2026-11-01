@@ -97,16 +97,25 @@ def test_city_daily_reuses_the_csv_copy(monkeypatch, tmp_path):
     client = CPCBHistorical()
     downloads = []
 
-    def fake_download(city, year, path):
-        downloads.append(city)
-        pd.DataFrame({"Day": [1, 30], "February": [100, 200]}).to_csv(path, index=False)
+    listings = []
 
-    monkeypatch.setattr(client, "download_past_year_aqi_data_city_level", fake_download)
+    def fake_listing(*args):
+        listings.append(args[3])
+        return [{"year": "2023"}]
+
+    def fake_download(entries, year):
+        downloads.append(year)
+        return pd.DataFrame({"Day": [1, 30], "February": [100, 200]})
+
+    monkeypatch.setattr(client, "get_file_path", fake_listing)
+    monkeypatch.setattr(client, "_read_year_excel", fake_download)
     for _ in range(2):
         out = client.city_daily("Delhi", 2023, cache_dir=str(tmp_path))
-    assert downloads == ["Delhi"]
+    assert listings == ["Delhi"] and downloads == ["2023"]
+    # tidying with the year drops 30 February
     assert out.to_dict("list") == {
-        "city": ["Delhi", "Delhi"], "day": [1, 30], "month": [2, 2], "value": [100.0, 200.0]
+        "city": ["Delhi"], "year": [2023], "day": [1], "month": [2], "value": [100.0],
+        "date": [date(2023, 2, 1)],
     }  # fmt: skip
 
 
@@ -323,3 +332,24 @@ def test_oaq_city_latest_uses_lower_case_paths(monkeypatch):
     monkeypatch.setattr(client, "_get", lambda path: paths.append(path) or {})
     client.get_city_latest("AIRNET", "Bengaluru")
     assert paths == ["provider=airnet/live/by_city/bengaluru/map_latest.json"]
+
+
+def test_city_daily_lists_each_city_once(monkeypatch, tmp_path):
+    client = CPCBHistorical()
+    listings = []
+
+    def fake_listing(*args):
+        listings.append(args[3])
+        return []
+
+    def fake_download(entries, year):
+        return pd.DataFrame({"Day": [1], "March": [int(year)]})
+
+    monkeypatch.setattr(client, "get_file_path", fake_listing)
+    monkeypatch.setattr(client, "_read_year_excel", fake_download)
+    out = client.city_daily(["Pune", "Agra"], [2022, 2023], cache_dir=str(tmp_path))
+    assert sorted(listings) == ["Agra", "Pune"]
+    assert out[["city", "year", "value"]].values.tolist() == [
+        ["Pune", 2022, 2022.0], ["Pune", 2023, 2023.0],
+        ["Agra", 2022, 2022.0], ["Agra", 2023, 2023.0],
+    ]  # fmt: skip

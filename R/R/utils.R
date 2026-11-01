@@ -66,7 +66,12 @@ get_aqi_category <- function(aqi_value) {
 #' get_aqi_categories(c(42, 180, NA, 450))
 #' @export
 get_aqi_categories <- function(aqi_values) {
-  vapply(aqi_values, get_aqi_category, character(1), USE.NAMES = FALSE)
+  aqi_values <- as.numeric(aqi_values)
+  # a value on a bound belongs to the lower band
+  upper <- .aqi_bands[c(FALSE, TRUE)][-6]
+  out <- names(.aqi_colours)[findInterval(aqi_values, upper, left.open = TRUE) + 1]
+  out[is.na(aqi_values)] <- "No Data"
+  out
 }
 
 #' Calculate haversine distance

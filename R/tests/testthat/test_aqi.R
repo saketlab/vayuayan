@@ -103,3 +103,9 @@ test_that("compute_aqi matches the CPCB calculator sample", {
   expect_equal(r$aqi, 114L)
   expect_equal(r$dominant_pollutant, "PM10")
 })
+
+test_that("get_aqi_categories matches get_aqi_category, and aqi_color follows it", {
+  values <- c(-5, 0, 50, 50.4, 100, 100.5, 200, 300.2, 400, 401, 500, 900, NA)
+  expect_equal(get_aqi_categories(values), vapply(values, get_aqi_category, ""))
+  expect_equal(aqi_color(c(42, 180, NA, 450)), c("#00B050", "#FFFF00", NA, "#C00000"))
+})
