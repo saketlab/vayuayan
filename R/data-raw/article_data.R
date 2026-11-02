@@ -24,8 +24,11 @@ if (!file.exists(diurnal)) {
   utils::write.csv(transform(raw, timestamp = format(timestamp, "%Y-%m-%d %H:%M:%S")), diurnal, row.names = FALSE)
 }
 
+invisible(cpcb_city_daily(c("Mumbai", "Bengaluru"), 2017:2025, cache_dir = "vignettes/data/diurnal"))
+
 files <- c(
   diurnal,
+  file.path("vignettes/data/diurnal", sprintf("%s_aqi_%d.csv", rep(c("mumbai", "bengaluru"), each = 9), 2017:2025)),
   file.path("vignettes/data/metro", sprintf("%s_aqi_%s.csv", tolower(metro), year)),
   file.path("vignettes/data", tolower(names(station_dirs)), sprintf("%s_aqi_%s.csv", tolower(names(station_dirs)), year)),
   list.files(file.path("vignettes", station_dirs), sprintf("_%s\\.csv$", year), full.names = TRUE)

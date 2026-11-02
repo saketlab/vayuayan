@@ -1,11 +1,11 @@
 ---
-title: "PM2.5 by hour of the day: Mumbai and Bengaluru (2023)"
+title: "PM2.5 by year and hour of the day: Mumbai and Bengaluru"
 output:
   rmarkdown::html_vignette:
     toc: true
     toc_depth: 3
 vignette: >
-  %\VignetteIndexEntry{PM2.5 by hour of the day: Mumbai and Bengaluru (2023)}
+  %\VignetteIndexEntry{PM2.5 by year and hour of the day: Mumbai and Bengaluru}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 ---
@@ -29,7 +29,23 @@ In this vignette, we show the hourly PM2.5 of 2023 at two CPCB stations: Powai
 in Mumbai, and Silk Board, a busy traffic junction in Bengaluru. We use
 `plot_aqi_radial_hourly()`, which draws each hour on a 24-hour clock in IST.
 
-## Download the data
+## Show the daily AQI over several years
+
+`plot_aqi_radial()` draws one ring per year. Here is the daily city AQI for
+2017 to 2025.
+
+```{r years}
+daily <- cpcb_city_daily(c("Mumbai", "Bengaluru"), 2017:2025,
+  cache_dir = here::here("vignettes/data/diurnal")
+)
+plot_aqi_radial(daily)
+```
+
+Mumbai is Moderate in winter and Satisfactory in the monsoon. Its Poor days
+fell from about 40 a year in 2021 to 2023 to 2 in 2024. Bengaluru is
+Satisfactory in most months.
+
+## Download the hourly data
 
 We download the raw 15-minute values with `cpcb_raw_readings()`. CPCB times are
 in IST.
