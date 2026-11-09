@@ -57,6 +57,17 @@ National AQI
    :members:
    :no-index:
 
+US AQI
+------
+
+.. automodule:: vayuayan.us_aqi
+   :members:
+   :no-index:
+
+.. automodule:: vayuayan.us_aqi_daily
+   :members:
+   :no-index:
+
 Tidy Data
 ---------
 

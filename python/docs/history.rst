@@ -13,8 +13,36 @@ v0.3.0 (unreleased)
   has no AQI for the hour.
 * The plot theme uses an installed font with a bold face (Arial on macOS).
 * New notebook ``08_diurnal_pm25``.
+* New ``daily_us_aqi`` and ``CPCBHistorical.daily_aqi(standard="us")``: the
+  daily US AQI from raw readings.
+* New ``CPCBHistorical.station_table``: every station with its ID, name, city,
+  state and coordinates. ``CPCBHistorical.download_city_report``: the report
+  export of all stations of a city as one table.
+* New ``CPCBHistorical.download_station_report``: a station's readings for any
+  period, from CPCB's report export, with no login.
+* New page :doc:`aqi_standards`.
+* ``station_table``, the station lookup and ``get_station_list`` share one
+  catalogue: the directory plus the stations only the RSS feed knows, with
+  their coordinates.
+* ``raw_readings`` and ``station_daily`` accept ``city=`` and ``state=`` in
+  place of station IDs. Single-station functions accept them to narrow an
+  ambiguous name.
+* ``download_city_report`` stops at the first timeout or connection failure and
+  returns what it has.
+* New terminal interface built on ``rich``: a menu, ``vayuayan live``, ``history``,
+  ``find`` and ``stations``, with official category colours and a year heatmap.
+  Every command has ``--json``, ``--no-input`` and documented exit codes.
+  See :doc:`cli_reference`. ``rich`` is a new required dependency.
+* ``CPCBClient.download_raw_data`` with ``site_id`` uses the repository API,
+  because ``/dataRepository/download_file`` answers 404.
 
 **Breaking changes**
+
+* The old CLI commands are removed: ``list_states``, ``list_cities``, ``list_stations``, ``station_table``, ``city_report``, ``city_data``, ``station_data``, ``daily_aqi``, ``locate_me``, ``nearest_station`` and ``live_aqi``. Use ``vayuayan stations``, ``find``, ``live`` and ``history`` (``--save``, ``--computed``, ``--from`` and ``--to``). ``vayuayan pm25`` now takes ``GEOJSON YEAR`` as positional arguments and ``--group-by``. The Python API is unchanged.
+* CLI exit codes changed: see :doc:`cli_reference`.
+* The NAQI follows the continuous form of CPCB's calculator: each band starts at the top of the band below, so PM2.5 31 gives 51.67, not 51.
+* PM2.5 polygon statistics count the cells whose centres are inside the polygon; a polygon with no centre uses the cells it touches. A polygon outside the grid raises ``ValueError``.
+* ``compute_us_aqi``: 8-hour O3 above 0.200 ppm with no 1-hour value gives no AQI, with a warning. 1-hour SO2 of 305 ppb or more with no 24-hour value gives 200.
 
 * ``PM25Client()`` and ``vayuayan pm25`` default to V6.GL.03 (1998-2024). Use ``version="V6"`` for V6.GL.02.04, the only version with the Google Earth Engine fallback.
 * ``CPCBHistorical.get_file_path()`` raises ``NetworkError`` when CPCB does not answer, instead of returning ``[]``.

@@ -69,13 +69,13 @@ Command Line Interface
 .. code-block:: bash
 
    # List available states
-   vayuayan list_states
+   vayuayan stations --state Kerala
 
    # Get city data for Mumbai in 2024
-   vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_aqi.csv"
+   vayuayan history mumbai 2024 --save mumbai_aqi.csv
 
    # Get live AQI data for your location
-   vayuayan live_aqi --path "current_aqi.json"
+   vayuayan live
 
 .. toctree::
    :maxdepth: 2
@@ -104,6 +104,14 @@ The ``notebooks/`` directory has interactive notebooks with examples:
    notebooks/06_oaq_sensor_quality
    notebooks/07_oaq_daily_values
    notebooks/08_diurnal_pm25
+
+AQI Standards
+=============
+
+.. toctree::
+   :maxdepth: 2
+
+   aqi_standards
 
 API Reference
 =============

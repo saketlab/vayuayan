@@ -45,42 +45,22 @@ Vayuayan keeps CPCB files of past years in `~/.cache/vayuayan`. To use a differe
 ### Command Line Interface
 
 ```bash
-# List available states/regions for AQI data
-vayuayan list_states
-
-# List cities in a state
-vayuayan list_cities "Maharashtra"
-
-# List monitoring stations in a city
-vayuayan list_stations "Mumbai"
-
-# Download historical city-level AQI data
-vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_aqi_2024.csv"
-
-# Download historical station-level data
-vayuayan station_data --station_id "site_5964" --year 2024 --path "station_data_2024.csv"
-
-# Compute the daily National AQI of a station from its raw 15-minute data
-vayuayan daily_aqi --station_id "site_301" --year 2024 --path "daily_aqi.csv"
-
-# Get your current location (IP-based)
-vayuayan locate_me
-
-# Find nearest monitoring station
-vayuayan nearest_station --lat 19.0760 --lon 72.8777
-
-# Get live air quality data
-vayuayan live_aqi --station_id "site_5964" --path "live_data.json"
-
-# Analyze PM2.5 satellite data for a region (combines all polygons)
-vayuayan pm25 --geojson_path "delhi_ncr.geojson" --year 2023 --month 11
-
-# Analyze PM2.5 data grouped by state
-vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11 --group_by state_name
-
-# Analyze PM2.5 data grouped by multiple columns (state and district)
-vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11 --group_by state_name,district_name
+vayuayan                          # open the menu
+vayuayan live                     # air quality near you
+vayuayan live anand vihar         # one station, no quotes needed
+vayuayan live mumbai              # every station of a city, worst first
+vayuayan history powai 2025       # a year as a calendar heatmap
+vayuayan history powai 2025 --standard us
+vayuayan history delhi 2024 --save delhi.csv
+vayuayan history delhi --from 2026-11-08 --to 2026-11-09 --hourly --save x.csv
+vayuayan find anand vihar
+vayuayan stations --state Kerala
+vayuayan pm25 districts.geojson 2023 --month 11 --group-by state_name
 ```
+
+`vayuayan live` with no place sends your IP address to ip-api.com to find your approximate location.
+
+For scripts and agents, `--json` prints one JSON document on stdout and `--no-input` forbids prompts. Exit codes: 0 success, 1 other error, 2 usage, 3 not found, 4 ambiguous, 5 no data, 6 network or CPCB down, 130 Ctrl-C. See the [CLI reference](https://vayuayan.saketlab.org/python/cli_reference.html).
 
 ### Python API
 

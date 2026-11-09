@@ -1,238 +1,244 @@
 Command Line Interface
 ======================
 
-The vayuayan command line interface gives access to all functions of the package.
-
-Basic Usage
------------
+``vayuayan`` shows air quality in India in the terminal. Run it with no command
+for a menu, or use one of the commands below.
 
 .. code-block:: bash
 
-   vayuayan [command] [options]
-
-To show all the commands:
-
-.. code-block:: bash
-
+   vayuayan                     # open the menu
+   vayuayan live                # air quality near you
+   vayuayan live anand vihar    # one station; no quotes needed
+   vayuayan live mumbai         # every station of a city, worst first
+   vayuayan history powai 2025  # a year as a calendar heatmap
+   vayuayan find anand vihar    # look up stations
    vayuayan --help
 
-Data Discovery Commands
------------------------
+Commands
+--------
 
-list_states
-~~~~~~~~~~~
+live
+~~~~
 
-List all the states that have AQI data.
-
-.. code-block:: bash
-
-   vayuayan list_states
-
-list_cities
-~~~~~~~~~~~
-
-List the cities in a state. The state is a name or a code, in any case.
+Show the current air quality.
 
 .. code-block:: bash
 
-   vayuayan list_cities "Maharashtra"
+   vayuayan live
+   vayuayan live powai
+   vayuayan live site_5112
+   vayuayan live mumbai --state Maharashtra
+   vayuayan live --lat 19.07 --lon 72.87
 
-list_stations
-~~~~~~~~~~~~~
+``PLACE`` is a station name, part of a name, a station ID or a city. A station
+shows a panel with the AQI, the category, the main pollutant, the place, the
+coordinates, the station ID and the time of the reading in IST. A city shows
+all its stations, worst AQI first.
 
-List the monitoring stations in a city, with their station IDs. The city is a
-name or a code, in any case. The list has offline stations too, and stations
-that are newer than the bundled station directory.
+With no place, the command finds your approximate location from your IP
+address and shows the nearest station that has a reading. Offline stations are
+skipped. If no station has a fresh reading, it shows the nearest older one and
+says so.
 
-.. code-block:: bash
+.. note::
 
-   vayuayan list_stations "Mumbai"
+   ``vayuayan live`` with no place sends your IP address to
+   `ip-api.com <http://ip-api.com>`_. The IP address is never shown or stored.
+   Give a place, or ``--lat`` and ``--lon``, to avoid the lookup.
 
-Historical Data Commands
-------------------------
+Options: ``--city``, ``--state`` to narrow a name; ``--lat`` and ``--lon``
+instead of your IP location.
 
-city_data
-~~~~~~~~~
+**The state of a reading.** Each reading is exactly one of:
 
-Download the AQI data of a city for one year.
+.. list-table::
+   :header-rows: 1
+   :widths: 15 60 10
 
-.. code-block:: bash
+   * - Status
+     - Meaning
+     - Exit code
+   * - ``live``
+     - CPCB has an AQI at most 3 hours old.
+     - 0
+   * - ``stale``
+     - CPCB's latest AQI is more than 3 hours old, or has no time.
+     - 0
+   * - ``offline``
+     - The station is not reporting, or is not in the feed.
+     - 5
+   * - ``no_reading``
+     - The station reported at a known time, but with no AQI.
+     - 5
+   * - ``fetch_failed``
+     - The feed could not be fetched. This says nothing about the station.
+     - 6
 
-   vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_aqi.csv"
+**What the pollutant numbers mean.** The values in CPCB's live feed are AQI
+sub-indices on the 0-500 scale, not concentrations in µg/m³. The table labels
+them that way:
 
-**Parameters:**
+- *24-hour avg* is the feed's ``avg``. The AQI is the highest of these.
+- *Latest hour* is ``Hourly_sub_index``.
+- *Lowest hour* and *Highest hour* are ``min`` and ``max``.
 
-- ``--city``: Name of the city (necessary)
-- ``--year``: Year of the data (necessary)
-- ``--path``: Output file path (necessary)
+This was checked by comparing the feed with CPCB's report export for one
+station and period. Concentrations of 13.57 to 15.17 µg/m³ of SO2 appear in the
+feed as 17 to 19, which are their sub-indices. Carbon monoxide in the feed
+reaches values such as 107, which cannot be mg/m³.
 
-station_data
-~~~~~~~~~~~~
+CPCB's feed can lag behind its other data. Check the time of the reading.
 
-Download the AQI data of a monitoring station for one year.
+history
+~~~~~~~
 
-.. code-block:: bash
-
-   vayuayan station_data --station_id "site_5964" --year 2024 --path "station_aqi.csv"
-
-**Parameters:**
-
-- ``--station_id``: ID of the monitoring station (necessary)
-- ``--year``: Year of the data (necessary)
-- ``--path``: Output file path (necessary)
-
-daily_aqi
-~~~~~~~~~
-
-Compute the daily National AQI of a station from its raw 15-minute data,
-with the CPCB breakpoints and rules (see ``vayuayan.aqi``).
-
-.. code-block:: bash
-
-   vayuayan daily_aqi --station_id "site_301" --year 2024 --path "daily_aqi.csv"
-
-**Parameters:**
-
-- ``--station_id``: ID of the monitoring station (necessary)
-- ``--year``: Year of the data (optional. The default is the current year.)
-- ``--path``: CSV file for the daily table, with the sub-index of each pollutant (optional)
-- ``--bulletin``: Use the 24 hours that end at 4 PM, like CPCB's daily bulletin. The default is calendar days. CPCB validates its data before it publishes, so the values can differ from the published daily AQI.
-
-Live Data Commands
-------------------
-
-locate_me
-~~~~~~~~~
-
-Get your current location from your IP address.
-
-.. code-block:: bash
-
-   vayuayan locate_me
-
-nearest_station
-~~~~~~~~~~~~~~~
-
-Find the nearest air quality monitoring station.
+Show the daily AQI of a place.
 
 .. code-block:: bash
 
-   # Using IP-based geolocation
-   vayuayan nearest_station
+   vayuayan history powai 2025
+   vayuayan history powai 2025 --month 11
+   vayuayan history powai 2025 --standard us
+   vayuayan history delhi 2024 --save delhi.csv
+   vayuayan history powai 2025 --computed --bulletin
 
-   # Using specific coordinates
-   vayuayan nearest_station --lat 19.0760 --lon 72.8777
+A station or a city with a year shows a heatmap with months down and days
+across. Each cell holds the number of its AQI category, so the map still reads
+without colour. A dot means no data. Below it are the mean, the worst and best
+days, the days with data and a count per category. A city also has a table by
+month.
 
-**Parameters:**
+``YEAR`` defaults to the last complete year.
 
-- ``--lat``: Latitude (optional. If you do not give it, the CLI uses the IP location.)
-- ``--lon``: Longitude (optional. If you do not give it, the CLI uses the IP location.)
+Options:
 
-live_aqi
+- ``--month``: one month, 1-12 or a name.
+- ``--standard``: ``india`` (default) or ``us``. Each value is coloured on the
+  scale of its own standard, and the output names the standard and shows its
+  legend. ``india`` uses CPCB's published daily AQI. ``us`` computes the US AQI
+  from a station's raw readings, which downloads much more data and needs one
+  station.
+- ``--computed``: compute India's AQI from raw readings instead of using the
+  published value. CPCB validates its data before publishing, so the values can
+  differ. Needs one station.
+- ``--bulletin``: use days that end at 4 PM, like CPCB's daily bulletin. Implies
+  ``--computed``.
+- ``--save FILE``: write the days as a CSV.
+
+**Readings for any period.** With ``--from`` and ``--to``, the command gives
+measured concentrations from CPCB's report export, for one station or for all
+stations of a city:
+
+.. code-block:: bash
+
+   vayuayan history delhi --from 2026-11-08 --to 2026-11-09 --hourly --save x.csv
+   vayuayan history powai --from 2026-11-08 --to 2026-11-08 --every 15min
+
+``--to`` with a date includes that whole day. ``--every`` takes ``15min``,
+``30min``, ``hourly`` (default), ``4hour``, ``8hour`` or ``daily``.
+``--pollutants`` takes a list such as ``PM2.5,NOx``. The terminal shows a summary
+per pollutant; ``--save`` or ``--json`` give every reading.
+
+find
+~~~~
+
+List the stations that match a name, with ID, name, city, state and coordinates.
+
+.. code-block:: bash
+
+   vayuayan find anand vihar
+   vayuayan find powai --save powai.csv
+
+stations
 ~~~~~~~~
 
-Get live air quality data.
+List monitoring stations. The terminal shows 40 rows with a hint; ``--all`` or
+``--limit`` change that.
 
 .. code-block:: bash
 
-   # For your current location
-   vayuayan live_aqi --path "current_aqi.json"
-
-   # For specific coordinates
-   vayuayan live_aqi --lat 19.0760 --lon 72.8777 --path "mumbai_aqi.json"
-
-   # For specific station
-   vayuayan live_aqi --station_id "site_5964" --path "station_aqi.json"
-
-   # For specific date and time
-   vayuayan live_aqi --date 2024-02-25 --hour 10 --path "historical_aqi.json"
-
-**Parameters:**
-
-- ``--lat``: Latitude (optional)
-- ``--lon``: Longitude (optional)
-- ``--station_id``: Station ID (optional)
-- ``--date``: Date in YYYY-MM-DD format (optional)
-- ``--hour``: Hour (0-23) (optional)
-- ``--path``: Output file path (optional)
-
-PM2.5 Data Commands
--------------------
+   vayuayan stations --state Kerala
+   vayuayan stations --city Delhi --save delhi.csv
+   vayuayan stations --all
 
 pm25
 ~~~~
 
-Get PM2.5 data for the geographic regions in a GeoJSON file.
+Satellite PM2.5 for the polygons of a GeoJSON file.
 
 .. code-block:: bash
 
-   # Analyze PM2.5 data for complete region
-   vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11
+   vayuayan pm25 districts.geojson 2023 --month 11
+   vayuayan pm25 districts.geojson 2023 --group-by state_name,district_name
 
-   # Analyze PM2.5 data grouped by state
-   vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11 --group_by state_name
+Options: ``--month``, ``--group-by``, ``--version`` (``V5``, ``V6`` or
+``V6GL03``, the default) and ``--region`` (``GL``, ``AS``, ``EU``, ``NA`` or
+``AF``).
 
-   # Analyze PM2.5 data grouped by multiple columns (state and district)
-   vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11 --group_by state_name,district_name
+Scripts and agents
+------------------
 
+Every command accepts these options, before or after its name:
 
-**Parameters:**
+- ``--json``: print one JSON document on stdout and nothing else. Progress and
+  warnings go to stderr.
+- ``--no-input``: never prompt. Prompts also never appear when stdin is not a
+  terminal, or with ``--json``.
+- ``--debug``: show the full error when something fails.
 
-- ``--geojson_path``: Path to the GeoJSON file of the region (necessary)
-- ``--year``: Year of the data (necessary)
-- ``--month``: Month (1-12) (optional. If you do not give it, the CLI uses annual data.)
-- ``--group_by``: One column or comma-separated columns for the polygon groups (optional)
-- ``--version``: Dataset version, ``V5`` (V5.GL.05.02, 1998-2023), ``V6`` (V6.GL.02.04, 1998-2023) or ``V6GL03`` (V6.GL.03, 1998-2024). Optional. The default is ``V6GL03``. Only ``V6`` has the Google Earth Engine fallback.
+Each document has ``status``, ``command`` and ``message``, then the fields of
+the command. ``status`` is ``ok``, ``ambiguous``, ``not_found``, ``no_data``,
+``network_error``, ``location_unknown``, ``usage_error`` or ``error``.
 
-Help and Information
---------------------
+.. code-block:: json
 
-cli-help
-~~~~~~~~
+   {"status": "ambiguous", "command": "live", "message": "Several places match 'anand vihar'.",
+    "query": "anand vihar",
+    "matches": [{"kind": "station", "id": "site_301", "name": "Anand Vihar, Delhi - DPCC",
+                 "city": "Delhi", "state": "Delhi", "latitude": 28.6476, "longitude": 77.3158}]}
 
-Show the full help of the CLI:
+For a station, ``live`` has ``reading``; for a city, ``readings``; each reading
+has its own ``status`` from the table above. A match has ``kind`` ``station``
+or ``city``. ``find`` lists every match with status ``ok``, because several
+matches are its normal answer. ``stations`` always returns every row with
+``--json``.
 
-.. code-block:: bash
+Exit codes
+----------
 
-   vayuayan --help
+.. list-table::
+   :header-rows: 1
+   :widths: 10 70
 
-Examples
---------
+   * - Code
+     - Meaning
+   * - 0
+     - Success
+   * - 1
+     - Other error, such as a file that could not be written
+   * - 2
+     - Wrong command or options
+   * - 3
+     - Place or file not found
+   * - 4
+     - The name matches several places
+   * - 5
+     - The place exists but has no data
+   * - 6
+     - Network failure, CPCB down, or location lookup failed
+   * - 130
+     - Stopped with Ctrl-C
 
-Complete Workflow Example
-~~~~~~~~~~~~~~~~~~~~~~~~~
+A city report that is only partly complete exits with 0. Its ``message`` says
+so, and with ``--json`` the document also has ``partial`` and
+``station_status``, the outcome of each station: ``ok``, ``no_data``,
+``not_found``, ``ambiguous``, ``outage``, ``not_attempted`` or ``error``. When
+CPCB is down before any station is fetched, the exit code is 6.
 
-.. code-block:: bash
+Colours
+-------
 
-   # 1. Find your location
-   vayuayan locate_me
-
-   # 2. Find nearest station
-   vayuayan nearest_station
-
-   # 3. Get current AQI
-   vayuayan live_aqi --path "current_aqi.json"
-
-   # 4. Explore available data
-   vayuayan list_states
-   vayuayan list_cities "Maharashtra"
-   vayuayan list_stations "Mumbai"
-
-   # 5. Download historical data
-   vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_2024.csv"
-
-Error Handling
---------------
-
-The CLI gives clear error messages and exit codes:
-
-- **Exit code 0**: Success
-- **Exit code 1**: General error, or the user stopped the command
-- **Exit code 2**: Invalid arguments
-
-Frequent errors and their solutions:
-
-- **Network timeout**: Make sure that the internet connection is on. Then run the command again.
-- **Invalid city or station**: Use the list commands to find the correct names and IDs.
-- **File permission errors**: Make sure that you can write to the output directory.
-- **Invalid coordinates**: Make sure that the latitude is from -90 to 90 and the longitude is from -180 to 180.
+The categories and colours of both standards come from ``vayuayan.constants``
+and ``vayuayan.us_aqi``. Text on a coloured cell is black or white, whichever
+has more contrast. The output honours ``NO_COLOR`` and uses no colour when
+piped; category names and band numbers remain.

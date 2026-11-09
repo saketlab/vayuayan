@@ -83,13 +83,13 @@ List Available Data
 .. code-block:: bash
 
    # List all states
-   vayuayan list_states
+   vayuayan stations
 
    # List cities in Maharashtra
-   vayuayan list_cities "Maharashtra"
+   vayuayan stations --state Maharashtra
 
    # List stations in Mumbai
-   vayuayan list_stations "Mumbai"
+   vayuayan stations --city Mumbai
 
 Download Historical Data
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -97,27 +97,24 @@ Download Historical Data
 .. code-block:: bash
 
    # Download city-level AQI data
-   vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_aqi.csv"
+   vayuayan history mumbai 2024 --save mumbai_aqi.csv
 
    # Download station-level AQI data
-   vayuayan station_data --station_id "site_5964" --year 2024 --path "station_aqi.csv"
+   vayuayan history site_5964 2024 --save station_aqi.csv
 
 Live Data Access
 ~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   # Get your current location
-   vayuayan locate_me
+   # Air quality near you (sends your IP address to ip-api.com)
+   vayuayan live
 
-   # Find nearest station
-   vayuayan nearest_station
+   # Air quality for a place
+   vayuayan live powai
 
-   # Get live AQI data
-   vayuayan live_aqi --path "current_aqi.json"
-
-   # Get live AQI for specific coordinates
-   vayuayan live_aqi --lat 19.0760 --lon 72.8777 --path "mumbai_aqi.json"
+   # Air quality at specific coordinates, as JSON
+   vayuayan live --lat 19.0760 --lon 72.8777 --json > mumbai_aqi.json
 
 PM2.5 Regional Data
 ~~~~~~~~~~~~~~~~~~~
@@ -125,7 +122,7 @@ PM2.5 Regional Data
 .. code-block:: bash
 
    # Get PM2.5 data for a region
-   vayuayan pm25 --geojson_path "region.geojson" --year 2024 --month 3 --combine
+   vayuayan pm25 region.geojson 2024 --month 3
 
 Error Handling
 --------------
