@@ -112,7 +112,7 @@ def test_live_with_only_a_city_filter(run):
 
 def test_filters_narrow_the_catalogue(run):
     # site_7 is in the catalogue but not the feed, so it reads as offline
-    assert run("live", "anand", "vihar", "--state", "UP") == 5
+    assert run("live", "vihar", "--state", "UP") == 5
     assert "site_7" in run.text
 
 
@@ -293,8 +293,8 @@ def test_old_commands_are_gone(run, command):
         (["history", "atlantis", "2025"], 3),
         (["find", "atlantis"], 3),
         (["stations", "--city", "Atlantis"], 3),
-        (["live", "anand", "vihar"], 4),
-        (["history", "anand", "vihar", "2025"], 4),
+        (["live", "vihar"], 4),
+        (["history", "vihar", "2025"], 4),
         (["live", "colaba"], 5),
         (["nonsense"], 2),
         (["live", "--nope"], 2),
@@ -380,7 +380,7 @@ def test_json_flag_works_before_the_command(run):
 
 
 def test_json_ambiguous_schema(run):
-    assert run("live", "anand", "vihar", "--json") == 4
+    assert run("live", "vihar", "--json") == 4
 
     document = run.document()
     assert document["status"] == "ambiguous"
@@ -417,14 +417,14 @@ def test_json_never_prompts_in_a_terminal(run, monkeypatch):
     run.terminal()
     answers(monkeypatch)
 
-    assert run("live", "anand", "vihar", "--json") == 4
+    assert run("live", "vihar", "--json") == 4
 
 
 def test_no_input_never_prompts_in_a_terminal(run, monkeypatch):
     run.terminal()
     answers(monkeypatch)
 
-    assert run("live", "anand", "vihar", "--no-input") == 4
+    assert run("live", "vihar", "--no-input") == 4
 
 
 def test_ambiguous_in_a_terminal_asks_and_continues(run, monkeypatch):
@@ -432,7 +432,7 @@ def test_ambiguous_in_a_terminal_asks_and_continues(run, monkeypatch):
     answers(monkeypatch, 1)
 
     assert run("find", "anand", "vihar") == 0
-    assert run("live", "anand", "vihar") in (0, 5)
+    assert run("live", "vihar") in (0, 5)
     assert "Anand Vihar, Delhi" in run.problem
 
 
@@ -441,7 +441,7 @@ def test_ambiguous_choice_applies_to_the_command(run, monkeypatch):
     run.live = FakeLive()
     answers(monkeypatch, 2)
 
-    run("history", "anand", "vihar", "2025")
+    run("history", "vihar", "2025")
 
     assert run.historical.calls[-1][1][0] == "site_7"
 
@@ -464,7 +464,7 @@ def test_ctrl_c_at_a_prompt_stops_quietly(run, monkeypatch):
     run.terminal()
     answers(monkeypatch, KeyboardInterrupt())
 
-    assert run("live", "anand", "vihar") == 130
+    assert run("live", "vihar") == 130
 
 
 def test_ip_failure_asks_for_a_place_in_a_terminal(run, monkeypatch):
@@ -721,3 +721,12 @@ def test_an_end_in_the_future_stops_at_the_last_whole_hour():
     now = datetime(2026, 11, 9, 15, 45)
 
     assert cli_parser.end_time("2026-11-09", now) == datetime(2026, 11, 9, 15)
+
+
+def test_a_bare_station_name_needs_no_city(run):
+    assert run("live", "anand", "vihar", "--json", "--no-input") in (0, 5)
+
+    document = run.document()
+    assert document["reading"]["station"]["id"] == "site_8"
+    assert [m["id"] for m in document["also_matches"]] == ["site_7"]
+    assert "--city Hapur" in run.problem

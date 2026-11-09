@@ -192,10 +192,13 @@ the command. ``status`` is ``ok``, ``ambiguous``, ``not_found``, ``no_data``,
 
 .. code-block:: json
 
-   {"status": "ambiguous", "command": "live", "message": "Several places match 'anand vihar'.",
-    "query": "anand vihar",
-    "matches": [{"kind": "station", "id": "site_301", "name": "Anand Vihar, Delhi - DPCC",
-                 "city": "Delhi", "state": "Delhi", "latitude": 28.6476, "longitude": 77.3158}]}
+   {"status": "ambiguous", "command": "live", "message": "Several places match 'bandra kurla'.",
+    "query": "bandra kurla",
+    "matches": [{"kind": "station", "id": "site_5392", "name": "Bandra Kurla Complex, Mumbai - IITM",
+                 "city": "Mumbai", "state": "Maharashtra", "latitude": 19.053536, "longitude": 72.84643}]}
+
+When a station name is shared by several cities, live and history use the
+city with the most stations and list the others in also_matches.
 
 For a station, ``live`` has ``reading``; for a city, ``readings``; each reading
 has its own ``status`` from the table above. A match has ``kind`` ``station``

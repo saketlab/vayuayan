@@ -231,7 +231,7 @@ def test_live_city_with_no_readings_is_no_data():
 
 def test_live_not_found_and_ambiguous():
     missing = commands.live_place(FakeLive(), _place("atlantis"), NOW)
-    several = commands.live_place(FakeLive(), _place("anand vihar"), NOW)
+    several = commands.live_place(FakeLive(), _place("vihar"), NOW)
 
     assert (missing.status, missing.exit_code) == ("not_found", 3)
     assert (several.status, several.exit_code) == ("ambiguous", 4)

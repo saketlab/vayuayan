@@ -12,7 +12,7 @@ import re
 import sys
 import warnings
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Callable, Dict, Iterator, List, Optional, Sequence
 
@@ -89,13 +89,28 @@ def _lookup(
         place = commands.lookup_place(
             CPCBHistorical(), " ".join(words), args.city, args.state
         )
+    if place.others:
+        assert place.station is not None
+        ctx.err.print(
+            f"Using {place.station.name}. Also: "
+            + "; ".join(f"{s.name} (--city {s.city})" for s in place.others),
+            markup=False,
+        )
     return _settle(ctx, place)
+
+
+def _with_others(result: CommandResult, place: PlaceResult) -> CommandResult:
+    """The result, naming any same-named stations the place was chosen over."""
+    if not place.others:
+        return result
+    others = [s.to_dict() for s in place.others]
+    return replace(result, data={**result.data, "also_matches": others})
 
 
 def _live_for(ctx: _Context, place: PlaceResult, save: str) -> CommandResult:
     """The live reading of a resolved place."""
     with _busy(ctx, "Fetching the latest reading..."):
-        return commands.live_place(CPCBLive(), place, save=save)
+        return _with_others(commands.live_place(CPCBLive(), place, save=save), place)
 
 
 def _live(ctx: _Context, args: argparse.Namespace) -> CommandResult:
@@ -144,7 +159,8 @@ def _history(ctx: _Context, args: argparse.Namespace) -> CommandResult:
         report = _report_request(args, year)
         place = _lookup(ctx, args, words)
         with _busy(ctx, "Downloading the report...") as progress:
-            return commands.history_report(client, place, report, progress)
+            result = commands.history_report(client, place, report, progress)
+            return _with_others(result, place)
 
     request = HistoryRequest(
         year=year if year is not None else date.today().year - 1,
@@ -156,7 +172,7 @@ def _history(ctx: _Context, args: argparse.Namespace) -> CommandResult:
     )
     place = _settle(ctx, commands.place_for_request(_lookup(ctx, args, words), request))
     with _busy(ctx, "Downloading the daily AQI...") as progress:
-        return commands.history(client, place, request, progress)
+        return _with_others(commands.history(client, place, request, progress), place)
 
 
 def _find(ctx: _Context, args: argparse.Namespace) -> CommandResult:

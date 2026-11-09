@@ -29,6 +29,8 @@ v0.3.0 (unreleased)
   with ``--json`` and ``--no-input``. See :doc:`cli_reference`.
 * ``--save`` writes CSV, JSON or Parquet by file extension, sorted ascending, and
   ``vayuayan live`` accepts it.
+* ``live`` and ``history`` take a station name shared by several cities: the
+  largest city wins and a note names the others.
 * ``CPCBClient.download_raw_data`` with ``site_id`` uses the token route.
 * New page :doc:`aqi_standards`.
 

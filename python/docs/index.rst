@@ -34,7 +34,7 @@ category colours. See :doc:`cli_reference`.
    vayuayan live anand vihar
 
 .. image:: assets/cli_live.png
-   :alt: Output of vayuayan live anand vihar: AQI 299, Poor, with pollutant sub-indices
+   :alt: Output of vayuayan live anand vihar: AQI 304, Very Poor, with pollutant sub-indices
 
 Overview
 --------

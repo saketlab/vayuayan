@@ -459,7 +459,7 @@ def test_problem_without_a_message_shows_its_status():
 
 
 def test_ambiguous_listing_when_nobody_can_choose():
-    out, err = _render(commands.live_place(FakeLive(), _place("anand vihar"), NOW))
+    out, err = _render(commands.live_place(FakeLive(), _place("vihar"), NOW))
     text = " ".join(text_of(err).split())
 
     assert text_of(out) == ""

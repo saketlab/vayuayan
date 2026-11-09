@@ -69,7 +69,7 @@ def test_city_with_one_station_is_that_station(stations):
 
 
 def test_several_stations_are_ambiguous(stations):
-    place = resolve_place("anand vihar", stations)
+    place = resolve_place("vihar", stations)
 
     assert place.status == "ambiguous"
     assert [m.id for m in place.matches] == ["site_8", "site_7"]
@@ -156,3 +156,36 @@ def test_catalogue_of_an_empty_table_is_empty():
 
 def test_catalogue_turns_missing_coordinates_into_none(stations):
     assert [s for s in stations if s.id == "site_6"][0].latitude is None
+
+
+def test_a_shared_site_name_prefers_the_largest_city(stations):
+    place = resolve_place("anand vihar", stations)
+
+    assert place.status == "station"
+    assert place.station.city == "Delhi"
+    assert [s.city for s in place.others] == ["Hapur"]
+
+
+def test_equal_cities_stay_ambiguous():
+    twins = [
+        Station("a", "Civil Lines, Agra - X", "Agra", "UP"),
+        Station("b", "Civil Lines, Pune - X", "Pune", "MH"),
+    ]
+
+    assert resolve_place("civil lines", twins).status == "ambiguous"
+
+
+def test_a_longer_site_name_does_not_undo_the_choice():
+    named = [
+        Station("a", "Civil Lines, Agra - X", "Agra", "UP"),
+        Station("b", "Civil Lines, Pune - X", "Pune", "MH"),
+        Station("c", "Shivaji Nagar, Pune - X", "Pune", "MH"),
+        Station("d", "Civil Lines Extension, Agra - X", "Agra", "UP"),
+        Station("e", "Kothrud, Pune - X", "Pune", "MH"),
+    ]
+
+    assert resolve_place("civil lines", named).station.id == "b"
+
+
+def test_a_partial_name_stays_ambiguous(stations):
+    assert resolve_place("vihar", stations).status == "ambiguous"

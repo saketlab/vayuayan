@@ -58,6 +58,7 @@ class PlaceResult:
         city: Set when status is city.
         matches: The candidates when status is ambiguous.
         reason: Why the candidates need a choice, if not because of the name.
+        others: Same-named stations passed over.
     """
 
     status: PlaceStatus
@@ -66,6 +67,7 @@ class PlaceResult:
     city: Optional[CityPlace] = None
     matches: Tuple[Match, ...] = ()
     reason: str = ""
+    others: Tuple[Station, ...] = ()
 
     def stations(self) -> Tuple[Station, ...]:
         """Every station this result covers."""
@@ -119,10 +121,24 @@ def _of_cities(query: str, cities: Sequence[CityPlace]) -> PlaceResult:
     return PlaceResult("city", query, city=cities[0])
 
 
+def _of_shared_site(
+    query: str, stations: Sequence[Station], cities: Sequence[CityPlace]
+) -> Optional[PlaceResult]:
+    """The station in the largest city, if several share a site name without a tie."""
+    if len(stations) < 2:
+        return None
+    size = {s: len(c.stations) for c in cities for s in c.stations}
+    best, *others = sorted(stations, key=size.__getitem__, reverse=True)
+    if size[best] == size[others[0]]:
+        return None
+    return PlaceResult("station", query, station=best, others=tuple(others))
+
+
 def resolve_place(query: str, catalogue: Sequence[Station]) -> PlaceResult:
     """Decide what a place name means.
 
-    An exact station ID or name wins, then an exact city name. After that the
+    An exact station ID or name wins, then an exact city name, then a site
+    name shared by several cities, taken from the largest. After that the
     words of the query must start words of a station's name and city, and
     last of all the query may appear anywhere in them.
 
@@ -145,6 +161,11 @@ def resolve_place(query: str, catalogue: Sequence[Station]) -> PlaceResult:
     exact_cities = [c for c in cities if _normalise(c.city) == wanted]
     if exact_cities:
         return _of_cities(query, exact_cities)
+
+    site = [s for s in catalogue if _normalise(s.name.split(",")[0]) == wanted]
+    shared = _of_shared_site(query, site, cities)
+    if shared is not None:
+        return shared
 
     matchers: Tuple[Callable[[str, str], bool], ...] = (_word_match, _part_match)
     for matches in matchers:

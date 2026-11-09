@@ -64,7 +64,7 @@ def find_stations(place: PlaceResult, save: str = "") -> CommandResult:
         unresolved = unresolved_place("find", place)
         assert unresolved is not None
         return unresolved
-    rows = [s.to_dict() for s in place.stations()]
+    rows = [s.to_dict() for s in (*place.stations(), *place.others)]
     if save:
         write_rows(rows, save)
     data = {
