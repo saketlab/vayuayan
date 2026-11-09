@@ -1,5 +1,6 @@
 """US EPA AQI against values computed by hand from the May 2024 EPA tables."""
 
+import logging
 import math
 
 import pytest
@@ -86,6 +87,34 @@ def test_compute_us_aqi_above_500_is_hazardous():
 
 def test_compute_us_aqi_without_values():
     assert compute_us_aqi({"Benzene": 3}).aqi is None
+
+
+def test_us_sub_index_converts_mg_to_ug_for_pm():
+    assert us_sub_index("PM2.5 (mg/m³)", 0.0354) == pytest.approx(100.0)
+    assert us_sub_index("PM10 (mg/m3)", 0.054) == pytest.approx(50.0)
+
+
+def test_8_hour_o3_above_the_table_gives_no_aqi_and_warns(caplog):
+    with caplog.at_level(logging.WARNING):
+        r = compute_us_aqi({"O3": 0.25, "PM2.5": 10})
+    assert r.aqi is None and r.category is None and r.dominant_pollutant is None
+    assert "O3" not in r.sub_indices and "PM2.5" in r.sub_indices
+    assert "O3" in caplog.text
+
+
+def test_8_hour_o3_at_the_top_of_the_table_is_a_value():
+    assert compute_us_aqi({"O3": 0.200}).aqi == 300
+
+
+def test_8_hour_o3_above_the_table_uses_a_1_hour_value():
+    r = compute_us_aqi({"O3": 0.25, "O3_1h": 0.21, "PM2.5": 10})
+    assert (r.aqi, r.dominant_pollutant) == (203, "O3_1h")
+
+
+def test_so2_at_305_ppb_without_a_24_hour_value_is_200():
+    # EPA AQS aqi_breakpoints.csv: Sulfur dioxide 1 HOUR 305-99999 = 200-200
+    r = compute_us_aqi({"SO2": 305})
+    assert (r.aqi, r.dominant_pollutant) == (200, "SO2")
 
 
 @pytest.mark.parametrize(

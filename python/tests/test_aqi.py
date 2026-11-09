@@ -17,22 +17,22 @@ from vayuayan.aqi import (
 @pytest.mark.parametrize(
     "pollutant, concentration, expected",
     [
-        # The worked examples of CPCB, "About National Air Quality Index"
-        ("PM2.5", 31, 51),
+        # CPCB AQI-Calculator.xls, continuous bands: 50 + (c - 30) * 50 / 30
+        ("PM2.5", 31, 50 + 50 / 30),
         ("PM2.5", 60, 100),
         ("PM2.5", 45, 75),
         # Band edges, the shared boundaries, and the Severe slope above 500
         ("PM10", 50, 50),
         ("PM10", 51, 51),
         ("PM10", 430, 400),
-        ("PM10", 600, 611),  # 500 + 90 * 99 / 80
+        ("PM10", 600, 400 + 170 * 100 / 80),
         ("CO", 10, 200),
         ("Pb", 0.5, 50),
         ("O3", 748, 400),
     ],
 )
 def test_sub_index_follows_the_cpcb_breakpoints(pollutant, concentration, expected):
-    assert round(sub_index(pollutant, concentration)) == expected
+    assert sub_index(pollutant, concentration) == pytest.approx(expected)
 
 
 def test_sub_index_of_a_missing_value_is_nan():
@@ -130,10 +130,10 @@ def test_health_impact_and_pollutant_category():
 
 
 def test_aqi_rounds_half_up_and_category_uses_the_rounded_value():
-    # PM2.5 30.5 -> sub-index 50.5: half up gives 51, Satisfactory
-    r = compute_aqi({"PM2.5": 30.5, "PM10": 10, "NO2": 10})
+    # PM10 50.5 -> sub-index 50.5: half up gives 51, Satisfactory
+    r = compute_aqi({"PM10": 50.5, "PM2.5": 10, "NO2": 10})
     assert (r.aqi, r.category) == (51, "Satisfactory")
-    assert pollutant_category("PM2.5", 30.5) == "Satisfactory"
+    assert pollutant_category("PM10", 50.5) == "Satisfactory"
     assert pollutant_category("PM2.5", 30.2) == "Good"  # 50.33 -> 50
 
 
@@ -162,3 +162,6 @@ def test_compute_aqi_matches_the_cpcb_calculator_sample():
     }
     r = compute_aqi(sample)
     assert (r.aqi, r.dominant_pollutant) == (114, "PM10")
+    # the calculator shows PM2.5 34 as 57 and PM10 121 as 114
+    assert r.sub_indices["PM2.5"] == pytest.approx(50 + 4 * 50 / 30)
+    assert r.sub_indices["PM10"] == pytest.approx(114.0)

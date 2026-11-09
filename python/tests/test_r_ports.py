@@ -121,7 +121,7 @@ def test_city_daily_reuses_the_csv_copy(monkeypatch, tmp_path):
 
 def test_station_daily_skips_unknown_stations(monkeypatch, tmp_path):
     client = CPCBHistorical()
-    monkeypatch.setattr(client, "_resolved_station", lambda q: None)
+    monkeypatch.setattr(client, "_resolved_station", lambda *a, **k: None)
     out = client.station_daily(["nowhere"], 2023, cache_dir=str(tmp_path))
     assert out.empty and list(out.columns)[:2] == ["station_id", "station_name"]
 
@@ -285,7 +285,7 @@ def test_oaq_readings_of_several_sensors(monkeypatch):
 def test_raw_readings_skip_stations_without_data(monkeypatch):
     client = CPCBHistorical()
 
-    def fake_raw(station, year, save_location, tidy=False):
+    def fake_raw(station, year, save_location, tidy=False, city="", state=""):
         if station == "site_2":
             raise DataNotFoundError("none")
         if station == "site_3":

@@ -77,3 +77,9 @@ def test_stream_to_file_leaves_no_partial_file(tmp_path):
     with pytest.raises(requests.ConnectionError):
         http_client.stream_to_file(_Stream([b"ab"], fail=True), broken, "test")
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_stream_to_file_skips_keep_alive_chunks(tmp_path):
+    path = tmp_path / "x.bin"
+    assert http_client.stream_to_file(_Stream([b"a", b"", b"b"]), path, "test") == 2
+    assert path.read_bytes() == b"ab"

@@ -85,7 +85,11 @@ def test_live_aqi_is_a_number_or_none(monkeypatch, rss_feed):
 
 def test_live_aqi_from_the_dashboard_is_a_number_or_none(monkeypatch):
     client = CPCBLive()
-    reply = {"station_id": "site_1", "airQualityIndex": {"value": "NA"}}
+    reply = {
+        "station_id": "site_1",
+        "airQualityIndex": {"value": "NA"},
+        "metrics": [{"name": "PM2.5"}],
+    }
     monkeypatch.setattr(client, "_make_request", lambda url, payload: reply)
     data = client.get_live_aqi_data_for_station("site_1", "x")
     assert data["airQualityIndex"]["value"] is None

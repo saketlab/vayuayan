@@ -11,7 +11,8 @@ import vayuayan.cpcb_common as cpcb_common
 from vayuayan import CPCBHistorical
 from vayuayan.exceptions import NetworkError, StationNotFoundError
 
-from .fakes import FakeResponse, raise_connection_error
+from .cpcb_urls import DOWNLOAD_LINK
+from .fakes import FakeResponse, http_response, raise_connection_error
 
 
 def test_normalize_frequency_preserves_package_compatibility():
@@ -113,7 +114,7 @@ def test_get_file_path_uses_new_station_level_payload(monkeypatch):
     }
 
 
-def test_read_repository_excel_uses_authenticated_download_endpoint(monkeypatch):
+def test_read_repository_excel_downloads_with_a_link_token(monkeypatch):
     client = CPCBHistorical()
     workbook = io.BytesIO()
     pd.DataFrame({"Day": [1], "January": [42]}).to_excel(workbook, index=False)
@@ -125,6 +126,8 @@ def test_read_repository_excel_uses_authenticated_download_endpoint(monkeypatch)
 
     def fake_request(method, url, **kwargs):
         calls.append((method, url, kwargs))
+        if "get-download-link" in url:
+            return FakeResponse(content=b"abc%3D%3D")
         return FakeResponse(content=workbook.getvalue())
 
     monkeypatch.setattr(cpcb_common, "send", fake_request)
@@ -134,12 +137,26 @@ def test_read_repository_excel_uses_authenticated_download_endpoint(monkeypatch)
     )
 
     assert df.to_dict("records") == [{"Day": 1, "January": 42}]
-    assert calls[0][0] == "get"
-    assert calls[0][1].endswith("/caaqms-common/dataRepository/download-excel-file")
+    assert [c[0] for c in calls] == ["get", "get"]
+    assert calls[0][1].endswith("/caaqms-common/dataRepository/get-download-link")
     assert calls[0][2]["params"] == {
         "file_name": "/AQI_daily/city_level/delhi/2025/delhi_2025.xlsx"
     }
-    assert calls[0][2]["headers"] == {"Authorization": "token"}
+    assert calls[1][1].endswith(
+        "/caaqms-common/dataRepository/download-excel-fileEnc?file_name=abc%3D%3D"
+    )
+    assert "params" not in calls[1][2]
+    assert calls[1][2]["headers"] == {"Authorization": "token"}
+
+
+@pytest.mark.parametrize("body", ["", "<html>©</html>", '{"status":"failed"}'])
+def test_download_stops_when_the_link_body_is_not_a_token(network, body):
+    network.on("get", DOWNLOAD_LINK, http_response(body.encode()))
+    client = CPCBHistorical(use_cache=False)
+
+    with pytest.raises(NetworkError, match="download token"):
+        client._download_repository_file("/Raw_data/1Hr/2024/x.csv")
+    assert network.urls() == [DOWNLOAD_LINK]
 
 
 def test_custom_query_treats_empty_204_body_as_no_rows(monkeypatch):
@@ -306,6 +323,8 @@ def test_token_is_sent_only_to_directory_queries(monkeypatch, cpcb_credentials):
 
     def fake_request(method, url, **kwargs):
         sent.append(kwargs["headers"].get("Authorization"))
+        if "get-download-link" in url:
+            return FakeResponse(content=b"token")
         return FakeResponse(content=b"[]", json_data=[])
 
     monkeypatch.setattr(cpcb_common, "send", fake_request)
@@ -313,7 +332,7 @@ def test_token_is_sent_only_to_directory_queries(monkeypatch, cpcb_credentials):
     client._custom_query("get-state-master-list-data")
     client._download_repository_file("/AQI_daily/2024/x.xlsx")
 
-    assert sent == ["token", None]
+    assert sent == ["token", None, None]
 
 
 def test_live_directory_failure_falls_back_to_snapshot(monkeypatch, cpcb_credentials):
@@ -369,7 +388,9 @@ def test_repository_files_of_past_years_are_cached(monkeypatch, tmp_path):
     calls = []
 
     def fake_send(method, url, **kwargs):
-        calls.append(kwargs["params"]["file_name"])
+        if "get-download-link" in url:
+            calls.append(kwargs["params"]["file_name"])
+            return FakeResponse(content=b"token")
         return FakeResponse(content=b"Day,January\n1,42\n")
 
     monkeypatch.setattr(cpcb_common, "send", fake_send)

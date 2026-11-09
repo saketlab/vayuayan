@@ -86,7 +86,7 @@ def test_dump_station_year_uses_date_range_in_cache_and_rows(tmp_path):
     )
 
     assert status == "written:1"
-    shard = tmp_path / "site_301" / "2025_2025-01-01_to_2025-05-31.parquet"
+    shard = tmp_path / "site_301" / "ranges" / "2025_2025-01-01_to_2025-05-31.parquet"
     assert shard.exists()
     rows = pd.read_parquet(shard)
     assert rows["date"].tolist() == [date(2025, 1, 1)]

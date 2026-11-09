@@ -2,6 +2,8 @@
 
 from vayuayan.air_quality_client import PM25Client
 
+from .fakes import write_pm25_netcdf
+
 
 def test_s3_urls_match_the_satpmdata_layout(tmp_path):
     v6 = PM25Client("V6", cache_dir=str(tmp_path))
@@ -30,14 +32,7 @@ def test_client_does_not_start_earth_engine_until_needed(tmp_path):
 
 
 def _write_month(client, year, month, value):
-    import numpy as np
-    import xarray as xr
-
-    lat = np.arange(30.0, 20.0, -0.1)
-    lon = np.arange(70.0, 85.0, 0.1)
-    data = np.full((lat.size, lon.size), float(value))
-    ds = xr.Dataset({"PM25": (("lat", "lon"), data)}, coords={"lat": lat, "lon": lon})
-    ds.to_netcdf(client.get_netcdf_path(year, month))
+    write_pm25_netcdf(client, value, step=0.1, year=year, month=month)
 
 
 def test_monthly_stats_and_map_geometry(tmp_path, monkeypatch):
