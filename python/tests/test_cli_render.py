@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
+from pathlib import Path
 
 import pytest
 
+import vayuayan
 from vayuayan import commands
 from vayuayan.cli_places import catalogue_from_table, resolve_place
 from vayuayan.cli_render import (
@@ -508,3 +511,13 @@ def test_render_ignores_a_result_of_an_unknown_command():
     out, err = _render(CommandResult("other", "ok"))
 
     assert text_of(out) == "" and text_of(err) == ""
+
+
+def test_dates_use_no_strftime_code_that_windows_rejects():
+    package = Path(vayuayan.__file__).parent
+
+    assert not [
+        path.name
+        for path in package.glob("*.py")
+        if re.search(r"%[-#][a-zA-Z]", path.read_text(encoding="utf-8"))
+    ]

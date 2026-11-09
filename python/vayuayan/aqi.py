@@ -313,7 +313,12 @@ def daily_aqi(
     daily["aqi_status"] = np.where(~ok & np.array(short_days), "too_few_hours", status)
     # Half up, as compute_aqi; Series.round() rounds half to even
     daily["aqi"] = np.floor(subs.max(axis=1).where(ok) + 0.5).astype("Int64")
-    dominant = subs[ok].idxmax(axis=1).str.removesuffix("_sub_index")
+    # pandas 2.0 raises on idxmax of an empty frame
+    dominant = (
+        subs[ok].idxmax(axis=1).str.removesuffix("_sub_index")
+        if ok.any()
+        else pd.Series(dtype=object)
+    )
     daily["dominant_pollutant"] = dominant.reindex(daily.index)
     daily["category"] = daily["aqi"].map(get_aqi_category, na_action="ignore")
     return daily[DAILY_COLUMNS + list(subs.columns)].sort_values(

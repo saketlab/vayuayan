@@ -60,7 +60,8 @@ def _clock(iso: Optional[str]) -> str:
     if not iso:
         return "not reported"
     moment = datetime.fromisoformat(iso)
-    return moment.strftime("%-d %b %Y, %-I:%M %p IST")
+    hour = int(moment.strftime("%I"))
+    return f"{moment.day} {moment:%b %Y}, {hour}:{moment:%M %p} IST"
 
 
 def _banner(reading: Dict[str, Any], scale: Scale) -> RenderableType:
@@ -336,6 +337,8 @@ def render(
         "reading" in result.data or "readings" in result.data
     ):
         _render_live(result, out)
+        if result.data.get("saved"):
+            out.print(f"Saved to {result.data['saved']}", markup=False)
     elif result.status != "ok":
         render_problem(result, err)
     elif result.command == "history":

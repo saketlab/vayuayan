@@ -163,7 +163,7 @@ test_that(".cpcb_download_repository without a name writes a temporary file", {
   dest <- .cpcb_download_repository("/x/y.csv")
   on.exit(unlink(dest), add = TRUE)
   expect_match(dest, "\\.csv$")
-  expect_equal(dirname(normalizePath(dest)), normalizePath(tempdir()))
+  expect_equal(normalizePath(dirname(dest)), normalizePath(tempdir()))
 })
 
 test_that("a failed file download leaves nothing behind", {

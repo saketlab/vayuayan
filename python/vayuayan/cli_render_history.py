@@ -127,7 +127,8 @@ def _summary_table(summary: Dict[str, Any], scale: Scale) -> Table:
 
 def _pretty(iso: str) -> str:
     """An ISO date as a day, month and year."""
-    return date.fromisoformat(iso).strftime("%-d %b %Y")
+    day = date.fromisoformat(iso)
+    return f"{day.day} {day:%b %Y}"
 
 
 def _counts_table(counts: Dict[str, int], scale: Scale) -> Table:

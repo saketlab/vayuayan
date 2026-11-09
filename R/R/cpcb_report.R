@@ -2,9 +2,9 @@
 .cpcb_report_pollutants <- data.frame(
   key = c("PM25", "PM10", "NO", "NO2", "NOx", "NH3", "SO2", "CO", "Ozone"),
   label = c(
-    "PM2.5 (µg/m³)", "PM10 (µg/m³)", "NO (µg/m³)",
-    "NO2 (µg/m³)", "NOx (ppb)", "NH3 (µg/m³)",
-    "SO2 (µg/m³)", "CO (mg/m³)", "Ozone (µg/m³)"
+    "PM2.5 (\u00b5g/m\u00b3)", "PM10 (\u00b5g/m\u00b3)", "NO (\u00b5g/m\u00b3)",
+    "NO2 (\u00b5g/m\u00b3)", "NOx (ppb)", "NH3 (\u00b5g/m\u00b3)",
+    "SO2 (\u00b5g/m\u00b3)", "CO (mg/m\u00b3)", "Ozone (\u00b5g/m\u00b3)"
   ),
   stringsAsFactors = FALSE
 )

@@ -75,7 +75,7 @@ jobs:
     - name: Test CLI functionality
       run: |
         python -m vayuayan --help
-        vayuayan daily_aqi --help
+        vayuayan live --help
         python -c "import vayuayan; print('Package imports successfully')"
 
   lowest-deps:
