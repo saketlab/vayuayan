@@ -44,6 +44,10 @@ Vayuayan keeps CPCB files of past years in `~/.cache/vayuayan`. To use a differe
 
 ### Command Line Interface
 
+`vayuayan` shows live and historical AQI in your terminal, in the official category colours.
+
+![vayuayan live anand vihar](https://raw.githubusercontent.com/saketlab/vayuayan/main/python/docs/assets/cli_live.png)
+
 ```bash
 vayuayan                          # open the menu
 vayuayan live                     # air quality near you

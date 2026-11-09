@@ -22,6 +22,20 @@ A Python package that gets and analyzes air quality data from many sources:
 An R package with the same functions is documented at
 `vayuayan.saketlab.org/R <https://vayuayan.saketlab.org/R/>`_.
 
+Air quality in your terminal
+----------------------------
+
+``vayuayan`` shows live and historical AQI on the command line, in the official
+category colours. See :doc:`cli_reference`.
+
+.. code-block:: bash
+
+   pip install vayuayan
+   vayuayan live anand vihar
+
+.. image:: assets/cli_live.png
+   :alt: Output of vayuayan live anand vihar: AQI 299, Poor, with pollutant sub-indices
+
 Overview
 --------
 

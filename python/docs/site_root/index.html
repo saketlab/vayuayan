@@ -27,6 +27,15 @@
     .card h2 { margin: 0 0 4px; font-size: 1.3rem; color: var(--accent); }
     .card code { font-size: 0.9rem; overflow-wrap: anywhere; }
     .card p { margin: 8px 0 0; color: var(--muted); font-size: 0.95rem; }
+    .cli { margin-top: 56px; }
+    .cli h2 { font-size: 1.5rem; margin: 0 0 8px; }
+    .cli p { color: var(--muted); margin: 0 0 20px; }
+    .cli p.note { font-size: 0.85rem; margin: 12px 0 0; }
+    .term { background: #1c1c1e; color: #e8e8ea; border-radius: 10px; overflow: hidden; }
+    .term-cmd, .term-body { margin: 0; padding: 0 16px; overflow-x: auto;
+      font: 12.5px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+    .term-cmd { padding-top: 16px; padding-bottom: 12px; color: #9fe870; }
+    .term-body { padding-bottom: 16px; }
   </style>
 </head>
 <body>
@@ -47,6 +56,50 @@
         <p>R package, with analysis articles for Delhi, Mumbai and other metros.</p>
       </a>
     </div>
+    <section class="cli">
+      <h2>Air quality in your terminal</h2>
+      <p>The Python package shows live and historical AQI on the command line, in the
+        official category colours. With no place named, <code>vayuayan live</code> finds
+        the station nearest to you.</p>
+      <div class="term">
+        <pre class="term-cmd">$ pip install vayuayan
+$ vayuayan live anand vihar</pre>
+<pre class="term-body">╭─────────────────────────────── Air quality ────────────────────────────────╮
+│ <span style="color: #000000; text-decoration-color: #000000; background-color: #ff9900; font-weight: bold">                                                                          </span> │
+│ <span style="color: #000000; text-decoration-color: #000000; background-color: #ff9900; font-weight: bold">                              AQI 299   Poor                              </span> │
+│ <span style="color: #000000; text-decoration-color: #000000; background-color: #ff9900; font-weight: bold">                                                                          </span> │
+│ <span style="color: #008000; text-decoration-color: #008000; font-weight: bold">Live reading</span>                                                               │
+│                                                                            │
+│ <span style="font-weight: bold">Main pollutant  </span>PM2.5                                                      │
+│ <span style="font-weight: bold">Station         </span>Anand Vihar, Delhi - DPCC                                  │
+│ <span style="font-weight: bold">City            </span>Delhi, Delhi                                               │
+│ <span style="font-weight: bold">Lat, long       </span>28.6476, 77.3158                                           │
+│ <span style="font-weight: bold">Station ID      </span>site_301                                                   │
+│ <span style="font-weight: bold">Collected       </span>9 Nov 2026, 3:00 PM IST, 49 min ago                        │
+│ <span style="font-weight: bold">Source          </span>CPCB RSS feed                                              │
+│                                                                            │
+│ <span style="font-weight: bold">Pollutant sub-indices, on the AQI scale of 0-500. These are not </span>           │
+│ <span style="font-weight: bold">concentrations such as µg/m³. The AQI is the highest 24-hour sub-index.</span>    │
+│                                                                            │
+│  <span style="font-weight: bold">Pollutant  </span> <span style="font-weight: bold">   24-hour avg </span> <span style="font-weight: bold">  Latest hour </span> <span style="font-weight: bold">  Lowest hour </span> <span style="font-weight: bold">  Highest hour</span>  │
+│  ────────────────────────────────────────────────────────────────────────  │
+│  PM2.5        <span style="color: #000000; text-decoration-color: #000000; background-color: #ff9900">          299</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #ffff00">         168</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">          92</span>   <span style="color: #ffffff; text-decoration-color: #ffffff; background-color: #c00000">          500</span>  │
+│  PM10         <span style="color: #000000; text-decoration-color: #000000; background-color: #ff9900">          249</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #ffff00">         138</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #ffff00">         112</span>   <span style="color: #ffffff; text-decoration-color: #ffffff; background-color: #c00000">          500</span>  │
+│  NO2          <span style="color: #000000; text-decoration-color: #000000; background-color: #00b050">           36</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #00b050">          23</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #00b050">          16</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">           62</span>  │
+│  NH3          <span style="color: #000000; text-decoration-color: #000000; background-color: #00b050">            6</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #00b050">           6</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #00b050">           5</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #00b050">            8</span>  │
+│  SO2          <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">           76</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">          77</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">          56</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #ffff00">          125</span>  │
+│  CO           <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">           68</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">          55</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">          55</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #ffff00">          101</span>  │
+│  Ozone        <span style="color: #000000; text-decoration-color: #000000; background-color: #00b050">           33</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">          53</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #00b050">          11</span>   <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050">           54</span>  │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
+<span style="font-weight: bold">Standard: India National AQI (CPCB)</span>
+<span style="color: #000000; text-decoration-color: #000000; background-color: #00b050"> 1 Good 0-50 </span>  <span style="color: #000000; text-decoration-color: #000000; background-color: #92d050"> 2 Satisfactory 51-100 </span>  <span style="color: #000000; text-decoration-color: #000000; background-color: #ffff00"> 3 Moderate 101-200 </span>
+<span style="color: #000000; text-decoration-color: #000000; background-color: #ff9900"> 4 Poor 201-300 </span>  <span style="color: #000000; text-decoration-color: #000000; background-color: #ff0000"> 5 Very Poor 301-400 </span>  <span style="color: #ffffff; text-decoration-color: #ffffff; background-color: #c00000"> 6 Severe 401-500 </span><span style="color: #7f7f7f; text-decoration-color: #7f7f7f">  · no data</span>
+</pre>
+      </div>
+      <p class="note">Real output from 9 November 2026. Also: <code>vayuayan live mumbai</code>,
+        <code>vayuayan history powai 2025</code>, <code>vayuayan find anand vihar</code>.</p>
+    </section>
   </main>
 </body>
 </html>
