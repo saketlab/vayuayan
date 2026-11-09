@@ -11,3 +11,4 @@ xarray>=2024.7.0
 netCDF4>=1.7.2
 tqdm>=4.62.0
 earthengine-api>=0.1.384
+rich>=13.7.0

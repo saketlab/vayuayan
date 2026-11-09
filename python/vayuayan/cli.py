@@ -1,225 +1,324 @@
 #!/usr/bin/env python3
-"""
-Command-line interface of the vayuayan package
+"""Command-line interface of vayuayan: routing only.
+
+Commands live in commands.py and return plain data; cli_render.py draws it.
 """
 
 import argparse
+import json
 import logging
+import os
+import re
 import sys
-from datetime import datetime
+import warnings
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import date
+from typing import Callable, Dict, Iterator, List, Optional, Sequence
 
-from . import CPCBHistorical, CPCBLive, PM25Client
-from .commands import (
-    get_city_data,
-    get_city_list,
-    get_daily_aqi,
-    get_live_aqi,
-    get_nearest_station,
-    get_pm25_data,
-    get_state_list,
-    get_station_data,
-    get_station_list,
-    locate_me,
-)
-from .pm25_versions import PM25_VERSIONS
+from rich.console import Console
+from rich.prompt import IntPrompt, Prompt
 
-STATION_HELP = (
-    "Station ID, name, or part of a name (e.g. site_301 or 'Anand Vihar, Delhi')"
-)
+from . import CPCBHistorical, CPCBLive, PM25Client, commands
+from .cli_menu import run_menu
+from .cli_parser import UsageError, build_parser
+from .cli_places import PlaceResult, choose
+from .cli_render import make_console, render, render_matches
+from .cli_results import CommandResult
+from .commands import HistoryRequest, ReportRequest
+from .commands_report import FREQUENCIES
+
+_YEAR_WORD = re.compile(r"(?:19|20)\d{2}$")
+_EXIT_INTERRUPTED = 130
+
+
+@dataclass(frozen=True)
+class _Context:
+    """What the commands need from the session."""
+
+    out: Console
+    err: Console
+    json: bool
+    interactive: bool
+    debug: bool
+
+
+def _stdin_is_terminal() -> bool:
+    """True if a person can answer a prompt."""
+    return sys.stdin.isatty()
+
+
+def _stdout_is_terminal() -> bool:
+    """True if a person sees the output."""
+    return sys.stdout.isatty()
+
+
+@contextmanager
+def _busy(ctx: _Context, message: str) -> Iterator[Callable[[str], None]]:
+    """A spinner on stderr; without a terminal, progress goes there as text."""
+    if not ctx.err.is_terminal:
+        yield lambda text: ctx.err.print(text, markup=False)
+        return
+    with ctx.err.status(message) as status:
+        yield lambda text: status.update(text)
+
+
+def _settle(ctx: _Context, place: PlaceResult) -> PlaceResult:
+    """Ask the user to pick when a name is ambiguous and asking is allowed."""
+    if place.status != "ambiguous" or not ctx.interactive:
+        return place
+    ctx.err.print(
+        place.reason or f"Several places match '{place.query}':", markup=False
+    )
+    render_matches([m.to_dict() for m in place.matches], ctx.err)
+    count = len(place.matches)
+    number = IntPrompt.ask(
+        f"Which one? (1-{count})",
+        console=ctx.err,
+        choices=[str(i) for i in range(1, count + 1)],
+        show_choices=False,
+    )
+    return choose(place, number - 1)
+
+
+def _lookup(
+    ctx: _Context, args: argparse.Namespace, words: Sequence[str]
+) -> PlaceResult:
+    """The place a command was given, after any choice the user made."""
+    with _busy(ctx, "Looking up the place..."):
+        place = commands.lookup_place(
+            CPCBHistorical(), " ".join(words), args.city, args.state
+        )
+    return _settle(ctx, place)
+
+
+def _live_for(ctx: _Context, place: PlaceResult) -> CommandResult:
+    """The live reading of a resolved place."""
+    with _busy(ctx, "Fetching the latest reading..."):
+        return commands.live_place(CPCBLive(), place)
+
+
+def _live(ctx: _Context, args: argparse.Namespace) -> CommandResult:
+    if args.words or args.city:
+        return _live_for(ctx, _lookup(ctx, args, args.words or [args.city]))
+    if args.state:
+        raise UsageError("--state narrows a place; give a place too")
+    if (args.lat is None) != (args.lon is None):
+        raise UsageError("--lat and --lon go together")
+    coords = None if args.lat is None else (args.lat, args.lon)
+    with _busy(ctx, "Finding the nearest station..."):
+        result = commands.live_near(CPCBLive(), coords)
+    if result.status != "location_unknown" or not ctx.interactive:
+        return result
+    ctx.err.print(result.message, markup=False)
+    reply = Prompt.ask("Which place? (station or city)", console=ctx.err).split()
+    return _live_for(ctx, _lookup(ctx, args, reply)) if reply else result
+
+
+def _report_request(args: argparse.Namespace, year: Optional[int]) -> ReportRequest:
+    """The period of a history command with --from and --to."""
+    if year is not None:
+        raise UsageError("give a YEAR or --from and --to, not both")
+    if not args.start or not args.end:
+        raise UsageError("a period needs both --from and --to")
+    if args.standard == "us" or args.computed or args.bulletin or args.month:
+        raise UsageError(
+            "--from and --to give readings; they do not combine with "
+            "--standard us, --computed, --bulletin or --month"
+        )
+    every = "hourly" if args.hourly else args.every or "hourly"
+    names = None
+    if args.pollutants:
+        names = tuple(p.strip() for p in args.pollutants.split(","))
+    return ReportRequest(args.start, args.end, FREQUENCIES[every], names, args.save)
+
+
+def _history(ctx: _Context, args: argparse.Namespace) -> CommandResult:
+    words: List[str] = list(args.words)
+    year: Optional[int] = None
+    if len(words) > 1 and _YEAR_WORD.match(words[-1]):
+        year = int(words.pop())
+    client = CPCBHistorical()
+
+    if any((args.start, args.end, args.every, args.hourly, args.pollutants)):
+        report = _report_request(args, year)
+        place = _lookup(ctx, args, words)
+        with _busy(ctx, "Downloading the report...") as progress:
+            return commands.history_report(client, place, report, progress)
+
+    request = HistoryRequest(
+        year=year if year is not None else date.today().year - 1,
+        month=args.month,
+        standard=args.standard,
+        computed=args.computed or args.bulletin,
+        bulletin=args.bulletin,
+        save=args.save,
+    )
+    place = _settle(ctx, commands.place_for_request(_lookup(ctx, args, words), request))
+    with _busy(ctx, "Downloading the daily AQI...") as progress:
+        return commands.history(client, place, request, progress)
+
+
+def _find(ctx: _Context, args: argparse.Namespace) -> CommandResult:
+    with _busy(ctx, "Searching..."):
+        place = commands.lookup_place(CPCBHistorical(), " ".join(args.words))
+        return commands.find_stations(place, args.save)
+
+
+def _stations(ctx: _Context, args: argparse.Namespace) -> CommandResult:
+    with _busy(ctx, "Loading stations..."):
+        return commands.list_stations(
+            CPCBHistorical(), args.city, args.state, args.save
+        )
+
+
+def _pm25(ctx: _Context, args: argparse.Namespace) -> CommandResult:
+    with _busy(ctx, "Calculating PM2.5..."):
+        return commands.pm25_stats(
+            PM25Client(version=args.version, region=args.region),
+            args.geojson,
+            args.year,
+            args.month,
+            args.group_by,
+        )
+
+
+_HANDLERS: Dict[str, Callable[[_Context, argparse.Namespace], CommandResult]] = {
+    "live": _live,
+    "history": _history,
+    "find": _find,
+    "stations": _stations,
+    "pm25": _pm25,
+}
+
+
+def _print_document(result: CommandResult) -> None:
+    """Write the one JSON document of this run."""
+    sys.stdout.write(json.dumps(result.to_document(), ensure_ascii=False) + "\n")
+
+
+def _emit(ctx: _Context, args: argparse.Namespace, result: CommandResult) -> int:
+    """Print a result as JSON or for people, and return its exit code."""
+    if ctx.json:
+        _print_document(result)
+    else:
+        limit = None if getattr(args, "all", False) else getattr(args, "limit", None)
+        render(result, ctx.out, ctx.err, limit)
+    return result.exit_code
+
+
+def _parse(argv: Sequence[str]) -> argparse.Namespace:
+    """Parse argv; words left over after an option belong to the place."""
+    parser = build_parser()
+    args, extras = parser.parse_known_args(list(argv))
+    if extras:
+        takes_words = hasattr(args, "words")
+        unknown = [e for e in extras if e.startswith("-") or not takes_words]
+        if unknown:
+            message = f"unrecognised: {' '.join(unknown)}"
+            raise UsageError(message, parser.format_usage())
+        args.words = [*args.words, *extras]
+    return args
+
+
+def _run_command(ctx: _Context, args: argparse.Namespace) -> int:
+    """Run one parsed command, turning every failure into a result."""
+    try:
+        return _emit(ctx, args, _HANDLERS[args.command](ctx, args))
+    except (UsageError, BrokenPipeError):
+        raise
+    except (KeyboardInterrupt, EOFError):
+        ctx.err.print("Stopped.")
+        return _EXIT_INTERRUPTED
+    except Exception as error:
+        if ctx.debug:
+            ctx.err.print_exception()
+        return _emit(ctx, args, commands.error_result(args.command, error))
+
+
+def _usage_failure(error: UsageError, as_json: bool, err: Console) -> int:
+    """Report a wrong command line."""
+    if as_json:
+        _print_document(CommandResult("usage", "usage_error", message=str(error)))
+    else:
+        if error.usage:
+            err.print(error.usage.rstrip(), markup=False)
+        err.print(f"vayuayan: error: {error}", markup=False)
+    return 2
+
+
+def _menu(ctx: _Context) -> int:
+    """The interactive menu, until the user quits or presses Ctrl-C."""
+
+    def execute(command: List[str]) -> int:
+        try:
+            return _run_command(ctx, _parse(command))
+        except UsageError as error:
+            return _usage_failure(error, False, ctx.err)
+
+    try:
+        return run_menu(ctx.out, execute)
+    except (KeyboardInterrupt, EOFError):
+        ctx.err.print("Stopped.")
+        return _EXIT_INTERRUPTED
+
+
+def run(
+    argv: Optional[Sequence[str]] = None,
+    out: Optional[Console] = None,
+    err: Optional[Console] = None,
+) -> int:
+    """Run the CLI and return the process exit code.
+
+    Args:
+        argv: The arguments; sys.argv is used by default.
+        out: Console for results.
+        err: Console for progress, prompts and problems.
+
+    Returns:
+        The exit code.
+    """
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    out = out or make_console()
+    err = err or make_console(stderr=True)
+    as_json = "--json" in arguments
+    try:
+        args = _parse(arguments)
+    except UsageError as error:
+        return _usage_failure(error, as_json, err)
+
+    # A prompt would corrupt a --json document and hang a script without a terminal
+    interactive = _stdin_is_terminal() and not args.no_input and not args.json
+    ctx = _Context(out, err, args.json, interactive, args.debug)
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.WARNING,
+        format="%(message)s",
+        stream=sys.stderr,
+    )
+    warnings.filterwarnings("ignore", message="Workbook contains no default style")
+
+    if not args.command:
+        if ctx.interactive and _stdout_is_terminal():
+            return _menu(ctx)
+        if args.json:
+            return _usage_failure(UsageError("no command given"), True, err)
+        out.print(build_parser().format_help(), markup=False)
+        return 2
+    try:
+        return _run_command(ctx, args)
+    except UsageError as error:
+        return _usage_failure(error, as_json, err)
 
 
 def main() -> None:
-    """Entry point of the CLI"""
-    parser = argparse.ArgumentParser(
-        description="vayuayan CLI - Get air quality monitoring data",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  vayuayan list_states
-  vayuayan list_cities "Maharashtra"
-  vayuayan list_stations "Mumbai"
-  vayuayan city_data --city "Mumbai" --year 2024 --path "output.json"
-  vayuayan station_data --station_id "site_5964" --year 2024 --path "output.json"
-  vayuayan daily_aqi --station_id "site_301" --year 2024 --path "daily_aqi.csv"
-  vayuayan station_data --station "Anand Vihar, Delhi" --year 2024 --path "output.csv"
-
-  vayuayan locate_me
-  vayuayan nearest_station --lat 19.0760 --lon 72.8777
-  vayuayan live_aqi --station_id "site_5964" --path "output.json"
-  vayuayan live_aqi --date 2024-02-25 --hour 10 --path "output.json"
-  vayuayan live_aqi --lat 19.0760 --lon 72.8777 --path "output.json"
-
-  vayuayan pm25 --geojson_path "districts.geojson" --year 2019 --month 2
-  vayuayan pm25 --geojson_path "districts.geojson" --year 2019 --month 2 \
-      --group_by state_name
-        """,
-    )
-
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # Arguments that several commands share
-    year_arg = argparse.ArgumentParser(add_help=False)
-    year_arg.add_argument(
-        "--year",
-        type=int,
-        default=datetime.now().year,
-        help="Year (default: current year)",
-    )
-    coords_arg = argparse.ArgumentParser(add_help=False)
-    coords_arg.add_argument("--lat", type=float, help="Latitude of geolocation")
-    coords_arg.add_argument("--lon", type=float, help="Longitude of geolocation")
-
-    # Each command builds only the client it needs: PM25Client may start
-    # Earth Engine, and the clients make network sessions.
-    # ------------------------------ AQI Commands ------------------------------ #
-    subparsers.add_parser("list_states", help="List all states").set_defaults(
-        run=lambda a: get_state_list(CPCBHistorical())
-    )
-
-    cmd = subparsers.add_parser("list_cities", help="List all cities in a state")
-    cmd.add_argument("state", help="State name")
-    cmd.set_defaults(run=lambda a: get_city_list(CPCBHistorical(), a.state))
-
-    cmd = subparsers.add_parser("list_stations", help="List all stations in a city")
-    cmd.add_argument("city", help="City name")
-    cmd.set_defaults(run=lambda a: get_station_list(CPCBHistorical(), a.city))
-
-    cmd = subparsers.add_parser(
-        "city_data", help="Get city-level AQI data", parents=[year_arg]
-    )
-    cmd.add_argument("--city", required=True, help="City name")
-    cmd.add_argument("--path", required=True, help="Path to output file")
-    cmd.set_defaults(
-        run=lambda a: get_city_data(CPCBHistorical(), a.city, a.year, a.path)
-    )
-
-    cmd = subparsers.add_parser(
-        "station_data", help="Get station-level AQI data", parents=[year_arg]
-    )
-    cmd.add_argument(
-        "--station", "--station_id", dest="station_id", required=True, help=STATION_HELP
-    )
-    cmd.add_argument("--path", required=True, help="Path to output file")
-    cmd.set_defaults(
-        run=lambda a: get_station_data(CPCBHistorical(), a.station_id, a.year, a.path)
-    )
-
-    cmd = subparsers.add_parser(
-        "daily_aqi",
-        help="Compute the daily National AQI of a station from its raw data",
-        parents=[year_arg],
-    )
-    cmd.add_argument(
-        "--station", "--station_id", dest="station_id", required=True, help=STATION_HELP
-    )
-    cmd.add_argument("--path", help="CSV file for the daily table")
-    cmd.add_argument(
-        "--bulletin",
-        action="store_true",
-        help="Days end at 4 PM, like CPCB's daily bulletin (default: calendar days)",
-    )
-    cmd.set_defaults(
-        run=lambda a: get_daily_aqi(
-            CPCBHistorical(), a.station_id, a.year, a.path, a.bulletin
-        )
-    )
-
-    # ------------------------------ Live AQI Commands ------------------------------ #
-    subparsers.add_parser(
-        "locate_me", help="Fetch current geolocation based on IP address"
-    ).set_defaults(run=lambda a: locate_me(CPCBLive()))
-
-    subparsers.add_parser(
-        "nearest_station",
-        help=(
-            "Fetch nearest station details using IP-based geolocation or "
-            "provided coordinates"
-        ),
-        parents=[coords_arg],
-    ).set_defaults(run=lambda a: get_nearest_station(CPCBLive(), a.lat, a.lon))
-
-    cmd = subparsers.add_parser(
-        "live_aqi",
-        help="Fetch live AQI data for nearest station or specified station",
-        parents=[coords_arg],
-    )
-    cmd.add_argument("--station", "--station_id", dest="station_id", help=STATION_HELP)
-    cmd.add_argument("--date", type=str, help="Date for the AQI data (YYYY-MM-DD)")
-    cmd.add_argument("--hour", type=int, help="Hour for the AQI data (0-23)")
-    cmd.add_argument("--path", help="Path to output file")
-    cmd.set_defaults(
-        run=lambda a: get_live_aqi(
-            CPCBLive(), a.lat, a.lon, a.station_id, a.date, a.hour, a.path
-        )
-    )
-
-    # ------------------------------ PM2.5 Commands ------------------------------ #
-    cmd = subparsers.add_parser(
-        "pm25", help="Fetch PM2.5 data for given geographic polygon"
-    )
-    cmd.add_argument(
-        "--geojson_path", required=True, help="Path to the GeoJSON file with polygon"
-    )
-    cmd.add_argument("--year", type=int, required=True, help="Year of the data")
-    cmd.add_argument(
-        "--month",
-        type=int,
-        help="Month of the data (1-12), if not provided, annual data is used",
-    )
-    cmd.add_argument(
-        "--group_by",
-        type=str,
-        help=(
-            "Column name(s) to group polygons by. Can be a single column "
-            "(e.g., 'state_name') or comma-separated multiple columns "
-            "(e.g., 'state_name,district_name')."
-        ),
-    )
-    cmd.add_argument(
-        "--version",
-        type=str,
-        choices=list(PM25_VERSIONS),
-        default="V6GL03",
-        help="Dataset version (default: V6GL03): "
-        + ", ".join(
-            f"{key} = {v.name}, {v.year_range[0]}-{v.year_range[1]}"
-            for key, v in PM25_VERSIONS.items()
-        ),
-    )
-    cmd.add_argument(
-        "--region",
-        type=str,
-        choices=["GL", "AS", "EU", "NA", "AF"],
-        default="GL",
-        help="Region file (default: GL, global). AS (Asia) is smaller and covers "
-        "India; AF is V6GL03 only.",
-    )
-    cmd.set_defaults(
-        run=lambda a: get_pm25_data(
-            PM25Client(version=a.version, region=a.region),
-            a.geojson_path,
-            a.year,
-            a.month,
-            a.group_by,
-        )
-    )
-
-    args = parser.parse_args()
-    if not args.command:
-        parser.print_help()
-        sys.exit(1)
-
-    # The library logs progress at INFO level; print it like the CLI output
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    """Entry point of the CLI."""
     try:
-        ok = args.run(args)
-    except KeyboardInterrupt:
-        print("\nInterrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error: Unexpected error: {e}")
-        sys.exit(1)
-    sys.exit(0 if ok else 1)
+        code = run()
+    except BrokenPipeError:
+        # the reader of a pipe left, such as head; not a failure
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        code = 0
+    sys.exit(code)
 
 
 if __name__ == "__main__":
