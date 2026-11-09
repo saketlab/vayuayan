@@ -14,11 +14,11 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union, cast
 from .constants import (
     ALL_STATION_URL,
     DEFAULT_DOWNLOAD_DIR,
-    DOWNLOAD_URL,
     PUBLIC_COOKIES,
 )
+from .cpcb_historical import CPCBHistorical
 from .cpcb_live import CPCBLive
-from .exceptions import CPCBError, NetworkError
+from .exceptions import CPCBError, DataNotFoundError
 from .utils import (
     _log_if_verbose,
     clean_station_name,
@@ -30,6 +30,25 @@ from .utils import (
 
 if TYPE_CHECKING:
     import pandas as pd
+
+
+def _repository_file(
+    site_id: str, station_name: str, time_period: str, year: str
+) -> bytes:
+    """The raw file of a station and year, through the current repository API.
+
+    Raises:
+        DataNotFoundError: If CPCB has no such file.
+    """
+    historical = CPCBHistorical()
+    entries = historical.get_file_path(
+        site_id, station_name, "", "", year, time_period, "raw"
+    )
+    selected = historical._select_repository_entry(entries, year)
+    filepath = selected[0].get("filepath") if selected else None
+    if not filepath:
+        raise DataNotFoundError(f"No raw file found for {site_id} in {year}")
+    return historical._download_repository_file(str(filepath)).getvalue()
 
 
 class CPCBClient:
@@ -98,7 +117,7 @@ class CPCBClient:
             else:
                 filename = f"{site_id}_{station_name}_{time_period}.csv"
 
-        if not filename.endswith(f"_{year}.csv"):
+        if year and not filename.endswith(f"_{year}.csv"):
             filename = filename.replace(".csv", f"_{year}.csv")
 
         if not filename.endswith(".csv"):
@@ -148,9 +167,9 @@ class CPCBClient:
             ... )
             >>> # Download with parameters
             >>> df = client.download_raw_data(
-            ...     site_id="DL001",
-            ...     station_name="Punjabi_Bagh",
-            ...     time_period="2024",
+            ...     site_id="site_301",
+            ...     station_name="Anand Vihar",
+            ...     time_period="15Min",
             ...     year="2024",
             ...     return_dataframe=True
             ... )
@@ -168,26 +187,25 @@ class CPCBClient:
             year_str = cast(str, year)
 
             cleaned_station_name = clean_station_name(station_name_str)
-            csv_filename = f"{site_id_str}_{cleaned_station_name}_{time_period_str}.csv"
-            url = f"{DOWNLOAD_URL}/{time_period_str}/{year_str}/{csv_filename}"
-            _log_if_verbose(f"Constructed URL: {url}", verbose)
+            source = f"{site_id_str}_{cleaned_station_name}_{time_period_str}.csv"
 
-        _log_if_verbose(f"Downloading CSV from: {url}", verbose)
+            # /dataRepository/download_file answers 404 for files that exist
+            def fetch() -> bytes:
+                return _repository_file(
+                    site_id_str, station_name_str, time_period_str, year_str
+                )
+        else:
+            source = url
+            direct_url = url
+
+            def fetch() -> bytes:
+                return self._download_url(direct_url, verbose)
 
         try:
-            response = safe_get(url, timeout=60, max_retries=3, allow_ssl_fallback=True)
-
-            content_type = response.headers.get("content-type", "").lower()
-            if (
-                "text/csv" not in content_type
-                and "application/octet-stream" not in content_type
-            ):
-                _log_if_verbose(
-                    f"Warning: Unexpected content type: {content_type}", verbose
-                )
+            content = fetch()
 
             generated_filename = self._generate_filename(
-                url, site_id, station_name, time_period, year or "", filename
+                source, site_id, station_name, time_period, year or "", filename
             )
 
             Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -195,7 +213,7 @@ class CPCBClient:
 
             _log_if_verbose(f"Saving to: {file_path}", verbose)
             with open(file_path, "wb") as f:
-                f.write(response.content)
+                f.write(content)
 
             _log_if_verbose(f"Successfully downloaded: {file_path}", verbose)
 
@@ -216,10 +234,24 @@ class CPCBClient:
 
             return str(file_path)
 
-        except NetworkError:
+        except CPCBError:
             raise
         except Exception as e:
             raise CPCBError(f"Failed to download CSV: {str(e)}") from e
+
+    def _download_url(self, url: str, verbose: bool) -> bytes:
+        """The body of a direct file URL."""
+        _log_if_verbose(f"Downloading CSV from: {url}", verbose)
+        response = safe_get(url, timeout=60, max_retries=3, allow_ssl_fallback=True)
+        content_type = response.headers.get("content-type", "").lower()
+        if (
+            "text/csv" not in content_type
+            and "application/octet-stream" not in content_type
+        ):
+            _log_if_verbose(
+                f"Warning: Unexpected content type: {content_type}", verbose
+            )
+        return response.content
 
     def _station_distances(self, lat: float, lon: float) -> List[Tuple[Dict, float]]:
         """All stations with valid coordinates and their haversine distance in km.
