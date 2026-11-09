@@ -37,13 +37,13 @@
 #' compare_daily_records(readings, records)
 #' @export
 compare_daily_records <- function(readings, records, value = "pm25", tolerance = 0.005) {
-  r <- readings[!is.na(readings$timestamp) & !is.na(readings[[value]]), , drop = FALSE]
+  r <- .usable_readings(readings, value, "sensor_id", "timestamp")
   r <- r[order(r$sensor_id, r$timestamp, method = "radix"), , drop = FALSE]
   rec <- records[!is.na(records[[value]]), , drop = FALSE]
   if (nrow(r) == 0 || nrow(rec) == 0) {
     return(.empty_records())
   }
-  r$date <- as.Date(r$timestamp, tz = "UTC")
+  r$date <- .local_date(r$timestamp)
   groups <- split(r[[value]], list(r$sensor_id, format(r$date)), drop = TRUE, sep = "\r")
   keys <- do.call(rbind, strsplit(names(groups), "\r", fixed = TRUE))
   stats <- data.frame(
@@ -80,6 +80,19 @@ compare_daily_records <- function(readings, records, value = "pm25", tolerance =
   for (s in .record_statistics) out[[s]] <- numeric()
   for (s in .record_statistics) out[[paste0("record_is_", s)]] <- logical()
   out$class <- character()
+  out
+}
+
+.empty_record_summary <- function(keys) {
+  out <- data.frame(sensor_id = character(), year = integer())
+  if ("provider" %in% keys) out <- cbind(provider = character(), out)
+  out$days <- integer()
+  out$clear_days <- integer()
+  out$mean <- integer()
+  out$last <- integer()
+  out$neither <- integer()
+  out$last_mean_day <- as.Date(character())
+  out$first_last_day <- as.Date(character())
   out
 }
 
@@ -156,6 +169,9 @@ daily_record_summary <- function(audit, min_gap = 1) {
   a$sensor_id <- as.character(a$sensor_id)
   a$date <- as.Date(a$date)
   a$year <- as.integer(format(a$date, "%Y"))
+  if (nrow(a) == 0) {
+    return(.empty_record_summary(keys))
+  }
   groups <- split(a, a[keys], drop = TRUE, lex.order = TRUE)
   rows <- lapply(groups, function(g) {
     clear <- g[abs(g$mean - g$last) > min_gap, , drop = FALSE]

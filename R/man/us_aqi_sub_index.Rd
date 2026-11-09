@@ -9,9 +9,10 @@ us_aqi_sub_index(pollutant, concentration)
 \arguments{
 \item{pollutant}{A pollutant label (see \code{us_aqi_pollutant_name()}).
 A label with a mass unit, such as \code{"O3 (ug/m3)"} or
-\code{"CO (mg/m3)"}, is converted to ppm or ppb at 25 degrees C. Without
-a unit, PM2.5 and PM10 are in ug/m3, O3 and CO in ppm, and SO2 and NO2
-in ppb.}
+\code{"CO (mg/m3)"}, is converted to ppm or ppb at 25 degrees C and 760
+mm Hg, a label in ppb or ppm, such as \code{"O3 (ppb)"}, to the unit of
+the table, and \code{"PM2.5 (mg/m3)"} to ug/m3. Without a unit, PM2.5 and
+PM10 are in ug/m3, O3 and CO in ppm, and SO2 and NO2 in ppb.}
 
 \item{concentration}{Numeric vector of averages: 24-hour for PM2.5, PM10
 and \code{SO2_24h}, 8-hour for O3 and CO, and 1-hour for \code{O3_1h},
@@ -20,12 +21,13 @@ SO2 and NO2.}
 \value{
 Numeric vector of sub-indices. Above the highest breakpoint the
 sub-index continues on the slope of the 301-500 band, so it can be more
-than 500. \code{NA} for missing values, for 8-hour O3 above 0.200 ppm,
+than 500. \code{NA} for missing, negative and non-finite values, for
+8-hour O3 above 0.200 ppm,
 1-hour O3 below 0.125 ppm, 1-hour SO2 above 304 ppb and 24-hour SO2
 below 305 ppb, where the EPA uses the other averaging time.
 }
 \description{
-The US EPA AQI sub-index of one pollutant (May 2024 tables). Each
+The US EPA AQI sub-index of one pollutant (EPA-403/B-26-003). Each
 concentration is truncated to the precision of the table, then the
 sub-index is a linear function of the concentration within its band.
 }

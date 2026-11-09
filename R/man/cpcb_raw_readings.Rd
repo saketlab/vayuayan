@@ -4,26 +4,45 @@
 \alias{cpcb_raw_readings}
 \title{Raw 15-minute data of several stations}
 \usage{
-cpcb_raw_readings(station_id, year, pollutants = NULL)
+cpcb_raw_readings(
+  station_id = NULL,
+  year,
+  pollutants = NULL,
+  city = NULL,
+  state = NULL
+)
 }
 \arguments{
-\item{station_id}{Character vector of station IDs or names.}
+\item{station_id}{Character vector of station IDs or names, or \code{NULL}
+with \code{city}.}
 
 \item{year}{Integer year.}
 
 \item{pollutants}{Optional pollutant names to keep, such as
 \code{c("PM2.5", "RH")}.}
+
+\item{city}{Optional city: all its stations when \code{station_id} is
+\code{NULL}, otherwise it narrows ambiguous names.}
+
+\item{state}{Optional state, for cities that share a name.}
 }
 \value{
-Data frame as \code{cpcb_raw_to_long()}.
+Data frame as \code{cpcb_raw_to_long()}, with attribute
+\code{station_status}: a named character vector giving each station's
+outcome, one of \code{"ok"}, \code{"no_data"}, \code{"not_found"},
+\code{"ambiguous"}, \code{"outage"}, \code{"not_attempted"} or
+\code{"error"}.
 }
 \description{
-\code{cpcb_download_raw_station_data(tidy = TRUE)} for several stations,
-as one long table. Stations without a raw file for the year are skipped
-with a warning.
+\code{cpcb_download_raw_station_data(tidy = TRUE)} for several stations or
+every station of a city, as one long table. Stations without a raw file
+for the year are skipped with a warning, and an outage stops the run,
+keeping the stations already fetched. If nothing was fetched in an outage,
+the function stops with an error of class \code{vayuayan_network}.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 raw <- cpcb_raw_readings(c("site_1554", "site_162"), 2025, "PM2.5")
+delhi <- cpcb_raw_readings(year = 2025, pollutants = "PM2.5", city = "Delhi")
 \dontshow{\}) # examplesIf}
 }

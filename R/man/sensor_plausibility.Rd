@@ -45,7 +45,7 @@ Data frame with \code{id_col}, \code{readings},
 \description{
 Screening flags per sensor: negative, zero and extreme readings, stuck
 runs and spikes. These are screening rules, not EPA targets: a flag marks
-readings to examine, not proof of a fault.
+readings to examine, not proof of a fault. A repeated time counts once.
 }
 \examples{
 r <- data.frame(

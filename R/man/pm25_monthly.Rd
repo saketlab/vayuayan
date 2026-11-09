@@ -23,7 +23,9 @@ pm25_monthly(
 \item{version, region, cache_dir}{Passed to \code{pm25_download_netcdf()}.}
 }
 \value{
-Data frame with columns \code{month} and \code{pm25}.
+Data frame with columns \code{month} and \code{pm25}. A month whose
+file cannot be downloaded is left out with a warning and listed in
+attribute \code{failed_months}.
 }
 \description{
 Mean satellite PM2.5 over the bounding box of \code{shape} for each month

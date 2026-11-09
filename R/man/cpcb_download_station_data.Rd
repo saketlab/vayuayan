@@ -4,7 +4,13 @@
 \alias{cpcb_download_station_data}
 \title{Download station-level AQI data}
 \usage{
-cpcb_download_station_data(station_id, year, save_location)
+cpcb_download_station_data(
+  station_id,
+  year,
+  save_location,
+  city = NULL,
+  state = NULL
+)
 }
 \arguments{
 \item{station_id}{Character. Station ID (e.g. \code{"site_301"}) or name. Part of a
@@ -12,11 +18,14 @@ name is enough when it picks one station (e.g. \code{"Anand Vihar, Delhi"}).}
 
 \item{year}{Integer. Year for data (e.g. \code{2022}).}
 
-\item{save_location}{Character. Full file path to save the downloaded CSV.}
+\item{save_location}{Character. Full file path to save the downloaded CSV,
+or \code{""} to save nothing.}
+
+\item{city, state}{Optional city and state that narrow an ambiguous station
+name. State applies only together with city.}
 }
 \value{
-Data frame preview (first 6 rows) of the downloaded data.
-The full data is saved to \code{save_location}.
+Data frame of the downloaded data.
 }
 \description{
 Download daily PM2.5 AQI data for a single CPCB monitoring station for

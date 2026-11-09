@@ -224,6 +224,9 @@ reference:
   - cpcb_download_hourly
   - cpcb_raw_to_long
   - cpcb_station_daily_aqi
+  - cpcb_download_station_report
+  - cpcb_download_city_report
+  - cpcb_station_table
 
 - title: "National AQI"
   desc: "Compute the CPCB National Air Quality Index from pollutant concentrations"
@@ -237,9 +240,10 @@ reference:
   - daily_aqi
 
 - title: "US EPA AQI"
-  desc: "The US EPA Air Quality Index (EPA-454/B-24-002, May 2024)."
+  desc: "The US EPA Air Quality Index (EPA-403/B-26-003, May 2026)."
   contents:
   - compute_us_aqi
+  - daily_us_aqi
   - us_aqi_sub_index
   - us_aqi_pollutant_name
   - us_aqi_category

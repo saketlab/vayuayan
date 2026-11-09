@@ -8,6 +8,12 @@
 )
 .readings_per_day <- 96
 
+# Readings with a time and a finite value, one row per sensor and time
+.usable_readings <- function(readings, value, id_col, time_col) {
+  df <- readings[!is.na(readings[[time_col]]) & .has_value(readings[[value]]), , drop = FALSE]
+  .average_duplicates(df, id_col, time_col, value)
+}
+
 #' Daily or hourly means of sensor readings
 #'
 #' @param readings Data frame with one row per reading, such as
@@ -21,7 +27,8 @@
 #' @param id_col,time_col Sensor and time columns.
 #' @return Data frame with \code{id_col}, \code{date} (\code{Date}) or
 #'   \code{hour} (POSIXct), \code{value} and \code{n}, for the periods with
-#'   enough readings.
+#'   enough readings. Days are taken in the time zone of \code{time_col}, and
+#'   readings repeated at one time are averaged and count once.
 #' @examples
 #' r <- data.frame(
 #'   sensor_id = "s1",
@@ -35,12 +42,12 @@ readings_mean <- function(readings, value = "pm25", by = "day", min_readings = N
   if (!by %in% c("day", "hour")) stop('by must be "day" or "hour"', call. = FALSE)
   per <- if (by == "day") .readings_per_day else .readings_per_day / 24
   need <- min_readings %||% ceiling(.epa_pm25_targets$completeness * per)
-  df <- readings[!is.na(readings[[time_col]]) & !is.na(readings[[value]]), , drop = FALSE]
+  df <- .usable_readings(readings, value, id_col, time_col)
   key <- if (by == "day") "date" else "hour"
   period <- if (by == "day") {
-    as.Date(df[[time_col]], tz = "UTC")
+    .local_date(df[[time_col]])
   } else {
-    as.POSIXct(trunc(df[[time_col]], "hours"), tz = "UTC")
+    as.POSIXct(trunc(df[[time_col]], "hours"))
   }
   group <- paste(df[[id_col]], format(period), sep = "\r")
   first <- !duplicated(group)
@@ -59,7 +66,8 @@ readings_mean <- function(readings, value = "pm25", by = "day", min_readings = N
 #'
 #' @description
 #' Share of the expected 15-minute readings, and of days with a valid
-#' 24-hour average (75 \% of the readings, the EPA rule), per sensor.
+#' 24-hour average (75 \% of the readings, the EPA rule), per sensor. Days are
+#' taken in the time zone of \code{time_col}, and a repeated time counts once.
 #'
 #' @inheritParams readings_mean
 #' @param start,end First and last day of the period (inclusive).
@@ -78,10 +86,10 @@ readings_mean <- function(readings, value = "pm25", by = "day", min_readings = N
 sensor_completeness <- function(readings, start, end, value = "pm25", ids = NULL,
                                 id_col = "sensor_id", time_col = "timestamp") {
   days <- seq(as.Date(start), as.Date(end), by = "day")
-  df <- readings[!is.na(readings[[time_col]]) & !is.na(readings[[value]]), , drop = FALSE]
-  day <- as.Date(df[[time_col]], tz = "UTC")
+  df <- .usable_readings(readings, value, id_col, time_col)
+  day <- .local_date(df[[time_col]])
   df <- df[day >= min(days) & day <= max(days), , drop = FALSE]
-  day <- as.Date(df[[time_col]], tz = "UTC")
+  day <- .local_date(df[[time_col]])
   ids <- sort(unique(as.character(ids %||% df[[id_col]])), method = "radix")
   need <- ceiling(.epa_pm25_targets$completeness * .readings_per_day)
   per_day <- table(factor(df[[id_col]], levels = ids), day)
@@ -103,7 +111,7 @@ sensor_completeness <- function(readings, start, end, value = "pm25", ids = NULL
 #' @description
 #' Screening flags per sensor: negative, zero and extreme readings, stuck
 #' runs and spikes. These are screening rules, not EPA targets: a flag marks
-#' readings to examine, not proof of a fault.
+#' readings to examine, not proof of a fault. A repeated time counts once.
 #'
 #' @inheritParams readings_mean
 #' @param value Column to check, such as \code{"pm25"} or \code{"temp"}.
@@ -129,18 +137,14 @@ sensor_completeness <- function(readings, start, end, value = "pm25", ids = NULL
 sensor_plausibility <- function(readings, value = "pm25", max_value = 1000, stuck_run = 8,
                                 spike_factor = 10, spike_min = 100, spike_window = 9,
                                 id_col = "sensor_id", time_col = "timestamp") {
-  df <- readings[!is.na(readings[[time_col]]) & !is.na(readings[[value]]), , drop = FALSE]
+  df <- .usable_readings(readings, value, id_col, time_col)
   ids <- sort(unique(as.character(df[[id_col]])), method = "radix")
-  half <- spike_window %/% 2
   rows <- lapply(ids, function(id) {
     g <- df[df[[id_col]] == id, , drop = FALSE]
     v <- g[[value]][order(g[[time_col]], method = "radix")]
     runs <- rle(v)
     run <- rep(runs$lengths, runs$lengths)
-    around <- vapply(seq_along(v), function(i) {
-      w <- v[max(1, i - half):min(length(v), i + half)]
-      if (length(w) >= half + 1) stats::median(w) else NA_real_
-    }, numeric(1))
+    around <- .centred_median(v, spike_window)
     spikes <- !is.na(around) & v > spike_factor * around & v > spike_min
     data.frame(
       id = id, readings = length(v), negative_pct = 100 * mean(v < 0),
@@ -155,6 +159,26 @@ sensor_plausibility <- function(readings, value = "pm25", max_value = 1000, stuc
   )), rows))
   names(out)[1] <- id_col
   out
+}
+
+# Median of the window around each value, NA with under half a window, as pandas rolling(center = TRUE)
+.centred_median <- function(v, window) {
+  before <- window %/% 2
+  after <- window - before - 1
+  n <- length(v)
+  around <- rep(NA_real_, n)
+  ends <- seq_len(n)
+  # runmed takes only odd windows and leaves the first and last half window
+  if (window %% 2 == 1 && n >= window) {
+    inner <- (before + 1):(n - after)
+    around[inner] <- as.numeric(stats::runmed(v, window, endrule = "keep"))[inner]
+    ends <- setdiff(ends, inner)
+  }
+  around[ends] <- vapply(ends, function(i) {
+    w <- v[max(1, i - before):min(n, i + after)]
+    if (length(w) >= before + 1) stats::median(w) else NA_real_
+  }, numeric(1))
+  around
 }
 
 #' Precision of collocated sensors
@@ -177,7 +201,7 @@ sensor_plausibility <- function(readings, value = "pm25", max_value = 1000, stuc
 #' collocated_precision(daily)
 #' @export
 collocated_precision <- function(daily, value = "pm25", min_sensors = 3, date_col = "date") {
-  df <- daily[!is.na(daily[[value]]), , drop = FALSE]
+  df <- daily[.has_value(daily[[value]]), , drop = FALSE]
   days <- sort(unique(df[[date_col]]))
   rows <- lapply(seq_along(days), function(i) {
     v <- df[[value]][df[[date_col]] == days[i]]
@@ -201,7 +225,8 @@ collocated_precision <- function(daily, value = "pm25", min_sensors = 3, date_co
 #' @param tolerance Ratios within \code{1 +/- tolerance} count as agreeing.
 #' @param id_col Sensor column.
 #' @return Data frame with \code{id_col}, \code{days}, \code{median_ratio}
-#'   and \code{within_pct}, sorted by \code{median_ratio}.
+#'   and \code{within_pct}, sorted by \code{median_ratio}. Non-finite ratios,
+#'   such as against a peer median of 0, are left out.
 #' @examples
 #' daily <- data.frame(
 #'   sensor_id = rep(c("a", "b", "c"), 2), date = rep(as.Date("2026-01-01") + 0:1, each = 3),
@@ -211,20 +236,20 @@ collocated_precision <- function(daily, value = "pm25", min_sensors = 3, date_co
 #' @export
 peer_ratio <- function(daily, value = "pm25", min_sensors = 3, tolerance = 0.3,
                        id_col = "sensor_id", date_col = "date") {
-  df <- daily[!is.na(daily[[value]]), , drop = FALSE]
+  df <- daily[.has_value(daily[[value]]), , drop = FALSE]
   ids <- sort(unique(as.character(df[[id_col]])), method = "radix")
   days <- sort(unique(df[[date_col]]))
-  wide <- matrix(NA_real_, length(days), length(ids))
-  for (k in seq_len(nrow(df))) {
-    i <- match(df[[date_col]][k], days)
-    j <- match(df[[id_col]][k], ids)
-    wide[i, j] <- mean(c(wide[i, j], df[[value]][k]), na.rm = TRUE)
-  }
+  # a sensor with several rows on a day takes their arithmetic mean
+  wide <- unname(tapply(
+    df[[value]],
+    list(factor(df[[date_col]], levels = days), factor(as.character(df[[id_col]]), levels = ids)),
+    mean
+  ))
   wide <- wide[rowSums(!is.na(wide)) >= min_sensors, , drop = FALSE]
   rows <- lapply(seq_along(ids), function(j) {
     others <- apply(wide[, -j, drop = FALSE], 1, stats::median, na.rm = TRUE)
     ratio <- wide[, j] / others
-    ratio <- ratio[!is.na(ratio)]
+    ratio <- ratio[is.finite(ratio)]
     data.frame(
       id = ids[j], days = length(ratio),
       median_ratio = if (length(ratio)) stats::median(ratio) else NA_real_,
@@ -255,7 +280,8 @@ peer_ratio <- function(daily, value = "pm25", min_sensors = 3, tolerance = 0.3,
 #' @return Data frame with \code{id_col}, \code{days}, \code{slope},
 #'   \code{intercept}, \code{r2}, \code{rmse}, \code{nrmse_pct},
 #'   \code{slope_ok}, \code{intercept_ok}, \code{r2_ok}, \code{error_ok}
-#'   (RMSE or NRMSE) and \code{targets_met} (0 to 4).
+#'   (RMSE or NRMSE), which are never \code{NA}, and \code{targets_met} (0 to
+#'   4).
 #' @examples
 #' paired <- data.frame(sensor_id = "s1", reference = 1:40, pm25 = 2 + 1.1 * (1:40))
 #' sensor_accuracy(paired)
@@ -263,7 +289,7 @@ peer_ratio <- function(daily, value = "pm25", min_sensors = 3, tolerance = 0.3,
 sensor_accuracy <- function(paired, sensor = "pm25", reference = "reference",
                             min_days = 30, id_col = "sensor_id") {
   t <- .epa_pm25_targets
-  df <- paired[!is.na(paired[[sensor]]) & !is.na(paired[[reference]]), , drop = FALSE]
+  df <- .finite_rows(paired, c(sensor, reference))
   ids <- sort(unique(as.character(df[[id_col]])), method = "radix")
   rows <- lapply(ids, function(id) {
     g <- df[df[[id_col]] == id, , drop = FALSE]
@@ -279,10 +305,11 @@ sensor_accuracy <- function(paired, sensor = "pm25", reference = "reference",
       r2 = stats::cor(x, y)^2, rmse = rmse, nrmse_pct = 100 * rmse / mean(x),
       stringsAsFactors = FALSE
     )
-    out$slope_ok <- out$slope >= t$slope[1] && out$slope <= t$slope[2]
-    out$intercept_ok <- out$intercept >= t$intercept[1] && out$intercept <= t$intercept[2]
-    out$r2_ok <- out$r2 >= t$r2
-    out$error_ok <- rmse <= t$rmse || out$nrmse_pct <= t$nrmse_pct
+    # an undefined fit (constant sensor or reference) meets no target
+    out$slope_ok <- isTRUE(out$slope >= t$slope[1] && out$slope <= t$slope[2])
+    out$intercept_ok <- isTRUE(out$intercept >= t$intercept[1] && out$intercept <= t$intercept[2])
+    out$r2_ok <- isTRUE(out$r2 >= t$r2)
+    out$error_ok <- isTRUE(rmse <= t$rmse || out$nrmse_pct <= t$nrmse_pct)
     out$targets_met <- as.integer(out$slope_ok + out$intercept_ok + out$r2_ok + out$error_ok)
     out
   })
@@ -306,7 +333,8 @@ sensor_accuracy <- function(paired, sensor = "pm25", reference = "reference",
 #' @param hourly Data frame with hourly sensor, reference and humidity
 #'   values.
 #' @param sensor,reference,rh Their columns.
-#' @param breaks Humidity band limits (bands are \code{(lower, upper]}).
+#' @param breaks Humidity band limits (bands are \code{(lower, upper]}, and
+#'   the first band also includes its lower limit).
 #' @param min_reference Smallest reference value used.
 #' @return Data frame with \code{band} (\code{"40-50"} for 40 < RH <= 50),
 #'   \code{hours}, \code{median_ratio}, \code{q25} and \code{q75}.
@@ -316,10 +344,10 @@ sensor_accuracy <- function(paired, sensor = "pm25", reference = "reference",
 #' @export
 ratio_by_humidity <- function(hourly, sensor = "sensor", reference = "reference", rh = "rh",
                               breaks = c(0, 40, 50, 60, 70, 80, 90, 100), min_reference = 5) {
-  df <- hourly[!is.na(hourly[[sensor]]) & !is.na(hourly[[reference]]) & !is.na(hourly[[rh]]), , drop = FALSE]
+  df <- .finite_rows(hourly, c(sensor, reference, rh))
   df <- df[df[[reference]] >= min_reference, , drop = FALSE]
   labels <- sprintf("%g-%g", utils::head(breaks, -1), utils::tail(breaks, -1))
-  band <- cut(df[[rh]], breaks, labels = labels)
+  band <- cut(df[[rh]], breaks, labels = labels, include.lowest = TRUE)
   ratio <- df[[sensor]] / df[[reference]]
   rows <- lapply(labels, function(b) {
     r <- ratio[!is.na(band) & band == b]

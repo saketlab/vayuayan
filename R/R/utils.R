@@ -13,13 +13,17 @@ clean_station_name <- function(station_name) {
     return("")
   }
 
-  cleaned <- trimws(station_name)
+  # (*UCP) and \\p{L}/\\p{N} match Python's Unicode \\w and \\s on non-ASCII names
+  replace_ucp <- function(pattern, replacement, x) {
+    gsub(paste0("(*UCP)", pattern), replacement, x, perl = TRUE)
+  }
+  cleaned <- replace_ucp("^\\s+|\\s+$", "", enc2utf8(station_name))
 
-  cleaned <- gsub("\\s*-\\s*", " ", cleaned)
-  cleaned <- gsub(",\\s*", " ", cleaned)
+  cleaned <- replace_ucp("\\s*-\\s*", " ", cleaned)
+  cleaned <- replace_ucp(",\\s*", " ", cleaned)
   cleaned <- gsub("\\.", "", cleaned)
-  cleaned <- gsub("[^\\w\\s]", " ", cleaned, perl = TRUE)
-  cleaned <- gsub("\\s+", " ", cleaned)
+  cleaned <- replace_ucp("[^\\p{L}\\p{N}_\\s]", " ", cleaned)
+  cleaned <- replace_ucp("\\s+", " ", cleaned)
   cleaned <- gsub(" ", "_", cleaned)
   cleaned <- gsub("_+", "_", cleaned)
   cleaned <- gsub("^_+|_+$", "", cleaned)
@@ -40,19 +44,8 @@ clean_station_name <- function(station_name) {
 get_aqi_category <- function(aqi_value) {
   if (is.na(aqi_value)) {
     return("No Data")
-  } else if (aqi_value <= 50) {
-    return("Good")
-  } else if (aqi_value <= 100) {
-    return("Satisfactory")
-  } else if (aqi_value <= 200) {
-    return("Moderate")
-  } else if (aqi_value <= 300) {
-    return("Poor")
-  } else if (aqi_value <= 400) {
-    return("Very Poor")
-  } else {
-    return("Severe")
   }
+  get_aqi_categories(aqi_value)
 }
 
 #' Vectorized AQI category
@@ -68,7 +61,7 @@ get_aqi_category <- function(aqi_value) {
 get_aqi_categories <- function(aqi_values) {
   aqi_values <- as.numeric(aqi_values)
   # a value on a bound belongs to the lower band
-  upper <- .aqi_bands[c(FALSE, TRUE)][-6]
+  upper <- utils::head(.aqi_categories, -1)
   out <- names(.aqi_colours)[findInterval(aqi_values, upper, left.open = TRUE) + 1]
   out[is.na(aqi_values)] <- "No Data"
   out
@@ -113,7 +106,9 @@ haversine_distance <- function(lat1, lon1, lat2, lon2) {
 #' @param data List of cities with nested stations (from cpcb_get_all_india())
 #' @return Data frame with columns: station_id, station_name, city_name,
 #'   city_id, state_id, longitude, latitude, live, avg_aqi, status,
-#'   aqi_category
+#'   aqi_category. \code{status} is \code{"Live"}, \code{"No Reading"} (a
+#'   live station without an AQI) or \code{"Offline"}. Stations without
+#'   coordinates have \code{NA} longitude and latitude.
 #' @examplesIf interactive()
 #' df <- stations_to_dataframe(cpcb_get_all_india())
 #' table(df$aqi_category)
@@ -121,83 +116,96 @@ haversine_distance <- function(lat1, lon1, lat2, lon2) {
 stations_to_dataframe <- function(data) {
   rows <- list()
 
-  .extract_stations <- function(stations, city_name, city_id, state_id) {
-    if (is.data.frame(stations)) {
-      for (i in seq_len(nrow(stations))) {
-        lon <- suppressWarnings(as.numeric(stations$longitude[i]))
-        lat <- suppressWarnings(as.numeric(stations$latitude[i]))
-        if (is.na(lon) || is.na(lat)) next
+  for (city in .row_records(data)) {
+    if (!is.list(city$stationsInCity)) next
+    for (station in .row_records(city$stationsInCity)) {
+      is_live <- station$live %||% FALSE
+      avg_aqi <- .to_numeric(station$avg %||% NA)
 
-        is_live <- stations$live[i] %||% FALSE
-        avg_aqi <- suppressWarnings(as.numeric(stations$avg[i]))
-
-        rows[[length(rows) + 1]] <<- data.frame(
-          station_id = as.character(stations$id[i] %||% ""),
-          station_name = as.character(stations$name[i] %||% ""),
-          city_name = city_name,
-          city_id = city_id,
-          state_id = state_id,
-          longitude = lon,
-          latitude = lat,
-          live = is_live,
-          avg_aqi = avg_aqi,
-          status = if (isTRUE(is_live)) "Live" else "Offline",
-          aqi_category = get_aqi_category(avg_aqi),
-          stringsAsFactors = FALSE
-        )
-      }
-    } else if (is.list(stations)) {
-      for (station in stations) {
-        lon <- suppressWarnings(as.numeric(station$longitude %||% NA))
-        lat <- suppressWarnings(as.numeric(station$latitude %||% NA))
-        if (is.na(lon) || is.na(lat)) next
-
-        is_live <- station$live %||% FALSE
-        avg_aqi <- suppressWarnings(as.numeric(station$avg %||% NA))
-
-        rows[[length(rows) + 1]] <<- data.frame(
-          station_id = as.character(station$id %||% ""),
-          station_name = as.character(station$name %||% ""),
-          city_name = city_name,
-          city_id = city_id,
-          state_id = state_id,
-          longitude = lon,
-          latitude = lat,
-          live = is_live,
-          avg_aqi = avg_aqi,
-          status = if (isTRUE(is_live)) "Live" else "Offline",
-          aqi_category = get_aqi_category(avg_aqi),
-          stringsAsFactors = FALSE
-        )
-      }
+      rows[[length(rows) + 1]] <- data.frame(
+        station_id = as.character(station$id %||% ""),
+        station_name = as.character(station$name %||% ""),
+        city_name = city$cityName %||% "",
+        city_id = city$cityID %||% "",
+        state_id = city$stateID %||% "",
+        longitude = .to_numeric(station$longitude %||% NA),
+        latitude = .to_numeric(station$latitude %||% NA),
+        live = is_live,
+        avg_aqi = avg_aqi,
+        status = if (!isTRUE(is_live)) "Offline" else if (is.na(avg_aqi)) "No Reading" else "Live",
+        aqi_category = get_aqi_category(avg_aqi),
+        stringsAsFactors = FALSE
+      )
     }
   }
 
-  if (is.data.frame(data)) {
-    for (i in seq_len(nrow(data))) {
-      city_name <- data$cityName[i] %||% ""
-      city_id <- data$cityID[i] %||% ""
-      state_id <- data$stateID[i] %||% ""
-      stations <- data$stationsInCity[[i]]
-      if (is.null(stations)) next
-      .extract_stations(stations, city_name, city_id, state_id)
-    }
-  } else {
-    for (city in data) {
-      city_name <- city$cityName %||% ""
-      city_id <- city$cityID %||% ""
-      state_id <- city$stateID %||% ""
-      stations <- city$stationsInCity
-      if (is.null(stations)) next
-      .extract_stations(stations, city_name, city_id, state_id)
-    }
+  if (length(rows) == 0) {
+    return(data.frame(
+      station_id = character(), station_name = character(), city_name = character(),
+      city_id = character(), state_id = character(), longitude = numeric(),
+      latitude = numeric(), live = logical(), avg_aqi = numeric(),
+      status = character(), aqi_category = character()
+    ))
   }
-
   dplyr::bind_rows(rows)
 }
 
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
+}
+
+# A data frame as a list of one-row lists, so both feed forms read alike
+.row_records <- function(x) {
+  if (!is.data.frame(x)) {
+    return(x)
+  }
+  lapply(seq_len(nrow(x)), function(i) {
+    lapply(x, function(col) {
+      if (is.data.frame(col)) col[i, , drop = FALSE] else if (is.list(col)) col[[i]] else col[i]
+    })
+  })
+}
+
+# as.numeric, with text and non-finite values (Inf, -Inf, NaN) as NA
+.to_numeric <- function(x) {
+  out <- suppressWarnings(as.numeric(x))
+  out[!is.finite(out)] <- NA_real_
+  out
+}
+
+# TRUE where x holds a finite number; Inf counts as missing, as NaN does
+.has_value <- function(x) !is.na(.to_numeric(x))
+
+# Rows of df with a finite number in every one of columns
+.finite_rows <- function(df, columns) {
+  df[Reduce(`&`, lapply(columns, function(col) .has_value(df[[col]]))), , drop = FALSE]
+}
+
+# calendar day in the timestamps' own zone; going through UTC splits IST days at 05:30
+.local_date <- function(x) {
+  if (!inherits(x, "POSIXct")) {
+    return(as.Date(x))
+  }
+  tz <- attr(x, "tzone")
+  as.Date(x, tz = if (is.null(tz)) "" else tz[1])
+}
+
+# one row per key and time, averaged, so repeated readings count once
+.average_duplicates <- function(df, keys, time_col, value) {
+  group <- do.call(paste, c(
+    unname(lapply(df[keys], as.character)),
+    list(xtfrm(df[[time_col]]), sep = "\r")
+  ))
+  repeated <- duplicated(group)
+  if (!any(repeated)) {
+    return(df)
+  }
+  # ave is slow over many groups, and a group of one keeps its value
+  has_repeat <- group %in% group[repeated]
+  values <- as.numeric(df[[value]])
+  values[has_repeat] <- stats::ave(values[has_repeat], group[has_repeat], FUN = mean)
+  df[[value]] <- values
+  df[!repeated, , drop = FALSE]
 }
 
 #' Analyze station data
@@ -212,6 +220,7 @@ stations_to_dataframe <- function(data) {
 #' @export
 analyze_station_data <- function(data) {
   df <- stations_to_dataframe(data)
+  aqi <- df$avg_aqi[!is.na(df$avg_aqi)]
 
   analysis <- list(
     total_cities = NROW(data),
@@ -221,9 +230,9 @@ analyze_station_data <- function(data) {
     states = length(unique(df$state_id)),
     unique_states = sort(unique(df$state_id)),
     stations_with_aqi_data = sum(!is.na(df$avg_aqi)),
-    avg_aqi_overall = mean(df$avg_aqi, na.rm = TRUE),
-    min_aqi = min(df$avg_aqi, na.rm = TRUE),
-    max_aqi = max(df$avg_aqi, na.rm = TRUE)
+    avg_aqi_overall = if (length(aqi)) mean(aqi) else NA_real_,
+    min_aqi = if (length(aqi)) min(aqi) else NA_real_,
+    max_aqi = if (length(aqi)) max(aqi) else NA_real_
   )
 
   df$aqi_category <- get_aqi_categories(df$avg_aqi)
@@ -338,7 +347,7 @@ stations_to_city_summary <- function(data) {
     st <- city$stationsInCity
     live <- if (is.data.frame(st)) !is.na(st$live) & st$live else vapply(st, function(s) isTRUE(s$live), logical(1))
     avg <- if (is.data.frame(st)) st$avg else vapply(st, function(s) as.character(s$avg %||% NA), character(1))
-    aqi <- suppressWarnings(as.numeric(avg))[live]
+    aqi <- .to_numeric(avg)[live]
     aqi <- aqi[!is.na(aqi)]
     total <- length(live)
     data.frame(

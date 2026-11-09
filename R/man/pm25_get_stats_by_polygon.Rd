@@ -31,11 +31,14 @@ pm25_get_stats_by_polygon(
 download.}
 }
 \value{
-Data frame with the identifier column, \code{mean} and \code{std}.
+Data frame with the identifier column, \code{mean} and \code{std}
+(population standard deviation).
 }
 \description{
 Mean and standard deviation of satellite PM2.5 within each feature of a
-GeoJSON file, over the cells whose centers fall inside it.
+GeoJSON file, over the cells whose centers fall inside it. A feature with
+no cell center inside uses the cells it touches. A region entirely outside
+the grid is an error.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

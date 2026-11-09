@@ -31,7 +31,8 @@ completeness rule.}
 \value{
 Data frame with \code{id_col}, \code{date} (\code{Date}) or
 \code{hour} (POSIXct), \code{value} and \code{n}, for the periods with
-enough readings.
+enough readings. Days are taken in the time zone of \code{time_col}, and
+readings repeated at one time are averaged and count once.
 }
 \description{
 Daily or hourly means of sensor readings

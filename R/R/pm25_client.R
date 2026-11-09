@@ -1,3 +1,9 @@
+# a smaller cached file is a failed transfer; Python applies the same limit
+.pm25_min_cached_bytes <- 1024 * 1024
+
+# .tif is what the Python package writes when it falls back to Google Earth Engine
+.pm25_cached_pattern <- "\\.(nc|tif)$"
+
 .pm25_find_variable <- function(pm25_raster) {
   var_names <- names(pm25_raster)
   if ("PM25" %in% var_names) {
@@ -21,6 +27,13 @@
   pm25_var <- .pm25_find_variable(pm25_raster)
   pm25_layer <- pm25_raster[[pm25_var]]
 
+  grid <- terra::ext(pm25_layer)
+  # NA for an empty geometry, which the check below reports
+  if (isTRUE(bbox$xmax < terra::xmin(grid) || bbox$xmin > terra::xmax(grid) ||
+    bbox$ymax < terra::ymin(grid) || bbox$ymin > terra::ymax(grid))) {
+    stop("The polygon is entirely outside the PM2.5 grid.", call. = FALSE)
+  }
+
   bbox_buffered <- sf::st_bbox(c(
     xmin = as.numeric(bbox$xmin) - 0.1,
     ymin = as.numeric(bbox$ymin) - 0.1,
@@ -32,6 +45,16 @@
   }
 
   terra::crop(pm25_layer, terra::ext(bbox_buffered))
+}
+
+# cells whose centres are in the polygon; touched cells if no centre is inside (small = TRUE)
+.pm25_extract_cells <- function(pm25, polygon, fun = NULL, ...) {
+  terra::extract(pm25, polygon, fun = fun, ..., touches = FALSE, small = TRUE, ID = FALSE)[[1]]
+}
+
+.pm25_polygon_values <- function(pm25, polygon) {
+  values <- .pm25_extract_cells(pm25, polygon)
+  values[!is.na(values)]
 }
 
 .pm25_get_stats_grouped <- function(gdf, nc_file, group_cols) {
@@ -46,12 +69,10 @@
   for (group_gdf in gdf_grouped) {
     tryCatch(
       {
-        group_vals <- group_gdf[1, group_cols, drop = FALSE]
+        group_vals <- sf::st_drop_geometry(group_gdf)[1, group_cols, drop = FALSE]
         combined_geom <- sf::st_union(group_gdf)
         geom_vect <- terra::vect(combined_geom)
-        pm25_masked <- terra::mask(pm25_cropped, geom_vect)
-
-        values <- terra::values(pm25_masked, na.rm = TRUE)
+        values <- .pm25_polygon_values(pm25_cropped, geom_vect)
 
         result <- as.list(group_vals)
 
@@ -125,7 +146,7 @@ pm25_download_netcdf <- function(year, month = NULL,
   filename <- .pm25_get_aws_filename(year, month, region, version)
 
   if (!force_download) {
-    cached <- .cache_lookup(dirs, filename, min_size = 1024 * 1024)
+    cached <- .cache_lookup(dirs, filename, min_size = .pm25_min_cached_bytes)
     if (!is.null(cached)) {
       cli::cli_alert_info("Using cached file: {cached}")
       return(cached)
@@ -147,12 +168,17 @@ pm25_download_netcdf <- function(year, month = NULL,
       if (interactive()) httr::progress()
     ),
     error = function(e) {
-      stop(sprintf("Failed to download NetCDF data: %s", conditionMessage(e)),
-        call. = FALSE
+      .vayuayan_abort(
+        "vayuayan_pm25_download",
+        sprintf("Failed to download NetCDF data: %s", conditionMessage(e)),
+        parent = e
       )
     }
   )
-  httr::stop_for_status(response, task = paste("download", aws_url))
+  tryCatch(
+    httr::stop_for_status(response, task = paste("download", aws_url)),
+    http_error = function(e) .vayuayan_abort("vayuayan_pm25_download", conditionMessage(e), parent = e)
+  )
   file.rename(partial, cached_path)
 
   size_mb <- file.info(cached_path)$size / (1024 * 1024)
@@ -165,7 +191,10 @@ pm25_download_netcdf <- function(year, month = NULL,
 #' @description
 #' Compute mean, SD, min, max, and pixel count of satellite PM2.5 for a
 #' region defined by a GeoJSON file. Optionally group by a column in the
-#' GeoJSON (e.g. district name) to return per-group statistics.
+#' GeoJSON (e.g. district name) to return per-group statistics. Statistics
+#' cover the cells whose centres fall inside the polygon; a polygon with no
+#' cell centre inside uses the cells it touches, and a region entirely
+#' outside the grid is an error.
 #'
 #' @param geojson_file Character. Path or URL to a GeoJSON file defining the
 #'   region (remote \code{http(s)://} URLs are read directly).
@@ -274,10 +303,7 @@ pm25_get_stats <- function(geojson_file, year = NULL, month = NULL,
 
   pm25_cropped <- .pm25_load_and_crop(nc_file, sf::st_bbox(polygon))
 
-  polygon_vect <- terra::vect(polygon)
-  pm25_masked <- terra::mask(pm25_cropped, polygon_vect)
-
-  values <- terra::values(pm25_masked, na.rm = TRUE)
+  values <- .pm25_polygon_values(pm25_cropped, terra::vect(polygon))
 
   if (length(values) == 0) {
     stop("No valid PM2.5 data found within the polygon boundary")
@@ -295,7 +321,8 @@ pm25_get_stats <- function(geojson_file, year = NULL, month = NULL,
 #' List cached PM2.5 NetCDF files
 #'
 #' @description
-#' List all cached NetCDF files in the cache directory with file sizes.
+#' List all cached NetCDF files in the cache directory with file sizes,
+#' including any GeoTIFF the Python package saved from Google Earth Engine.
 #'
 #' @param cache_dir Character. Directory containing cached files. \code{NULL}
 #'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()}.
@@ -312,10 +339,13 @@ pm25_list_cached_files <- function(cache_dir = NULL) {
 
   cached_files <- list.files(
     cache_dir,
-    pattern = "\\.nc$",
+    pattern = .pm25_cached_pattern,
     full.names = TRUE
   )
 
+  if (any(grepl("\\.tif$", cached_files))) {
+    cli::cli_alert_warning("Cached .tif files are the coarse Google Earth Engine fallback, not WUSTL NetCDF.")
+  }
   if (length(cached_files) > 0) {
     cli::cli_alert_info("Cached files in {cache_dir}:")
     for (file in cached_files) {
@@ -334,7 +364,8 @@ pm25_list_cached_files <- function(cache_dir = NULL) {
 #' Clear PM2.5 cache
 #'
 #' @description
-#' Delete all cached NetCDF files from the cache directory.
+#' Delete all cached NetCDF files, and any GeoTIFF the Python package saved
+#' from Google Earth Engine, from the cache directory.
 #'
 #' @param cache_dir Character. Directory containing cached files. \code{NULL}
 #'   uses the \code{pm25} folder of \code{vayuayan_cache_dir()}.
@@ -351,7 +382,7 @@ pm25_clear_cache <- function(cache_dir = NULL) {
 
   cached_files <- list.files(
     cache_dir,
-    pattern = "\\.nc$",
+    pattern = .pm25_cached_pattern,
     full.names = TRUE
   )
 
@@ -401,17 +432,41 @@ pm25_v5gl04_path <- function(year, month, base_dir) {
   }
   bbox <- sf::st_bbox(shape)
   nc <- ncdf4::nc_open(nc_path)
-  on.exit(ncdf4::nc_close(nc))
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
   lons <- ncdf4::ncvar_get(nc, lon_name)
   lats <- ncdf4::ncvar_get(nc, lat_name)
-  lon_idx <- which(lons >= bbox["xmin"] & lons <= bbox["xmax"])
-  lat_idx <- which(lats >= bbox["ymin"] & lats <= bbox["ymax"])
+  lon_idx <- .pm25_bbox_index(lons, bbox[["xmin"]], bbox[["xmax"]], "longitude")
+  lat_idx <- .pm25_bbox_index(lats, bbox[["ymin"]], bbox[["ymax"]], "latitude")
   data <- ncdf4::ncvar_get(
     nc, var,
     start = c(min(lon_idx), min(lat_idx)),
     count = c(length(lon_idx), length(lat_idx))
   )
-  list(lons = lons[lon_idx], lats = lats[lat_idx], data = data)
+  list(
+    lons = lons[lon_idx], lats = lats[lat_idx], data = data,
+    lon_step = .pm25_grid_step(lons), lat_step = .pm25_grid_step(lats)
+  )
+}
+
+.pm25_grid_step <- function(coords) {
+  if (length(coords) > 1) stats::median(abs(diff(coords))) else NA_real_
+}
+
+# grid indices in [low, high]; a region between centres takes the nearest overlapping cell
+.pm25_bbox_index <- function(coords, low, high, axis) {
+  idx <- which(coords >= low & coords <= high)
+  if (length(idx)) {
+    return(idx)
+  }
+  half <- .pm25_grid_step(coords) / 2
+  if (is.na(half)) half <- 0
+  if (high < min(coords) - half || low > max(coords) + half) {
+    stop(sprintf(
+      "The region (%s %g to %g) is outside the NetCDF grid (%g to %g).",
+      axis, low, high, min(coords), max(coords)
+    ), call. = FALSE)
+  }
+  which.min(abs(coords - (low + high) / 2))
 }
 
 #' Mean gridded PM2.5 over a region's bounding box
@@ -443,8 +498,8 @@ pm25_read_netcdf_bbox <- function(nc_path, shape, var = "GWRPM25",
 #' @param shape An \code{sf} object defining the region.
 #' @param var NetCDF variable name. Defaults to \code{"GWRPM25"} (WUSTL V5GL04).
 #' @param lon_name,lat_name Longitude/latitude dimension names.
-#' @param mask Logical. If \code{TRUE}, set pixels outside \code{shape} to
-#'   \code{NA}.
+#' @param mask Logical. If \code{TRUE}, set pixels whose centres fall outside
+#'   \code{shape} to \code{NA}.
 #' @return A \code{terra} \code{SpatRaster} cropped to the bounding box.
 #' @examplesIf interactive()
 #' shape <- sf::st_read("https://geo.bharatviz.org/geojsons/cities/delhi.geojson")
@@ -454,18 +509,30 @@ pm25_load_netcdf_bbox <- function(nc_path, shape, var = "GWRPM25",
                                   lon_name = "lon", lat_name = "lat",
                                   mask = FALSE) {
   d <- .pm25_read_bbox(nc_path, shape, var, lon_name, lat_name)
+  # the coordinates are cell centres: the raster extends half a cell beyond them
+  dx <- if (is.na(d$lon_step)) d$lat_step else d$lon_step
+  dy <- if (is.na(d$lat_step)) d$lon_step else d$lat_step
+  if (is.na(dx)) {
+    stop("A NetCDF grid of one cell has no grid spacing.", call. = FALSE)
+  }
   r <- terra::rast(
     nrows = length(d$lats), ncols = length(d$lons),
-    xmin = min(d$lons), xmax = max(d$lons),
-    ymin = min(d$lats), ymax = max(d$lats),
+    xmin = min(d$lons) - dx / 2, xmax = max(d$lons) + dx / 2,
+    ymin = min(d$lats) - dy / 2, ymax = max(d$lats) + dy / 2,
     crs = "EPSG:4326"
   )
-  terra::values(r) <- t(d$data)[nrow(t(d$data)):1, ]
+  # ncvar_get drops the dimension of a single row or column
+  grid <- matrix(d$data, length(d$lons), length(d$lats))
+  terra::values(r) <- as.vector(grid[order(d$lons), order(d$lats, decreasing = TRUE), drop = FALSE])
   if (mask) {
-    r <- terra::mask(r, terra::vect(sf::st_geometry(shape)))
+    # the polygon statistics count cells by their centres
+    r <- terra::mask(r, terra::vect(sf::st_geometry(shape)), touches = FALSE)
   }
   r
 }
 
 # population standard deviation of a polygon's pixels (denominator n)
-.pop_sd <- function(x) sqrt(mean((x - mean(x))^2))
+.pop_sd <- function(x, na.rm = FALSE) {
+  if (na.rm) x <- x[!is.na(x)]
+  sqrt(mean((x - mean(x))^2))
+}

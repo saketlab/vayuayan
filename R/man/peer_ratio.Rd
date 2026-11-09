@@ -28,7 +28,8 @@ peer_ratio(
 }
 \value{
 Data frame with \code{id_col}, \code{days}, \code{median_ratio}
-and \code{within_pct}, sorted by \code{median_ratio}.
+and \code{within_pct}, sorted by \code{median_ratio}. Non-finite ratios,
+such as against a peer median of 0, are left out.
 }
 \description{
 On days with at least \code{min_sensors} sensors, each sensor's daily mean

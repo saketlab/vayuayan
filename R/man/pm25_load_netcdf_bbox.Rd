@@ -22,8 +22,8 @@ pm25_load_netcdf_bbox(
 
 \item{lon_name, lat_name}{Longitude/latitude dimension names.}
 
-\item{mask}{Logical. If \code{TRUE}, set pixels outside \code{shape} to
-\code{NA}.}
+\item{mask}{Logical. If \code{TRUE}, set pixels whose centres fall outside
+\code{shape} to \code{NA}.}
 }
 \value{
 A \code{terra} \code{SpatRaster} cropped to the bounding box.

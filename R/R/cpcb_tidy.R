@@ -22,10 +22,12 @@ cpcb_tidy_daily <- function(x, year = NULL) {
   }
   months <- match(names(x)[-1], month.name)
   keep <- which(!is.na(months))
+  # footer rows such as "Min" have no day number; a sheet can have no columns
+  days <- if (ncol(x) > 0) suppressWarnings(as.integer(as.character(x[[1]]))) else integer()
   out <- data.frame(
-    day = rep(as.integer(x[[1]]), length(keep)),
+    day = rep(days, length(keep)),
     month = rep(months[keep], each = nrow(x)),
-    value = suppressWarnings(as.numeric(unlist(x[keep + 1], use.names = FALSE)))
+    value = .to_numeric(unlist(x[keep + 1], use.names = FALSE))
   )
   out <- out[!is.na(out$value) & !is.na(out$day), , drop = FALSE]
   if (!is.null(year)) {
@@ -69,18 +71,18 @@ cpcb_raw_to_long <- function(raw, station = NULL, start_date = NULL, end_date = 
   }
   ts <- .parse_timestamp(raw$Timestamp)
   keep <- !is.na(ts)
-  if (!is.null(start_date)) keep <- keep & ts >= as.POSIXct(as.Date(start_date))
-  if (!is.null(end_date)) keep <- keep & ts < as.POSIXct(as.Date(end_date) + 1)
+  day <- .local_date(ts)
+  if (!is.null(start_date)) keep <- keep & day >= as.Date(start_date)
+  if (!is.null(end_date)) keep <- keep & day <= as.Date(end_date)
   raw <- raw[keep, , drop = FALSE]
   ts <- ts[keep]
 
   labels <- setdiff(names(raw), "Timestamp")
-  parts <- regmatches(labels, regexec("^\\s*(.*?)\\s*(?:\\((.*?)\\))?\\s*$", labels, perl = TRUE))
   long <- data.frame(
     timestamp = rep(ts, length(labels)),
-    pollutant = rep(vapply(parts, `[`, "", 2), each = length(ts)),
-    unit = rep(vapply(parts, `[`, "", 3), each = length(ts)),
-    value = suppressWarnings(as.numeric(unlist(raw[labels], use.names = FALSE))),
+    pollutant = rep(.aqi_split_label(labels), each = length(ts)),
+    unit = rep(.aqi_label_unit(labels), each = length(ts)),
+    value = .to_numeric(unlist(raw[labels], use.names = FALSE)),
     stringsAsFactors = FALSE
   )
   long <- long[!is.na(long$value), , drop = FALSE]
@@ -104,11 +106,15 @@ cpcb_raw_to_long <- function(raw, station = NULL, start_date = NULL, end_date = 
 #' Download (or reuse) the CPCB daily city file for each city and year and
 #' return it in long format. CPCB files of past years are cached in
 #' \code{vayuayan_cache_dir()}. With \code{cache_dir}, each sheet is also
-#' saved as \code{<city>_aqi_<year>.csv} there and read back on later calls.
+#' saved as \code{<city>_aqi_<year>.csv} there (\code{<state>_<city>_aqi_<year>.csv}
+#' with \code{state}) and read back on later calls. A copy of the current year
+#' is refreshed on every call, because CPCB still adds data to it.
 #'
 #' @param city Character vector of city names.
 #' @param year Integer year, or a vector of years.
 #' @param cache_dir Optional directory for CSV copies of the sheets.
+#' @param state Optional state name or code, one for each city or one for all,
+#'   needed for a city name used in more than one state.
 #' @return Data frame with columns \code{city}, \code{year}, \code{day},
 #'   \code{month}, \code{value} and \code{date}, sorted by city and date.
 #' @examplesIf interactive()
@@ -117,18 +123,24 @@ cpcb_raw_to_long <- function(raw, station = NULL, start_date = NULL, end_date = 
 #' plot_aqi_radial(cpcb_city_daily("Delhi", 2018:2025))
 #' @export
 cpcb_city_daily <- function(city, year,
-                            cache_dir = NULL) {
-  sheets <- expand.grid(year = as.integer(year), city = city, stringsAsFactors = FALSE)
-  sheets$path <- .cpcb_csv_copy(cache_dir, sprintf("%s_aqi_%s.csv", tolower(sheets$city), sheets$year))
-  missing <- which(!file.exists(sheets$path))
+                            cache_dir = NULL, state = NULL) {
+  states <- if (is.null(state)) rep("", length(city)) else rep_len(state, length(city))
+  sheets <- expand.grid(year = as.integer(year), place = seq_along(city), stringsAsFactors = FALSE)
+  sheets$city <- city[sheets$place]
+  sheets$state <- states[sheets$place]
+  # two states' cities of one name must not share a copy
+  stem <- ifelse(nzchar(sheets$state), paste(sheets$state, sheets$city, sep = "_"), sheets$city)
+  sheets$path <- .cpcb_csv_copy(cache_dir, sprintf("%s_aqi_%s.csv", tolower(stem), sheets$year))
+  missing <- which(!.cpcb_copy_usable(sheets$path, sheets$year))
   if (length(missing) > 0) {
     # one listing per city covers all its years
-    cities <- unique(sheets$city[missing])
-    listings <- stats::setNames(lapply(cities, function(name) {
-      cpcb_get_file_path(city = name, frequency = "daily", data_type = "cityLevel")
-    }), cities)
+    places <- unique(sheets$place[missing])
+    listings <- lapply(stats::setNames(places, places), function(p) {
+      cpcb_get_file_path(city = city[p], state = states[p], frequency = "daily", data_type = "cityLevel")
+    })
+    listing_of <- function(i) listings[[as.character(sheets$place[i])]]
     wanted <- unlist(lapply(missing, function(i) {
-      for (entry in listings[[sheets$city[i]]]) {
+      for (entry in listing_of(i)) {
         if (identical(as.character(entry[["year"]]), as.character(sheets$year[i]))) {
           return(entry[["filepath"]])
         }
@@ -137,7 +149,7 @@ cpcb_city_daily <- function(city, year,
     .cpcb_prefetch(wanted)
     for (i in missing) {
       .cpcb_save_year(
-        listings[[sheets$city[i]]], sheets$year[i], sheets$path[i],
+        listing_of(i), sheets$year[i], sheets$path[i],
         paste("city", sheets$city[i])
       )
     }
@@ -154,39 +166,49 @@ cpcb_city_daily <- function(city, year,
 #' Download (or reuse) the CPCB daily file for each station and year and
 #' return them in one long table. CPCB files of past years are cached in
 #' \code{vayuayan_cache_dir()}. With \code{cache_dir}, each sheet is also
-#' saved as \code{<station_id>_<year>.csv} there. Stations that are not found
-#' or have no data for the year are skipped with a warning.
+#' saved as \code{<station_id>_<year>.csv} there; a copy of the current year is
+#' refreshed on every call. Stations that are not found or have no data for
+#' the year are skipped with a warning, and an outage stops the run, keeping
+#' the stations already fetched. If nothing was fetched in an outage, the
+#' function stops with an error of class \code{vayuayan_network}.
 #'
 #' @param station_id Character vector of station IDs or names, for example
 #'   the \code{value} or \code{label} column of \code{cpcb_get_station_list()}.
-#'   Part of a name is enough when it picks one station.
+#'   Part of a name is enough when it picks one station. \code{NULL} with
+#'   \code{city} means every station of the city.
 #' @param year Integer year.
 #' @param cache_dir Optional directory for CSV copies of the sheets.
+#' @param city Optional city: all its stations when \code{station_id} is
+#'   \code{NULL}, otherwise it narrows ambiguous names.
+#' @param state Optional state, for cities that share a name.
 #' @return Data frame with columns \code{station_id}, \code{station_name},
-#'   \code{day}, \code{month} and \code{value}.
+#'   \code{day}, \code{month} and \code{value}, with no rows when no station
+#'   has data. Attribute \code{station_status} gives each station's outcome, as
+#'   in \code{cpcb_raw_readings()}.
 #' @examplesIf interactive()
 #' daily <- cpcb_station_daily(c("Anand Vihar, Delhi", "ITO, Delhi"), 2024)
 #' @export
-cpcb_station_daily <- function(station_id, year,
-                               cache_dir = NULL) {
-  per_station <- lapply(station_id, function(name) {
-    tryCatch(
-      {
-        station <- .cpcb_require_station(name)
-        id <- station$station_id
-        path <- .cpcb_csv_copy(cache_dir, sprintf("%s_%s.csv", id, year))
-        if (!file.exists(path)) {
-          cpcb_download_station_data(id, year, path)
-        }
-        cbind(station_id = id, station_name = station$station_name, cpcb_tidy_daily(path))
-      },
-      error = function(e) {
-        cli::cli_alert_warning("Skipped {name}: {conditionMessage(e)}")
-        NULL
-      }
-    )
+cpcb_station_daily <- function(station_id = NULL, year,
+                               cache_dir = NULL, city = NULL, state = NULL) {
+  ids <- .cpcb_batch_ids(station_id, city, state)
+  run <- .cpcb_each_station(ids, function(name) {
+    station <- .cpcb_require_station(name, city, state)
+    id <- station$station_id
+    path <- .cpcb_csv_copy(cache_dir, sprintf("%s_%s.csv", id, year))
+    if (!.cpcb_copy_usable(path, year)) {
+      cpcb_download_station_data(id, year, path)
+    }
+    cbind(station_id = id, station_name = station$station_name, cpcb_tidy_daily(path))
   })
-  do.call(rbind, per_station)
+  .cpcb_check_available(run)
+  out <- do.call(rbind, run$frames)
+  if (is.null(out)) {
+    out <- data.frame(
+      station_id = character(), station_name = character(),
+      day = integer(), month = integer(), value = numeric()
+    )
+  }
+  .cpcb_with_status(out, run)
 }
 
 # per-element parse, so one malformed value does not void the column
@@ -211,6 +233,11 @@ cpcb_station_daily <- function(station_id, year,
   }
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
   file.path(cache_dir, name)
+}
+
+# only a past year is final, as for the repository cache
+.cpcb_copy_usable <- function(path, year) {
+  file.exists(path) & as.integer(year) < as.integer(format(Sys.Date(), "%Y"))
 }
 
 #' Recent hours of live CPCB data in long format
@@ -239,7 +266,7 @@ cpcb_live_to_long <- function(aqi_data, station_id = "") {
     data.frame(
       timestamp = field(s$data, "date"),
       pollutant = rep(as.character(s$name %||% NA), length(s$data)),
-      value = suppressWarnings(as.numeric(field(s$data, "val")))
+      value = .to_numeric(field(s$data, "val"))
     )
   })
   long <- do.call(rbind, c(
@@ -277,7 +304,7 @@ cpcb_live_metrics <- function(aqi_data) {
       max = numeric(), period = character()
     ))
   }
-  num <- function(x) suppressWarnings(as.numeric(x %||% NA))
+  num <- function(x) .to_numeric(x %||% NA)
   data.frame(
     pollutant = as.character(m$name), avg = num(m$avg), min = num(m$min),
     max = num(m$max), period = as.character(m$avgDesc %||% NA),

@@ -8,8 +8,10 @@ daily_aqi(long, min_hours = .aqi_min_hours, day_ends_at = 24)
 }
 \arguments{
 \item{long}{Data frame with columns \code{timestamp}, \code{pollutant},
-\code{value}, and optionally \code{station_id} and \code{unit}. Values in
-ug/m3 or mg/m3 are converted to the NAQI unit of each pollutant.}
+\code{value}, and optionally \code{station_id} and \code{unit}. Without
+a \code{unit} column, a unit in the \code{pollutant} label is used. Values
+in ug/m3 or mg/m3 are converted to the NAQI unit of each pollutant; values
+in ppb or ppm are treated as missing, with a warning.}
 
 \item{min_hours}{Minimum hours with data for a sub-index (CPCB: 16).}
 
@@ -19,16 +21,23 @@ calendar days. A row is dated by the day its window ends.}
 \value{
 One row per station and date: \code{station_id}, \code{date},
 \code{aqi}, \code{category}, \code{dominant_pollutant},
-\code{n_pollutants} and one \code{<pollutant>_sub_index} column per
-pollutant with data. \code{aqi}, \code{category} and
-\code{dominant_pollutant} are \code{NA} when the data are insufficient.
+\code{n_pollutants}, \code{aqi_status} and one
+\code{<pollutant>_sub_index} column per pollutant with data. \code{aqi},
+\code{category} and \code{dominant_pollutant} are \code{NA} when the data
+are insufficient. \code{aqi_status} says why: \code{"too_few_hours"} when
+a pollutant with readings fell short of \code{min_hours}, else
+\code{"no_pm"}, else \code{"too_few_pollutants"}; \code{"ok"} when there
+is an AQI.
 }
 \description{
 Daily NAQI of each station from long data, such as 15-minute raw data from
 \code{cpcb_raw_to_long()}. Values are first averaged by hour. PM10, PM2.5,
 NO2, SO2, NH3 and Pb use the daily mean of the hourly values; CO and O3
-use the highest 8-hour running mean (of at least 6 hourly values). A
-sub-index needs data in at least \code{min_hours} hours of the day.
+use the highest 8-hour running mean (of at least 6 hourly values, or
+\code{min_hours} when that is smaller). A sub-index needs data in at least
+\code{min_hours} hours of the day. Each calendar day is taken in the time
+zone of the timestamps. Readings repeated at one time are averaged once;
+negative and non-finite readings are dropped.
 
 CPCB's daily bulletin reports the AQI at 4 PM from the 24 hours before it;
 \code{day_ends_at = 16} computes the same window. CPCB validates its data
@@ -42,4 +51,22 @@ long <- data.frame(
   value = rep(c(45, 80, 30), each = 24)
 )
 daily_aqi(long)
+}
+\references{
+CPCB (2014). \emph{National Air Quality Index}. Control of Urban Pollution Series
+CUPS/82/2014-15, pp. 35, 37, 44.
+\url{https://cpcb.gov.in/displaypdf.php?id=bmF0aW9uYWwtYWlyLXF1YWxpdHktaW5kZXgvRklOQUwtUkVQT1JUX0FRSV8ucGRm}
+(accessed 2026-11-09).
+
+CPCB. \emph{About National Air Quality Index}.
+\url{https://cpcb.nic.in/displaypdf.php?id=bmF0aW9uYWwtYWlyLXF1YWxpdHktaW5kZXgvQWJvdXRfQVFJLnBkZg==}
+(accessed 2026-11-09).
+
+CPCB. \emph{How is AQI calculated?}
+\url{https://cpcb.gov.in/displaypdf.php?id=bmF0aW9uYWwtYWlyLXF1YWxpdHktaW5kZXgvSG93X0FRSV9DYWxjdWxhdGVkLnBkZg==}
+(accessed 2026-11-09).
+
+CPCB. \emph{AQI-Calculator.xls}.
+\url{https://cpcb.gov.in/upload/national-air-quality-index/AQI-Calculator.xls}
+(accessed 2026-11-09).
 }

@@ -1,5 +1,29 @@
 # vayuayan (development version)
 
+* `cpcb_station_table()` includes stations that only the CPCB live feed knows.
+  If the feed is unavailable, the directory alone is used.
+* `cpcb_raw_readings()` and `cpcb_station_daily()` accept `city` and `state`.
+  The single-station functions accept them to narrow an ambiguous name.
+* `cpcb_download_city_report()` sends its requests in parallel, and a network
+  failure stops a batch with one warning, keeping what was fetched.
+* `sensor_plausibility()` is about 9 times faster, with the same results for
+  odd windows; an even `spike_window` now matches the Python package.
+* `us_aqi_pollutant_name("SO2 (24h) (ppb)")` is the 24-hour SO2.
+* `pm25_load_netcdf_bbox(mask = TRUE)` keeps cells by their centres.
+
+* `aqi_sub_index()`, `compute_aqi()` and `daily_aqi()` use the continuous bands
+  of CPCB's AQI calculator (for example PM2.5 30-60 maps to 50-100), so values
+  near a band boundary change by a few points.
+* New `daily_us_aqi()`: daily US EPA AQI from raw readings; and
+  `cpcb_station_daily_aqi(standard = "us")`.
+* New `cpcb_station_table()`: every station with its ID, name, city, state and coordinates. `cpcb_download_city_report()`: the report export of all stations of a city as one table.
+* New `cpcb_download_station_report()`: station data from CPCB's report export.
+* `compute_us_aqi()` gives no AQI, with a warning, for 8-hour O3 above 0.200 ppm
+  without a 1-hour value, and gives SO2 200 for a 1-hour SO2 from 305 ppb with
+  no 24-hour value.
+* `us_aqi_sub_index("PM2.5 (mg/m3)", x)` converts mg to ug.
+* PM2.5 polygon statistics count cells whose centres fall inside, falling back
+  to the cells a small polygon touches; a polygon outside the grid is an error.
 * Added `plot_aqi_radial()` to draw daily AQI as a radial calendar
 * New `plot_aqi_radial_hourly()`: hourly AQI on a 24-hour clock in IST.
 * CPCB repository downloads retry timeouts and 5xx errors.

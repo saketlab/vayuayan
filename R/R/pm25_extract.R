@@ -51,7 +51,9 @@ pm25_get_point <- function(latitude, longitude, year = NULL, month = NULL,
 #'
 #' @description
 #' Mean and standard deviation of satellite PM2.5 within each feature of a
-#' GeoJSON file, over the cells whose centers fall inside it.
+#' GeoJSON file, over the cells whose centers fall inside it. A feature with
+#' no cell center inside uses the cells it touches. A region entirely outside
+#' the grid is an error.
 #'
 #' @param geojson_file Path or URL of a GeoJSON file, or an \code{sf} object.
 #' @param year Integer year.
@@ -61,7 +63,8 @@ pm25_get_point <- function(latitude, longitude, year = NULL, month = NULL,
 #' @param version,region,cache_dir Passed to \code{pm25_download_netcdf()}.
 #' @param nc_file Optional path to a local NetCDF file to use instead of a
 #'   download.
-#' @return Data frame with the identifier column, \code{mean} and \code{std}.
+#' @return Data frame with the identifier column, \code{mean} and \code{std}
+#'   (population standard deviation).
 #' @examplesIf interactive()
 #' pm25_get_stats_by_polygon(
 #'   "https://geo.bharatviz.org/geojsons/districts/India_LGD_districts.geojson",
@@ -87,8 +90,8 @@ pm25_get_stats_by_polygon <- function(geojson_file, year = NULL, month = NULL,
   }
   pm25 <- .pm25_load_and_crop(nc_file, sf::st_bbox(gdf))
   zones <- terra::vect(sf::st_geometry(gdf))
-  means <- terra::extract(pm25, zones, fun = mean, na.rm = TRUE, ID = FALSE)[[1]]
-  sds <- terra::extract(pm25, zones, fun = stats::sd, na.rm = TRUE, ID = FALSE)[[1]]
+  means <- .pm25_extract_cells(pm25, zones, fun = mean, na.rm = TRUE)
+  sds <- .pm25_extract_cells(pm25, zones, fun = .pop_sd, na.rm = TRUE)
 
   id_col <- if (!is.null(id_field) && id_field %in% names(gdf)) {
     id_field
@@ -113,7 +116,9 @@ pm25_get_stats_by_polygon <- function(geojson_file, year = NULL, month = NULL,
 #' @param year Integer year.
 #' @param months Integer vector of months.
 #' @param version,region,cache_dir Passed to \code{pm25_download_netcdf()}.
-#' @return Data frame with columns \code{month} and \code{pm25}.
+#' @return Data frame with columns \code{month} and \code{pm25}. A month whose
+#'   file cannot be downloaded is left out with a warning and listed in
+#'   attribute \code{failed_months}.
 #' @examplesIf interactive()
 #' delhi <- india_boundary(state = "Delhi")
 #' pm25_monthly(delhi, 2022, version = "V5GL04", region = "AS")
@@ -122,12 +127,24 @@ pm25_monthly <- function(shape, year, months = 1:12, version = "V6GL03",
                          region = "GL",
                          cache_dir = NULL) {
   var <- .pm25_spec(version)$variable
-  pm25 <- vapply(months, function(m) {
-    nc_file <- pm25_download_netcdf(
-      year, m,
-      cache_dir = cache_dir, region = region, version = version
+  frames <- lapply(as.integer(months), function(m) {
+    tryCatch(
+      {
+        nc_file <- pm25_download_netcdf(
+          year, m,
+          cache_dir = cache_dir, region = region, version = version
+        )
+        data.frame(month = m, pm25 = pm25_read_netcdf_bbox(nc_file, shape, var = var))
+      },
+      vayuayan_pm25_download = function(e) {
+        cli::cli_alert_warning("No PM2.5 data for {year}-{sprintf('%02d', m)}: {conditionMessage(e)}")
+        NULL
+      }
     )
-    pm25_read_netcdf_bbox(nc_file, shape, var = var)
-  }, numeric(1))
-  data.frame(month = as.integer(months), pm25 = pm25)
+  })
+  out <- do.call(rbind, frames)
+  if (is.null(out)) out <- data.frame(month = integer(), pm25 = numeric())
+  failed <- as.integer(months)[vapply(frames, is.null, TRUE)]
+  if (length(failed)) attr(out, "failed_months") <- failed
+  out
 }

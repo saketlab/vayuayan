@@ -4,18 +4,21 @@
 \alias{cpcb_download_city_data}
 \title{Download city-level AQI data}
 \usage{
-cpcb_download_city_data(city, year, save_location)
+cpcb_download_city_data(city, year, save_location, state = "")
 }
 \arguments{
 \item{city}{Character. City name (e.g. \code{"Delhi"}, \code{"Mumbai"}).}
 
 \item{year}{Integer. Year for data (e.g. \code{2022}).}
 
-\item{save_location}{Character. Full file path to save the downloaded CSV.}
+\item{save_location}{Character. Full file path to save the downloaded CSV,
+or \code{""} to save nothing.}
+
+\item{state}{Optional state name or code, needed for a city name used in
+more than one state.}
 }
 \value{
-Data frame preview (first 6 rows) of the downloaded data.
-The full data is saved to \code{save_location}.
+Data frame of the downloaded data.
 }
 \description{
 Download daily PM2.5 AQI data for a city from the CPCB data repository

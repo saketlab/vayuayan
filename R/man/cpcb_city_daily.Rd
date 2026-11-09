@@ -4,7 +4,7 @@
 \alias{cpcb_city_daily}
 \title{Daily city-level AQI in long format}
 \usage{
-cpcb_city_daily(city, year, cache_dir = NULL)
+cpcb_city_daily(city, year, cache_dir = NULL, state = NULL)
 }
 \arguments{
 \item{city}{Character vector of city names.}
@@ -12,6 +12,9 @@ cpcb_city_daily(city, year, cache_dir = NULL)
 \item{year}{Integer year, or a vector of years.}
 
 \item{cache_dir}{Optional directory for CSV copies of the sheets.}
+
+\item{state}{Optional state name or code, one for each city or one for all,
+needed for a city name used in more than one state.}
 }
 \value{
 Data frame with columns \code{city}, \code{year}, \code{day},
@@ -21,7 +24,9 @@ Data frame with columns \code{city}, \code{year}, \code{day},
 Download (or reuse) the CPCB daily city file for each city and year and
 return it in long format. CPCB files of past years are cached in
 \code{vayuayan_cache_dir()}. With \code{cache_dir}, each sheet is also
-saved as \code{<city>_aqi_<year>.csv} there and read back on later calls.
+saved as \code{<city>_aqi_<year>.csv} there (\code{<state>_<city>_aqi_<year>.csv}
+with \code{state}) and read back on later calls. A copy of the current year
+is refreshed on every call, because CPCB still adds data to it.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

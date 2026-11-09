@@ -4,17 +4,23 @@
 \alias{cpcb_get_nearest_station}
 \title{Find nearest monitoring station}
 \usage{
-cpcb_get_nearest_station(coords = NULL)
+cpcb_get_nearest_station(coords = NULL, prefer_reading = is.null(coords))
 }
 \arguments{
 \item{coords}{Optional numeric vector c(lat, lon). If NULL, uses IP location.}
+
+\item{prefer_reading}{Logical. Prefer the nearest station that has a
+current AQI over a closer one that does not. Defaults to \code{TRUE} only
+when \code{coords} is not given, so explicit coordinates get the
+closest station.}
 }
 \value{
 List with station_id, station_name, and distance_km
 }
 \description{
 Find the CPCB monitoring station nearest to given coordinates, or to the
-IP-based location when none are given.
+IP-based location when none are given. A station found from the IP location
+is the nearest one with a current reading, if any has one.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

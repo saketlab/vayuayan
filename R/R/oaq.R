@@ -26,7 +26,7 @@ oaq_session <- function(api_key = Sys.getenv("OAQ_API_KEY")) {
     httr::GET(url, httr::timeout(30)),
     error = function(e) stop(sprintf("OAQ handshake request failed: %s", e$message))
   )
-  httr::stop_for_status(response)
+  .oaq_stop_for_status(response)
 
   data <- httr::content(response, as = "parsed", type = "application/json")
 
@@ -61,9 +61,24 @@ oaq_session <- function(api_key = Sys.getenv("OAQ_API_KEY")) {
     httr::RETRY("GET", url, httr::timeout(30), times = 4, terminate_on = 400:499, quiet = TRUE),
     error = function(e) stop(sprintf("OAQ request failed: %s", e$message))
   )
-  httr::stop_for_status(response)
+  .oaq_stop_for_status(response)
 
   .oaq_parse(httr::content(response, as = "text", encoding = "UTF-8"))
+}
+
+# 401 or 403 means the session expired or the key was refused, so no later request can succeed
+.oaq_stop_for_status <- function(response) {
+  tryCatch(httr::stop_for_status(response), http_error = function(e) {
+    if (inherits(e, c("http_401", "http_403"))) {
+      .vayuayan_abort(
+        "vayuayan_auth",
+        sprintf("OAQ refused the session, which may have expired: %s", conditionMessage(e)),
+        parent = e
+      )
+    }
+    stop(e)
+  })
+  invisible(response)
 }
 
 # OAQ sends bare NaN (cpcb 164, 2025-10-19), which jsonlite rejects
@@ -73,6 +88,17 @@ oaq_session <- function(api_key = Sys.getenv("OAQ_API_KEY")) {
     jsonlite::fromJSON(text, simplifyVector = TRUE),
     error = function(e) stop(sprintf("Failed to parse OAQ response: %s", e$message))
   )
+}
+
+# NULL on failure; a 404 means no file, anything else warns so partial results are visible
+.oaq_try <- function(expr, what) {
+  tryCatch(expr, error = function(e) {
+    if (inherits(e, "vayuayan_auth")) stop(e)
+    if (!inherits(e, "http_404")) {
+      warning(sprintf("OAQ data for %s failed: %s", what, conditionMessage(e)), call. = FALSE)
+    }
+    NULL
+  })
 }
 
 #' List all OAQ data providers
@@ -315,9 +341,9 @@ oaq_fetch_monthly_stations <- function(session, provider, year,
   # ids are text: cpcb ids look numeric, Airnet ids can be alphanumeric
   for (sid in as.character(meta$id)) {
     for (m in months) {
-      res <- tryCatch(
+      res <- .oaq_try(
         oaq_get_monthly(session, provider, sid, year, m),
-        error = function(e) NULL
+        sprintf("%s sensor %s month %s-%s", provider, sid, year, m)
       )
       if (is.null(res$data) || nrow(res$data) == 0) next
       df <- res$data
@@ -500,12 +526,12 @@ oaq_daily_means <- function(session, provider, sensor_id, dates, min_readings = 
   }
   rows <- lapply(as.character(as.Date(dates)), function(day) {
     d <- as.Date(day)
-    res <- tryCatch(
+    res <- .oaq_try(
       oaq_get_daily(
         session, provider, sensor_id,
         format(d, "%Y"), format(d, "%m"), format(d, "%d")
       ),
-      error = function(e) NULL
+      sprintf("%s sensor %s on %s", provider, sensor_id, day)
     )
     readings <- res$data
     if (!is.data.frame(readings) || nrow(readings) == 0) {
@@ -513,7 +539,7 @@ oaq_daily_means <- function(session, provider, sensor_id, dates, min_readings = 
     }
     row <- list(sensor_id = as.character(sensor_id), date = d)
     for (column in setdiff(names(readings), "date")) {
-      values <- suppressWarnings(as.numeric(readings[[column]]))
+      values <- .to_numeric(readings[[column]])
       values <- values[!is.na(values)]
       row[[paste0("n_", column)]] <- length(values)
       row[[column]] <- if (length(values) >= min_readings) mean(values) else NA_real_
@@ -546,12 +572,12 @@ oaq_readings <- function(session, provider, sensor_id, dates) {
   }
   frames <- lapply(as.character(as.Date(dates)), function(day) {
     d <- as.Date(day)
-    res <- tryCatch(
+    res <- .oaq_try(
       oaq_get_daily(
         session, provider, sensor_id,
         format(d, "%Y"), format(d, "%m"), format(d, "%d")
       ),
-      error = function(e) NULL
+      sprintf("%s sensor %s on %s", provider, sensor_id, day)
     )
     rows <- res$data
     if (!is.data.frame(rows) || nrow(rows) == 0 || !"date" %in% names(rows)) {
@@ -561,9 +587,7 @@ oaq_readings <- function(session, provider, sensor_id, dates) {
     timestamp <- as.POSIXct(substr(as.character(rows$date), 1, 19),
       format = "%Y-%m-%dT%H:%M:%S", tz = "UTC"
     )
-    values <- lapply(rows[setdiff(names(rows), "date")], function(x) {
-      suppressWarnings(as.numeric(x))
-    })
+    values <- lapply(rows[setdiff(names(rows), "date")], .to_numeric)
     data.frame(
       sensor_id = rep(as.character(sensor_id), nrow(rows)), timestamp = timestamp,
       values, check.names = FALSE, stringsAsFactors = FALSE
@@ -599,11 +623,14 @@ oaq_daily_records <- function(session, provider, sensor_id, years) {
     return(dplyr::bind_rows(lapply(sensor_id, function(s) oaq_daily_records(session, provider, s, years))))
   }
   frames <- lapply(years, function(year) {
-    rows <- tryCatch(oaq_get_annual(session, provider, sensor_id, year)$data, error = function(e) NULL)
+    rows <- .oaq_try(
+      oaq_get_annual(session, provider, sensor_id, year),
+      sprintf("%s sensor %s year %s", provider, sensor_id, year)
+    )$data
     if (!is.data.frame(rows) || nrow(rows) == 0 || !"date" %in% names(rows)) {
       return(NULL)
     }
-    values <- lapply(rows[setdiff(names(rows), "date")], function(x) suppressWarnings(as.numeric(x)))
+    values <- lapply(rows[setdiff(names(rows), "date")], .to_numeric)
     data.frame(
       sensor_id = rep(as.character(sensor_id), nrow(rows)),
       date = as.Date(substr(as.character(rows$date), 1, 10), optional = TRUE),

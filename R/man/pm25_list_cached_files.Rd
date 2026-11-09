@@ -14,7 +14,8 @@ uses the \code{pm25} folder of \code{vayuayan_cache_dir()}.}
 Character vector of cached file paths.
 }
 \description{
-List all cached NetCDF files in the cache directory with file sizes.
+List all cached NetCDF files in the cache directory with file sizes,
+including any GeoTIFF the Python package saved from Google Earth Engine.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

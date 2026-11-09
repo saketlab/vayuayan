@@ -7,19 +7,25 @@
 aqi_sub_index(pollutant, concentration)
 }
 \arguments{
-\item{pollutant}{A pollutant label (see \code{aqi_pollutant_name()}).}
+\item{pollutant}{A pollutant label (see \code{aqi_pollutant_name()}). A
+label with a mass unit, such as \code{"CO (ug/m3)"}, is converted to the
+NAQI unit. A label in ppb or ppm gives \code{NA}, with a warning, as the
+conversion needs temperature and pressure.}
 
 \item{concentration}{Numeric vector of 24-hour averages (8-hour for CO and
-O3), in mg/m3 for CO and ug/m3 for the others.}
+O3), in mg/m3 for CO and ug/m3 for the others when the label has no unit.}
 }
 \value{
-Numeric vector of sub-indices; above the last breakpoint the
-slope of the Severe band continues, so a sub-index can be more than 500.
-\code{NA} stays \code{NA}.
+Numeric vector of sub-indices; the Severe band runs from 400 at
+its first breakpoint with slope 100 over the width of the Very Poor band
+(for O3, 100 over 540), and continues without a cap, so a sub-index can
+be more than 500. O3 above 208 stays on the 8-hour value.
+\code{NA}, negative and non-finite values give \code{NA}.
 }
 \description{
 The CPCB National AQI sub-index of one pollutant, by linear interpolation
-within its breakpoint band.
+between the band tops of CPCB's AQI calculator, so the sub-index has no
+gaps between bands (PM2.5 30 is 50, and 60 is 100).
 }
 \examples{
 aqi_sub_index("PM2.5", c(25, 45, 300))

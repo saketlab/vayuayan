@@ -26,7 +26,8 @@ and the reference daily means.}
 Data frame with \code{id_col}, \code{days}, \code{slope},
 \code{intercept}, \code{r2}, \code{rmse}, \code{nrmse_pct},
 \code{slope_ok}, \code{intercept_ok}, \code{r2_ok}, \code{error_ok}
-(RMSE or NRMSE) and \code{targets_met} (0 to 4).
+(RMSE or NRMSE), which are never \code{NA}, and \code{targets_met} (0 to
+4).
 }
 \description{
 Per sensor: least-squares slope and intercept of the sensor on the

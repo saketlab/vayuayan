@@ -4,27 +4,44 @@
 \alias{cpcb_station_daily}
 \title{Daily station-level AQI in long format}
 \usage{
-cpcb_station_daily(station_id, year, cache_dir = NULL)
+cpcb_station_daily(
+  station_id = NULL,
+  year,
+  cache_dir = NULL,
+  city = NULL,
+  state = NULL
+)
 }
 \arguments{
 \item{station_id}{Character vector of station IDs or names, for example
 the \code{value} or \code{label} column of \code{cpcb_get_station_list()}.
-Part of a name is enough when it picks one station.}
+Part of a name is enough when it picks one station. \code{NULL} with
+\code{city} means every station of the city.}
 
 \item{year}{Integer year.}
 
 \item{cache_dir}{Optional directory for CSV copies of the sheets.}
+
+\item{city}{Optional city: all its stations when \code{station_id} is
+\code{NULL}, otherwise it narrows ambiguous names.}
+
+\item{state}{Optional state, for cities that share a name.}
 }
 \value{
 Data frame with columns \code{station_id}, \code{station_name},
-\code{day}, \code{month} and \code{value}.
+\code{day}, \code{month} and \code{value}, with no rows when no station
+has data. Attribute \code{station_status} gives each station's outcome, as
+in \code{cpcb_raw_readings()}.
 }
 \description{
 Download (or reuse) the CPCB daily file for each station and year and
 return them in one long table. CPCB files of past years are cached in
 \code{vayuayan_cache_dir()}. With \code{cache_dir}, each sheet is also
-saved as \code{<station_id>_<year>.csv} there. Stations that are not found
-or have no data for the year are skipped with a warning.
+saved as \code{<station_id>_<year>.csv} there; a copy of the current year is
+refreshed on every call. Stations that are not found or have no data for
+the year are skipped with a warning, and an outage stops the run, keeping
+the stations already fetched. If nothing was fetched in an outage, the
+function stops with an error of class \code{vayuayan_network}.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

@@ -7,10 +7,13 @@
 aqi_pollutant_category(pollutant, concentration)
 }
 \arguments{
-\item{pollutant}{A pollutant label (see \code{aqi_pollutant_name()}).}
+\item{pollutant}{A pollutant label (see \code{aqi_pollutant_name()}). A
+label with a mass unit, such as \code{"CO (ug/m3)"}, is converted to the
+NAQI unit. A label in ppb or ppm gives \code{NA}, with a warning, as the
+conversion needs temperature and pressure.}
 
 \item{concentration}{Numeric vector of 24-hour averages (8-hour for CO and
-O3), in mg/m3 for CO and ug/m3 for the others.}
+O3), in mg/m3 for CO and ug/m3 for the others when the label has no unit.}
 }
 \value{
 Character vector of AQI categories.

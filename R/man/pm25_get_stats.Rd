@@ -52,7 +52,10 @@ PM2.5 statistics: \code{mean}, \code{std}, \code{min}, \code{max},
 \description{
 Compute mean, SD, min, max, and pixel count of satellite PM2.5 for a
 region defined by a GeoJSON file. Optionally group by a column in the
-GeoJSON (e.g. district name) to return per-group statistics.
+GeoJSON (e.g. district name) to return per-group statistics. Statistics
+cover the cells whose centres fall inside the polygon; a polygon with no
+cell centre inside uses the cells it touches, and a region entirely
+outside the grid is an error.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

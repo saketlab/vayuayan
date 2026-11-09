@@ -14,7 +14,8 @@ uses the \code{pm25} folder of \code{vayuayan_cache_dir()}.}
 Invisibly returns NULL.
 }
 \description{
-Delete all cached NetCDF files from the cache directory.
+Delete all cached NetCDF files, and any GeoTIFF the Python package saved
+from Google Earth Engine, from the cache directory.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

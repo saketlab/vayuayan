@@ -9,7 +9,9 @@ cpcb_download_raw_station_data(
   year,
   save_location = "",
   frequency = "15_minute",
-  tidy = FALSE
+  tidy = FALSE,
+  city = NULL,
+  state = NULL
 )
 }
 \arguments{
@@ -26,6 +28,9 @@ saves nothing.}
 
 \item{tidy}{Logical. If \code{TRUE}, return (and save) long rows from
 \code{cpcb_raw_to_long()} instead of CPCB's wide table.}
+
+\item{city, state}{Optional city and state that narrow an ambiguous station
+name. State applies only together with city.}
 }
 \value{
 Data frame of observations.

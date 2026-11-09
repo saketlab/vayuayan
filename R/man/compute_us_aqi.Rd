@@ -9,19 +9,41 @@ compute_us_aqi(concentrations)
 \arguments{
 \item{concentrations}{Named numeric vector or list: pollutant label to
 concentration (see \code{us_aqi_sub_index()}). Labels that are not US
-AQI pollutants and missing values are ignored.}
+AQI pollutants and missing, negative or non-finite values are ignored.}
 }
 \value{
 List with \code{aqi} (integer, \code{NA} when no pollutant has a
-sub-index), \code{category}, \code{dominant_pollutant} and the named
-\code{sub_indices}.
+sub-index), \code{category}, \code{dominant_pollutant}, the named
+\code{sub_indices} and \code{status}: \code{"ok"},
+\code{"no_sub_index"} or \code{"o3_beyond_table"}.
 }
 \description{
 The US AQI is the highest sub-index, rounded half up. The EPA has no
 minimum number of pollutants. For O3 and SO2 with both averaging times,
-the higher sub-index counts. If the 1-hour SO2 is 305 ppb or more and the
-24-hour SO2 is below 305 ppb, the SO2 sub-index is 200.
+the higher sub-index counts. If the 1-hour SO2 is 305 ppb or more and no
+24-hour SO2 of 305 ppb or more is given, the SO2 sub-index is 200. An
+8-hour O3 above 0.200 ppm without a 1-hour O3 gives no AQI, with a warning,
+because 8-hour O3 does not define the Hazardous band. Ties for the dominant
+pollutant go to the first in the order of the EPA tables.
 }
 \examples{
 compute_us_aqi(c("PM2.5" = 35.4, O3 = 0.060))$aqi
+}
+\references{
+US EPA (2026). \emph{Technical Assistance Document for the Reporting of Daily Air
+Quality - the Air Quality Index (AQI)}. EPA-403/B-26-003, May 2026.
+\url{https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf}
+(accessed 2026-11-09).
+
+40 CFR Part 58, Appendix G, as amended at 89 FR 16403 (6 March 2024).
+\url{https://www.ecfr.gov/current/title-40/chapter-I/subchapter-C/part-58/appendix-Appendix\%20G\%20to\%20Part\%2058}
+(accessed 2026-11-09).
+
+40 CFR Part 50 (section 50.3 and Appendices K, N, S, T, U).
+\url{https://www.ecfr.gov/current/title-40/chapter-I/subchapter-C/part-50}
+(accessed 2026-11-09).
+
+US EPA. AQS code table \code{aqi_breakpoints.csv}.
+\url{https://aqs.epa.gov/aqsweb/documents/codetables/aqi_breakpoints.csv}
+(accessed 2026-11-09).
 }

@@ -8,13 +8,15 @@ compute_aqi(concentrations)
 }
 \arguments{
 \item{concentrations}{Named numeric vector or list: pollutant label to
-averaged concentration. Labels that are not NAQI pollutants and missing
-values are ignored.}
+averaged concentration. Labels that are not NAQI pollutants, and missing,
+negative or non-finite values, are ignored. Mass units in a label are
+converted; values labelled in ppb or ppm are ignored with one warning.}
 }
 \value{
 List with \code{aqi} (integer, \code{NA} when the data are
-insufficient), \code{category}, \code{dominant_pollutant} and the named
-\code{sub_indices}.
+insufficient), \code{category}, \code{dominant_pollutant}, the named
+\code{sub_indices} and \code{status}: \code{"ok"}, \code{"no_pm"} or
+\code{"too_few_pollutants"}.
 }
 \description{
 The overall AQI is the highest sub-index. CPCB requires at least three
@@ -22,4 +24,22 @@ pollutants, one of them PM2.5 or PM10.
 }
 \examples{
 compute_aqi(c("PM2.5" = 45, PM10 = 80, NO2 = 30))$aqi
+}
+\references{
+CPCB (2014). \emph{National Air Quality Index}. Control of Urban Pollution Series
+CUPS/82/2014-15, pp. 35, 37, 44.
+\url{https://cpcb.gov.in/displaypdf.php?id=bmF0aW9uYWwtYWlyLXF1YWxpdHktaW5kZXgvRklOQUwtUkVQT1JUX0FRSV8ucGRm}
+(accessed 2026-11-09).
+
+CPCB. \emph{About National Air Quality Index}.
+\url{https://cpcb.nic.in/displaypdf.php?id=bmF0aW9uYWwtYWlyLXF1YWxpdHktaW5kZXgvQWJvdXRfQVFJLnBkZg==}
+(accessed 2026-11-09).
+
+CPCB. \emph{How is AQI calculated?}
+\url{https://cpcb.gov.in/displaypdf.php?id=bmF0aW9uYWwtYWlyLXF1YWxpdHktaW5kZXgvSG93X0FRSV9DYWxjdWxhdGVkLnBkZg==}
+(accessed 2026-11-09).
+
+CPCB. \emph{AQI-Calculator.xls}.
+\url{https://cpcb.gov.in/upload/national-air-quality-index/AQI-Calculator.xls}
+(accessed 2026-11-09).
 }

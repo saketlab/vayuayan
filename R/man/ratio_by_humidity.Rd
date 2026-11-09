@@ -19,7 +19,8 @@ values.}
 
 \item{sensor, reference, rh}{Their columns.}
 
-\item{breaks}{Humidity band limits (bands are \code{(lower, upper]}).}
+\item{breaks}{Humidity band limits (bands are \code{(lower, upper]}, and
+the first band also includes its lower limit).}
 
 \item{min_reference}{Smallest reference value used.}
 }

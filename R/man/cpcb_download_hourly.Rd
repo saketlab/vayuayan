@@ -6,17 +6,27 @@
 \alias{cpcb_download_hourly_station_data}
 \title{Download hourly AQI data}
 \usage{
-cpcb_download_hourly_city_data(city, year, save_location = "", month = NULL)
+cpcb_download_hourly_city_data(
+  city,
+  year,
+  save_location = "",
+  month = NULL,
+  state = ""
+)
 
 cpcb_download_hourly_station_data(
   station_id,
   year,
   save_location = "",
-  month = NULL
+  month = NULL,
+  city = NULL,
+  state = NULL
 )
 }
 \arguments{
-\item{city}{Character. City name.}
+\item{city}{Character. City name. For
+\code{cpcb_download_hourly_station_data()}, an optional city that narrows
+an ambiguous station name.}
 
 \item{year}{Integer year.}
 
@@ -25,6 +35,9 @@ saves nothing.}
 
 \item{month}{Optional month name (e.g. \code{"January"}). If \code{NULL},
 all months of the year are combined.}
+
+\item{state}{Optional state that narrows \code{city}, needed for a city name
+used in more than one state.}
 
 \item{station_id}{Character. Station ID (e.g. \code{"site_301"}) or name. Part of a
 name is enough when it picks one station (e.g. \code{"Anand Vihar, Delhi"}).}

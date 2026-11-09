@@ -1,41 +1,34 @@
-# CPCB's About NAQI page; the 2014 report differs in places (Pb 0.6-1.0)
+# Band tops of CPCB's AQI-Calculator.xls and CUPS/82/2014-15 p.37; a band starts at the previous top
 # Severe has no upper limit; extended by the Very Poor width, at that slope
 .aqi_pollutants <- list(
-  PM10 = list(unit = "ug", hours = 24, bp = c(0, 50, 51, 100, 101, 250, 251, 350, 351, 430, 430, 510)),
-  PM2.5 = list(unit = "ug", hours = 24, bp = c(0, 30, 31, 60, 61, 90, 91, 120, 121, 250, 250, 380)),
-  NO2 = list(unit = "ug", hours = 24, bp = c(0, 40, 41, 80, 81, 180, 181, 280, 281, 400, 400, 520)),
-  O3 = list(unit = "ug", hours = 8, bp = c(0, 50, 51, 100, 101, 168, 169, 208, 209, 748, 748, 1288)),
-  CO = list(unit = "mg", hours = 8, bp = c(0, 1.0, 1.1, 2.0, 2.1, 10, 10, 17, 17, 34, 34, 51)),
-  SO2 = list(unit = "ug", hours = 24, bp = c(0, 40, 41, 80, 81, 380, 381, 800, 801, 1600, 1600, 2400)),
-  NH3 = list(unit = "ug", hours = 24, bp = c(0, 200, 201, 400, 401, 800, 801, 1200, 1200, 1800, 1800, 2400)),
-  Pb = list(unit = "ug", hours = 24, bp = c(0, 0.5, 0.5, 1.0, 1.1, 2.0, 2.1, 3.0, 3.1, 3.5, 3.5, 3.9))
+  PM10 = list(unit = "ug", hours = 24, tops = c(50, 100, 250, 350, 430, 510)),
+  PM2.5 = list(unit = "ug", hours = 24, tops = c(30, 60, 90, 120, 250, 380)),
+  NO2 = list(unit = "ug", hours = 24, tops = c(40, 80, 180, 280, 400, 520)),
+  O3 = list(unit = "ug", hours = 8, tops = c(50, 100, 168, 208, 748, 1288)),
+  CO = list(unit = "mg", hours = 8, tops = c(1, 2, 10, 17, 34, 51)),
+  SO2 = list(unit = "ug", hours = 24, tops = c(40, 80, 380, 800, 1600, 2400)),
+  NH3 = list(unit = "ug", hours = 24, tops = c(200, 400, 800, 1200, 1800, 2400)),
+  Pb = list(unit = "ug", hours = 24, tops = c(0.5, 1, 2, 3, 3.5, 4))
 )
 
-.aqi_bands <- c(0, 50, 51, 100, 101, 200, 201, 300, 301, 400, 401, 500)
+# Upper AQI limit of each category, also the sub-index at each band top
+.aqi_categories <- c(Good = 50, Satisfactory = 100, Moderate = 200, Poor = 300, "Very Poor" = 400, Severe = 500)
 
 .aqi_min_hours <- 16
 .aqi_min_pollutants <- 3
 
-# (concentration, sub-index) interpolation points; a shared band boundary
-# (Pb 0.5, CO 10) belongs to the lower band
-.aqi_points <- function(bp) {
-  xs <- bp
-  for (i in seq(3, length(xs), by = 2)) {
-    if (xs[i] <= xs[i - 1]) xs[i] <- xs[i - 1] + 1e-9
-  }
-  list(x = xs, y = .aqi_bands)
-}
-
 .aqi_interp <- function(pollutant, concentration) {
-  pts <- .aqi_points(.aqi_pollutants[[pollutant]]$bp)
+  x <- c(0, .aqi_pollutants[[pollutant]]$tops)
+  y <- c(0, unname(.aqi_categories))
   out <- rep(NA_real_, length(concentration))
-  ok <- !is.na(concentration)
-  out[ok] <- stats::approx(pts$x, pts$y, xout = concentration[ok], rule = 2)$y
+  # a negative concentration is a sensor fault, not 0
+  ok <- is.finite(concentration) & concentration >= 0
+  out[ok] <- stats::approx(x, y, xout = concentration[ok], rule = 2)$y
   # no cap at 500, as in CPCB's AQI-Calculator.xls
-  n <- length(pts$x)
-  above <- ok & concentration > pts$x[n]
-  slope <- (pts$y[n] - pts$y[n - 1]) / (pts$x[n] - pts$x[n - 1])
-  out[above] <- pts$y[n] + (concentration[above] - pts$x[n]) * slope
+  n <- length(x)
+  above <- ok & concentration > x[n]
+  slope <- (y[n] - y[n - 1]) / (x[n] - x[n - 1])
+  out[above] <- y[n] + (concentration[above] - x[n]) * slope
   out
 }
 
@@ -43,8 +36,10 @@
 .round_half_up <- function(x) floor(x + 0.5)
 
 .aqi_split_label <- function(label, part = 1) {
-  m <- regmatches(label, regexec("^\\s*(.*?)\\s*(?:\\((.*?)\\))?\\s*$", label, perl = TRUE))
-  vapply(m, function(x) if (length(x)) x[part + 1] else NA_character_, character(1))
+  # a label repeats once per reading and regexec is slow
+  labels <- unique(label)
+  m <- regmatches(labels, regexec("^\\s*(.*?)\\s*(?:\\(([^()]*)\\))?\\s*$", labels, perl = TRUE))
+  vapply(m, function(x) if (length(x)) x[part + 1] else NA_character_, character(1))[match(label, labels)]
 }
 
 # Unit of a label such as "PM2.5 (ug/m3)", "" when it has none
@@ -52,7 +47,8 @@
 
 # A label without its unit, case or punctuation: "PM2.5 (ug/m3)" -> "pm25"
 .aqi_key <- function(label) {
-  key <- tolower(.aqi_split_label(as.character(label)))
+  # an earlier group stays in the name but is a qualifier: "CO (8hr) (ug/m3)"
+  key <- tolower(gsub("\\([^()]*\\)", "", .aqi_split_label(as.character(label))))
   gsub("[^a-z0-9]", "", sub("2.5", "25", key, fixed = TRUE))
 }
 
@@ -60,6 +56,23 @@
 .aqi_mass_unit <- function(unit) {
   mass <- substr(gsub("\u03bc|\u00b5", "u", tolower(trimws(as.character(unit)))), 1, 2)
   ifelse(mass %in% c("ug", "mg"), mass, "")
+}
+
+# "ppb" or "ppm" for a volume unit, else ""
+.aqi_volume_unit <- function(unit) {
+  volume <- substr(tolower(trimws(as.character(unit))), 1, 3)
+  ifelse(volume %in% c("ppb", "ppm"), volume, "")
+}
+
+# ppb to ug/m3 needs temperature and pressure, so those values are missing
+.aqi_warn_volume <- function(pollutant, factor) {
+  bad <- is.na(factor) & !is.na(pollutant)
+  if (any(bad)) {
+    warning(sprintf(
+      "NAQI values in ppb or ppm treated as missing (%s): converting needs temperature and pressure",
+      paste(unique(pollutant[bad]), collapse = ", ")
+    ), call. = FALSE)
+  }
 }
 
 #' NAQI name of a pollutant label
@@ -84,14 +97,20 @@ aqi_pollutant_name <- function(label) {
 #'
 #' @description
 #' The CPCB National AQI sub-index of one pollutant, by linear interpolation
-#' within its breakpoint band.
+#' between the band tops of CPCB's AQI calculator, so the sub-index has no
+#' gaps between bands (PM2.5 30 is 50, and 60 is 100).
 #'
-#' @param pollutant A pollutant label (see \code{aqi_pollutant_name()}).
+#' @param pollutant A pollutant label (see \code{aqi_pollutant_name()}). A
+#'   label with a mass unit, such as \code{"CO (ug/m3)"}, is converted to the
+#'   NAQI unit. A label in ppb or ppm gives \code{NA}, with a warning, as the
+#'   conversion needs temperature and pressure.
 #' @param concentration Numeric vector of 24-hour averages (8-hour for CO and
-#'   O3), in mg/m3 for CO and ug/m3 for the others.
-#' @return Numeric vector of sub-indices; above the last breakpoint the
-#'   slope of the Severe band continues, so a sub-index can be more than 500.
-#'   \code{NA} stays \code{NA}.
+#'   O3), in mg/m3 for CO and ug/m3 for the others when the label has no unit.
+#' @return Numeric vector of sub-indices; the Severe band runs from 400 at
+#'   its first breakpoint with slope 100 over the width of the Very Poor band
+#'   (for O3, 100 over 540), and continues without a cap, so a sub-index can
+#'   be more than 500. O3 above 208 stays on the 8-hour value.
+#'   \code{NA}, negative and non-finite values give \code{NA}.
 #' @examples
 #' aqi_sub_index("PM2.5", c(25, 45, 300))
 #' @export
@@ -103,7 +122,9 @@ aqi_sub_index <- function(pollutant, concentration) {
       paste(names(.aqi_pollutants), collapse = ", ")
     ), call. = FALSE)
   }
-  .aqi_interp(name, as.numeric(concentration))
+  factor <- .aqi_unit_factor(.aqi_label_unit(pollutant), name)
+  .aqi_warn_volume(name, factor)
+  .aqi_interp(name, as.numeric(concentration) * factor)
 }
 
 #' Overall National AQI of a set of concentrations
@@ -113,42 +134,67 @@ aqi_sub_index <- function(pollutant, concentration) {
 #' pollutants, one of them PM2.5 or PM10.
 #'
 #' @param concentrations Named numeric vector or list: pollutant label to
-#'   averaged concentration. Labels that are not NAQI pollutants and missing
-#'   values are ignored.
+#'   averaged concentration. Labels that are not NAQI pollutants, and missing,
+#'   negative or non-finite values, are ignored. Mass units in a label are
+#'   converted; values labelled in ppb or ppm are ignored with one warning.
 #' @return List with \code{aqi} (integer, \code{NA} when the data are
-#'   insufficient), \code{category}, \code{dominant_pollutant} and the named
-#'   \code{sub_indices}.
+#'   insufficient), \code{category}, \code{dominant_pollutant}, the named
+#'   \code{sub_indices} and \code{status}: \code{"ok"}, \code{"no_pm"} or
+#'   \code{"too_few_pollutants"}.
+#' @references
+#' CPCB (2014). *National Air Quality Index*. Control of Urban Pollution Series
+#' CUPS/82/2014-15, pp. 35, 37, 44.
+#' <https://cpcb.gov.in/displaypdf.php?id=bmF0aW9uYWwtYWlyLXF1YWxpdHktaW5kZXgvRklOQUwtUkVQT1JUX0FRSV8ucGRm>
+#' (accessed 2026-11-09).
+#'
+#' CPCB. *About National Air Quality Index*.
+#' <https://cpcb.nic.in/displaypdf.php?id=bmF0aW9uYWwtYWlyLXF1YWxpdHktaW5kZXgvQWJvdXRfQVFJLnBkZg==>
+#' (accessed 2026-11-09).
+#'
+#' CPCB. *How is AQI calculated?*
+#' <https://cpcb.gov.in/displaypdf.php?id=bmF0aW9uYWwtYWlyLXF1YWxpdHktaW5kZXgvSG93X0FRSV9DYWxjdWxhdGVkLnBkZg==>
+#' (accessed 2026-11-09).
+#'
+#' CPCB. *AQI-Calculator.xls*.
+#' <https://cpcb.gov.in/upload/national-air-quality-index/AQI-Calculator.xls>
+#' (accessed 2026-11-09).
 #' @examples
 #' compute_aqi(c("PM2.5" = 45, PM10 = 80, NO2 = 30))$aqi
 #' @export
 compute_aqi <- function(concentrations) {
   values <- unlist(concentrations)
-  names_naqi <- aqi_pollutant_name(names(values))
-  keep <- !is.na(names_naqi) & !is.na(values)
+  labels <- as.character(names(values))
+  names_naqi <- aqi_pollutant_name(labels)
+  factors <- .aqi_unit_factor(.aqi_label_unit(labels), names_naqi)
+  .aqi_warn_volume(names_naqi, factors)
+  numbers <- suppressWarnings(as.numeric(values)) * factors
+  keep <- !is.na(names_naqi)
   subs <- stats::setNames(
-    mapply(.aqi_interp, names_naqi[keep], as.numeric(values[keep])),
+    mapply(.aqi_interp, names_naqi[keep], numbers[keep]),
     names_naqi[keep]
   )
+  subs <- subs[!is.na(subs)]
   # a repeated label counts once; ties go to the first in .aqi_pollutants
   order <- intersect(names(.aqi_pollutants), names(subs))
   subs <- vapply(order, function(n) max(subs[names(subs) == n]), numeric(1))
-  if (!.aqi_sufficient(names(subs))) {
+  status <- .aqi_status(length(subs), any(c("PM2.5", "PM10") %in% names(subs)))
+  if (status != "ok") {
     return(list(
       aqi = NA_integer_, category = NA_character_,
-      dominant_pollutant = NA_character_, sub_indices = subs
+      dominant_pollutant = NA_character_, sub_indices = subs, status = status
     ))
   }
   dominant <- names(subs)[which.max(subs)]
   aqi <- as.integer(.round_half_up(max(subs)))
   list(
     aqi = aqi, category = get_aqi_category(aqi),
-    dominant_pollutant = dominant, sub_indices = subs
+    dominant_pollutant = dominant, sub_indices = subs, status = status
   )
 }
 
-.aqi_sufficient <- function(pollutants) {
-  length(pollutants) >= .aqi_min_pollutants &&
-    any(c("PM2.5", "PM10") %in% pollutants)
+# PM is checked before the count, the order Python uses too
+.aqi_status <- function(n_pollutants, has_pm) {
+  ifelse(!has_pm, "no_pm", ifelse(n_pollutants < .aqi_min_pollutants, "too_few_pollutants", "ok"))
 }
 
 # health texts of CPCB's AQI-Calculator.xls

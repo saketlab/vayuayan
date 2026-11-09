@@ -1,5 +1,7 @@
 .cpcb_base_url <- "https://airquality.cpcb.gov.in"
 
+.nominatim_pause <- function() Sys.sleep(1) # Nominatim rate limit: 1 request/second
+
 #' Fetch complete station and city list from CPCB
 #'
 #' @description
@@ -68,14 +70,16 @@ cpcb_get_city_list <- function(state) {
 #' directory.
 #'
 #' @param city Character. City name (e.g. \code{"Delhi"}, \code{"Mumbai"}).
+#' @param state Optional state name or code, needed for a city name used in
+#'   more than one state.
 #' @return Data frame with columns \code{label} (station name) and
 #'   \code{value} (station ID)
 #' @examples
 #' stations <- cpcb_get_station_list("Delhi")
 #' head(stations)
 #' @export
-cpcb_get_station_list <- function(city) {
-  city_entry <- .cpcb_resolve_city(city)
+cpcb_get_station_list <- function(city, state = "") {
+  city_entry <- .cpcb_resolve_city(city, state)
   st <- if (!is.null(city_entry)) .cpcb_directory()$stations[[city_entry$city_code]]
   if (!is.data.frame(st)) {
     return(.cpcb_dropdown(character(0)))
@@ -109,10 +113,12 @@ cpcb_add_coords <- function(stations) {
       warning("CPCB live feed unavailable: ", conditionMessage(e), call. = FALSE)
       NULL
     })
-    missing <- which(is.na(stations$lat))
-    idx <- match(stations$value[missing], feed$id)
-    stations$lat[missing] <- suppressWarnings(as.numeric(feed$latitude[idx]))
-    stations$lon[missing] <- suppressWarnings(as.numeric(feed$longitude[idx]))
+    if (!is.null(feed)) {
+      missing <- which(is.na(stations$lat))
+      idx <- match(stations$value[missing], feed$id)
+      stations$lat[missing] <- suppressWarnings(as.numeric(feed$latitude[idx]))
+      stations$lon[missing] <- suppressWarnings(as.numeric(feed$longitude[idx]))
+    }
   }
 
   # stations absent from the live feed (e.g. offline) are geocoded with
@@ -134,7 +140,7 @@ cpcb_add_coords <- function(stations) {
         "", label
       )
 
-      Sys.sleep(1) # Nominatim rate limit: 1 request/second
+      .nominatim_pause()
       tryCatch(
         {
           url <- utils::URLencode(paste0(
@@ -207,7 +213,7 @@ cpcb_get_file_path <- function(station_id = "",
   payload <- list(
     station_id = station_id,
     station_name = station_name,
-    state = state,
+    state = state %||% "",
     city = city,
     year = as.character(year),
     frequency = .cpcb_normalize_frequency(frequency),
@@ -224,35 +230,59 @@ cpcb_get_file_path <- function(station_id = "",
       payload$city <- city_entry$city_name
     }
   } else if (data_type %in% c("stationLevel", "raw")) {
-    station <- .cpcb_resolve_station(station_id, station_name)
+    station <- .cpcb_resolve_station(station_id, station_name, city, state)
     if (!is.null(station)) {
       payload[names(station)] <- station
     }
   }
 
-  response <- httr::POST(
-    .cpcb_new_api("file-path"),
-    body = payload,
-    encode = "json",
-    httr::accept_json(),
-    httr::timeout(30)
+  response <- tryCatch(
+    .cpcb_ssl_fallback(function() {
+      httr::POST(
+        .cpcb_new_api("file-path"),
+        body = payload,
+        encode = "json",
+        httr::accept_json(),
+        httr::timeout(30)
+      )
+    }),
+    error = function(e) .vayuayan_abort("vayuayan_network", conditionMessage(e), parent = e)
   )
-  httr::stop_for_status(response)
+  listing <- .cpcb_read_listing(response)
+  if (listing$outcome == "FAILED") stop(listing$error)
+  listing$entries
+}
 
+# FILES, NONE or FAILED, so that a failed listing can never pass for no files and write an empty marker
+.cpcb_read_listing <- function(response) {
+  failed <- function(error) list(outcome = "FAILED", entries = list(), error = error)
+  none <- list(outcome = "NONE", entries = list())
+  network <- function(message, parent = NULL) {
+    tryCatch(.vayuayan_abort("vayuayan_network", message, parent = parent), error = identity)
+  }
+
+  http <- tryCatch(httr::stop_for_status(response), error = identity)
+  if (inherits(http, "error")) {
+    return(failed(network(conditionMessage(http), http)))
+  }
   # CPCB answers 204 with an empty body on no match
   text <- httr::content(response, as = "text", encoding = "UTF-8")
   if (is.na(text) || !nzchar(text)) {
-    return(list())
+    return(none)
   }
-  parsed_response <- jsonlite::fromJSON(text)
-
-  df <- parsed_response$data
-  if (!identical(parsed_response$status, "success") ||
-    !is.data.frame(df) || nrow(df) == 0) {
-    return(list())
+  parsed <- tryCatch(jsonlite::fromJSON(text), error = function(e) NULL)
+  if (!is.list(parsed) || !identical(parsed$status, "success")) {
+    return(failed(network("CPCB did not answer the file listing")))
+  }
+  df <- parsed$data
+  if (!is.data.frame(df) || nrow(df) == 0) {
+    return(none)
   }
   # fields as CPCB sends them
-  lapply(seq_len(nrow(df)), function(i) as.list(df[i, , drop = FALSE]))
+  list(
+    outcome = "FILES",
+    entries = lapply(seq_len(nrow(df)), function(i) as.list(df[i, , drop = FALSE]))
+  )
 }
 
 #' Download city-level AQI data
@@ -264,9 +294,11 @@ cpcb_get_file_path <- function(station_id = "",
 #'
 #' @param city Character. City name (e.g. \code{"Delhi"}, \code{"Mumbai"}).
 #' @param year Integer. Year for data (e.g. \code{2022}).
-#' @param save_location Character. Full file path to save the downloaded CSV.
-#' @return Data frame preview (first 6 rows) of the downloaded data.
-#'   The full data is saved to \code{save_location}.
+#' @param save_location Character. Full file path to save the downloaded CSV,
+#'   or \code{""} to save nothing.
+#' @param state Optional state name or code, needed for a city name used in
+#'   more than one state.
+#' @return Data frame of the downloaded data.
 #' @examplesIf interactive()
 #' cpcb_download_city_data(
 #'   city          = "Delhi",
@@ -274,9 +306,10 @@ cpcb_get_file_path <- function(station_id = "",
 #'   save_location = tempfile(fileext = ".csv")
 #' )
 #' @export
-cpcb_download_city_data <- function(city, year, save_location) {
+cpcb_download_city_data <- function(city, year, save_location, state = "") {
   data_files <- cpcb_get_file_path(
     city = city,
+    state = state,
     frequency = "daily",
     data_type = "cityLevel"
   )
@@ -293,9 +326,11 @@ cpcb_download_city_data <- function(city, year, save_location) {
 #' @param station_id Character. Station ID (e.g. \code{"site_301"}) or name. Part of a
 #'   name is enough when it picks one station (e.g. \code{"Anand Vihar, Delhi"}).
 #' @param year Integer. Year for data (e.g. \code{2022}).
-#' @param save_location Character. Full file path to save the downloaded CSV.
-#' @return Data frame preview (first 6 rows) of the downloaded data.
-#'   The full data is saved to \code{save_location}.
+#' @param save_location Character. Full file path to save the downloaded CSV,
+#'   or \code{""} to save nothing.
+#' @param city,state Optional city and state that narrow an ambiguous station
+#'   name. State applies only together with city.
+#' @return Data frame of the downloaded data.
 #' @examplesIf interactive()
 #' cpcb_download_station_data(
 #'   station_id    = "Bandra Kurla Complex, Mumbai - MPCB",
@@ -303,8 +338,8 @@ cpcb_download_city_data <- function(city, year, save_location) {
 #'   save_location = tempfile(fileext = ".csv")
 #' )
 #' @export
-cpcb_download_station_data <- function(station_id, year, save_location) {
-  station <- .cpcb_require_station(station_id)
+cpcb_download_station_data <- function(station_id, year, save_location, city = NULL, state = NULL) {
+  station <- .cpcb_require_station(station_id, city, state)
 
   data_files <- cpcb_get_file_path(
     station_id = station$station_id,

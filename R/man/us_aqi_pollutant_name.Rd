@@ -16,7 +16,8 @@ Character vector of US AQI names (\code{"PM2.5"}, \code{"PM10"},
 }
 \description{
 Match a pollutant label such as \code{"PM2.5 (ug/m3)"}, \code{"Ozone"},
-\code{"O3_1h"} or \code{"SO2 24h"} to its US EPA AQI name.
+\code{"O3_1h"}, \code{"SO2 24h"} or \code{"SO2 (24h) (ppb)"} to its US EPA
+AQI name.
 }
 \examples{
 us_aqi_pollutant_name(c("PM2.5 (ug/m3)", "Ozone", "NH3"))

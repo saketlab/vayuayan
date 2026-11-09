@@ -51,9 +51,7 @@ vayuayan_cache_dir <- function() {
 # Cache path of a CPCB repository file relative to a cache root, or NULL when
 # it must not be cached: files of the current year still change.
 .cpcb_cache_name <- function(filepath) {
-  years <- as.integer(regmatches(
-    filepath, gregexpr("(?<![0-9])(19|20)[0-9]{2}(?![0-9])", filepath, perl = TRUE)
-  )[[1]])
+  years <- .cpcb_path_years(filepath)
   current <- as.integer(format(Sys.Date(), "%Y"))
   if (length(years) == 0 || max(years) >= current) {
     return(NULL)
@@ -61,6 +59,16 @@ vayuayan_cache_dir <- function() {
   parts <- strsplit(filepath, "/", fixed = TRUE)[[1]]
   parts <- parts[!parts %in% c("", ".", "..")]
   do.call(file.path, as.list(c("cpcb", gsub("[^A-Za-z0-9_.-]", "_", parts))))
+}
+
+# a year segment, a range (later year counts) or a name ending _YYYY.ext; site_2025 is not a year
+.cpcb_path_years <- function(filepath) {
+  parts <- strsplit(filepath, "/", fixed = TRUE)[[1]]
+  segments <- parts[grepl("^(19|20)[0-9]{2}(-(19|20)[0-9]{2})?$", parts)]
+  in_segments <- sub("^.*-", "", segments)
+  name <- basename(filepath)
+  in_name <- regmatches(name, regexpr("(?i)(?<!site)_(19|20)[0-9]{2}(?=\\.[^.]+$)", name, perl = TRUE))
+  as.integer(c(in_segments, sub("_", "", in_name)))
 }
 
 .pm25_default_dirs <- function() {

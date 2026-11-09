@@ -12,7 +12,9 @@ stations_to_dataframe(data)
 \value{
 Data frame with columns: station_id, station_name, city_name,
 city_id, state_id, longitude, latitude, live, avg_aqi, status,
-aqi_category
+aqi_category. \code{status} is \code{"Live"}, \code{"No Reading"} (a
+live station without an AQI) or \code{"Offline"}. Stations without
+coordinates have \code{NA} longitude and latitude.
 }
 \description{
 Convert nested station data to a flat data frame with geographic

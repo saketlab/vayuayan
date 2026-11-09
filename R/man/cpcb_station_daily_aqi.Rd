@@ -4,7 +4,14 @@
 \alias{cpcb_station_daily_aqi}
 \title{Daily National AQI of a station from its raw data}
 \usage{
-cpcb_station_daily_aqi(station_id, year, day_ends_at = 24)
+cpcb_station_daily_aqi(
+  station_id,
+  year,
+  day_ends_at = 24,
+  standard = "india",
+  city = NULL,
+  state = NULL
+)
 }
 \arguments{
 \item{station_id}{Character. Station ID (e.g. \code{"site_301"}) or name. Part of a
@@ -14,14 +21,22 @@ name is enough when it picks one station (e.g. \code{"Anand Vihar, Delhi"}).}
 
 \item{day_ends_at}{Hour at which each day's 24 hours end; 16 matches CPCB's
 4 PM bulletin.}
+
+\item{standard}{\code{"india"} for the NAQI or \code{"us"} for the US EPA AQI.}
+
+\item{city, state}{Optional city and state that narrow an ambiguous station
+name. State applies only together with city.}
 }
 \value{
-Data frame as returned by \code{daily_aqi()}, limited to dates in
-\code{year}.
+Data frame as returned by \code{daily_aqi()} or
+\code{daily_us_aqi()}, limited to dates in \code{year}.
 }
 \description{
 Download a station's raw 15-minute data for a year and compute its daily
-NAQI with \code{daily_aqi()}.
+AQI with \code{daily_aqi()} (NAQI) or \code{daily_us_aqi()} (US EPA). With
+\code{day_ends_at} before 24, the window
+of 1 January starts on 31 December, so the previous year's file is read
+too; if it is missing, 1 January uses the current year's hours only.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

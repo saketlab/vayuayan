@@ -34,7 +34,8 @@ Data frame with \code{id_col}, \code{readings_pct},
 }
 \description{
 Share of the expected 15-minute readings, and of days with a valid
-24-hour average (75 \\% of the readings, the EPA rule), per sensor.
+24-hour average (75 \\% of the readings, the EPA rule), per sensor. Days are
+taken in the time zone of \code{time_col}, and a repeated time counts once.
 }
 \examples{
 r <- data.frame(

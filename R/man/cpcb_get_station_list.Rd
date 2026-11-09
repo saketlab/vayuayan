@@ -4,10 +4,13 @@
 \alias{cpcb_get_station_list}
 \title{Get station list for a city}
 \usage{
-cpcb_get_station_list(city)
+cpcb_get_station_list(city, state = "")
 }
 \arguments{
 \item{city}{Character. City name (e.g. \code{"Delhi"}, \code{"Mumbai"}).}
+
+\item{state}{Optional state name or code, needed for a city name used in
+more than one state.}
 }
 \value{
 Data frame with columns \code{label} (station name) and

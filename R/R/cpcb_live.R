@@ -53,9 +53,14 @@ cpcb_get_all_india <- function() {
 #'
 #' @description
 #' Find the CPCB monitoring station nearest to given coordinates, or to the
-#' IP-based location when none are given.
+#' IP-based location when none are given. A station found from the IP location
+#' is the nearest one with a current reading, if any has one.
 #'
 #' @param coords Optional numeric vector c(lat, lon). If NULL, uses IP location.
+#' @param prefer_reading Logical. Prefer the nearest station that has a
+#'   current AQI over a closer one that does not. Defaults to \code{TRUE} only
+#'   when \code{coords} is not given, so explicit coordinates get the
+#'   closest station.
 #' @return List with station_id, station_name, and distance_km
 #' @examplesIf interactive()
 #' # Auto-detect location
@@ -68,11 +73,14 @@ cpcb_get_all_india <- function() {
 #' # Provide coordinates manually (Mumbai)
 #' nearest <- cpcb_get_nearest_station(coords = c(19.076, 72.877))
 #' @export
-cpcb_get_nearest_station <- function(coords = NULL) {
-  nearest <- cpcb_get_nearest_stations(coords, k = 1)
+cpcb_get_nearest_station <- function(coords = NULL, prefer_reading = is.null(coords)) {
+  force(prefer_reading)
+  nearest <- cpcb_get_nearest_stations(coords, k = if (prefer_reading) .Machine$integer.max else 1)
   if (nrow(nearest) == 0) {
     stop("Error finding nearest station: no stations with coordinates", call. = FALSE)
   }
+  with_reading <- which(nearest$live & !is.na(nearest$avg))
+  nearest <- nearest[if (prefer_reading && length(with_reading)) with_reading[1] else 1, ]
   list(
     station_id = nearest$station_id,
     station_name = nearest$station_name,
@@ -122,7 +130,7 @@ cpcb_get_nearest_stations <- function(coords = NULL, k = 5, max_distance_km = In
     latitude = stations$latitude,
     longitude = stations$longitude,
     live = stations$live,
-    avg = suppressWarnings(as.numeric(stations$avg)),
+    avg = .to_numeric(stations$avg),
     distance_km = stations$distance_km,
     stringsAsFactors = FALSE
   )
@@ -143,9 +151,12 @@ cpcb_get_nearest_stations <- function(coords = NULL, k = 5, max_distance_km = In
 #' @param date_time Ignored; the feed holds only the latest reading.
 #' @return List with \code{station_id}, \code{station_name},
 #'   \code{lastUpdate}, \code{airQualityIndex} (numeric; \code{NA} when CPCB
-#'   has no AQI for the hour) and a \code{metrics} data frame of pollutant
+#'   has no AQI for the hour), a \code{metrics} data frame of pollutant
 #'   readings (\code{name}, \code{avg}, \code{min}, \code{max},
-#'   \code{avgDesc}).
+#'   \code{avgDesc}), \code{source} (always \code{"rss"}),
+#'   \code{reading_state} (\code{"reading"} or \code{"no_reading"}) and
+#'   \code{as_of} (the time of the reading as CPCB writes it, \code{NA} when
+#'   CPCB gives none).
 #' @examplesIf interactive()
 #' aqi <- cpcb_get_live_aqi_data_for_station(station_id = "site_103")
 #' @export
@@ -161,9 +172,7 @@ cpcb_get_live_aqi_data_for_station <- function(station_id, date_time = NULL) {
 
   st <- .cpcb_find_station(.cpcb_rss_stations(), station_id, "id", "name")
   if (is.null(st)) {
-    stop(sprintf("Station %s not found in the CPCB live feed", station_id),
-      call. = FALSE
-    )
+    .vayuayan_abort("vayuayan_not_found", sprintf("Station %s not found in the CPCB live feed", station_id))
   }
 
   pollutants <- st$pollutants[[1]]
@@ -179,12 +188,16 @@ cpcb_get_live_aqi_data_for_station <- function(station_id, date_time = NULL) {
   } else {
     data.frame()
   }
+  aqi <- .to_numeric(st$avg %||% NA) # "NA" -> NA
   list(
     station_id = st$id,
     station_name = st$name,
     lastUpdate = st$lastUpdate,
-    airQualityIndex = suppressWarnings(as.numeric(st$avg %||% NA)), # "NA" -> NA
-    metrics = metrics
+    airQualityIndex = aqi,
+    metrics = metrics,
+    source = "rss",
+    reading_state = if (is.na(aqi)) "no_reading" else "reading",
+    as_of = if (is.na(st$lastUpdate) || !nzchar(st$lastUpdate)) NA_character_ else st$lastUpdate
   )
 }
 
@@ -210,7 +223,7 @@ cpcb_get_live_aqi_data_for_station <- function(station_id, date_time = NULL) {
 cpcb_get_live_aqi_data <- function(station_id = NULL, coords = NULL,
                                    date = NULL, hour = NULL) {
   if (is.null(station_id)) {
-    station_id <- cpcb_get_nearest_station(coords)$station_id
+    station_id <- cpcb_get_nearest_station(coords, prefer_reading = TRUE)$station_id
   }
   if (!is.null(date) || !is.null(hour)) {
     cli::cli_alert_warning(

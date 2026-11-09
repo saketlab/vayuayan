@@ -7,7 +7,8 @@ utils::globalVariables(c("ring", "angle", "width", "category", "hour", "y", "lab
 # CPCB category colours, with the band in each legend label
 .aqi_radial_fill <- function() {
   levels <- names(.aqi_colours)
-  ranges <- paste0(.aqi_bands[c(TRUE, FALSE)], "-", .aqi_bands[c(FALSE, TRUE)])
+  tops <- unname(.aqi_categories)
+  ranges <- paste0(c(0, utils::head(tops, -1) + 1), "-", tops)
   ggplot2::scale_fill_manual(
     values = .aqi_colours, limits = levels,
     labels = paste0(levels, "\n", ranges), na.value = "#d9d9d9",

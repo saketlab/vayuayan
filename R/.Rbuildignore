@@ -41,3 +41,4 @@ vignettes/.*_files$
 ^.*\.Rcheck$
 ^\.gitignore$
 ^article-data\.tar\.gz$
+^tests/testthat/_problems$
