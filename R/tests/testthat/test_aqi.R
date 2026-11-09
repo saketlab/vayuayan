@@ -1,11 +1,14 @@
-# Expected values come from the Python package (vayuayan.aqi) on the same
-# inputs; see fixtures/daily_aqi_python.csv.
+# daily_aqi is compared with the Python package; see fixtures/daily_aqi_python.csv.
+# Other expected values are hand-computed from the continuous bands.
 
-test_that("sub-indices match the Python package", {
+test_that("sub-indices follow the continuous bands", {
   cases <- data.frame(
     pollutant = c("PM2.5", "PM2.5", "PM2.5", "PM2.5", "PM10", "O3", "CO", "CO", "Pb", "Pb", "Ozone"),
     concentration = c(30, 30.5, 45, 1000, 430, 900, 1.05, 10, 0.5, 0.50001, 120),
-    expected = c(50, 50.5, 74.65517, 500 + 620 * 99 / 130, 400, 428.86667, 50.5, 200, 50, 51.00098, 129.07463)
+    expected = c(
+      50, 50 + 0.5 * 50 / 30, 75, 400 + 750 * 100 / 130, 400, 400 + 152 * 100 / 540,
+      52.5, 200, 50, 50.001, 100 + 20 * 100 / 68
+    )
   )
   got <- mapply(aqi_sub_index, cases$pollutant, cases$concentration)
   expect_equal(unname(got), cases$expected, tolerance = 1e-6)
@@ -30,7 +33,7 @@ test_that("compute_aqi follows the CPCB sufficiency rule", {
   expect_true(is.na(compute_aqi(c(NO2 = 30, SO2 = 10, CO = 2))$aqi))
 
   r <- compute_aqi(list("PM10 (ug/m3)" = 300, Ozone = 250, "CO (mg/m3)" = 12, Benzene = 5))
-  expect_equal(r$aqi, 309L)
+  expect_equal(r$aqi, 308L)
   expect_equal(r$dominant_pollutant, "O3")
 })
 

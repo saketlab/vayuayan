@@ -25,6 +25,7 @@ test_that("cities and stations resolve to CPCB's canonical names", {
 })
 
 test_that("stations resolve by full or partial name", {
+  local_no_feed()
   resolve <- vayuayan:::.cpcb_resolve_station
   expect_equal(resolve("anand vihar, delhi - dpcc")$station_id, "site_301")
   expect_equal(resolve("Anand Vihar, Delhi")$station_id, "site_301")
@@ -86,21 +87,14 @@ test_that("get_aqi_categories always returns a character vector", {
 })
 
 test_that("CPCB repository downloads retry, but not on 4xx", {
-  args <- NULL
-  local_mocked_bindings(
-    RETRY = function(verb, url, ..., times, terminate_on, quiet) {
-      args <<- list(times = times, terminate_on = terminate_on)
-      structure(list(status_code = 200L), class = "response")
-    },
-    stop_for_status = function(x, ...) invisible(x),
-    .package = "httr"
-  )
-  old <- options(vayuayan.cache_dir = tempfile())
-  on.exit(options(old), add = TRUE)
-  # the mock writes no file; only the call matters
-  suppressWarnings(.cpcb_download_repository("/AQI_daily/x.xlsx", "x.xlsx"))
-  expect_gt(args$times, 1)
-  expect_true(all(c(404L, 403L) %in% args$terminate_on))
+  local_cpcb()
+  http <- local_http(token_reply(), fake_response(200, "Day\n1\n"))
+  .cpcb_download_repository("/AQI_daily/x.xlsx", "x.xlsx")
+  expect_length(http$calls, 2)
+  for (call in http$calls) {
+    expect_gt(call$args$times, 1)
+    expect_true(all(c(404L, 403L) %in% call$args$terminate_on))
+  }
 })
 
 test_that("the live AQI is numeric, NA when CPCB sends NA", {

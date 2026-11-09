@@ -35,7 +35,7 @@ test_that("oaq_daily_means need enough readings", {
   full <- data.frame(date = paste0("t", 1:96), pm25 = 10 + (0:95) %% 2, pm10 = NA)
   short <- data.frame(date = paste0("t", 1:10), pm25 = 50)
   local_mocked_bindings(oaq_get_daily = function(session, provider, sensor_id, year, month, day) {
-    if (day == "03") stop("no file")
+    if (day == "03") stop(http_404_error())
     list(data = if (day == "01") full else short)
   })
   out <- oaq_daily_means(list(), "airnet", "s1", c("2026-09-01", "2026-09-02", "2026-09-03"))
@@ -55,7 +55,7 @@ test_that("oaq_readings stack days in local time", {
     "02" = data.frame(date = "bad", pm25 = 1)
   )
   local_mocked_bindings(oaq_get_daily = function(session, provider, sensor_id, year, month, day) {
-    if (is.null(days[[day]])) stop("no file")
+    if (is.null(days[[day]])) stop(http_404_error())
     list(data = days[[day]])
   })
   out <- oaq_readings(list(), "airnet", "s1", c("2026-09-01", "2026-09-02", "2026-09-03"))
@@ -73,11 +73,11 @@ test_that("oaq_readings stack days in local time", {
   )
   local_mocked_bindings(
     oaq_get_annual = function(session, provider, sensor_id, year) {
-      if (year != 2026) stop("no file")
+      if (year != 2026) stop(http_404_error())
       list(data = data.frame(date = "2026-05-29", pm25 = 300, temp = "31"))
     },
     oaq_get_daily = function(session, provider, sensor_id, year, month, day) {
-      if (month != "05" || day != "29") stop("no file")
+      if (month != "05" || day != "29") stop(http_404_error())
       list(data = readings)
     },
     .env = env

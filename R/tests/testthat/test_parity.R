@@ -20,11 +20,13 @@ test_that("NAQI breakpoints and bands match", {
   for (name in names(parity$pollutants)) {
     py <- parity$pollutants[[name]]
     r <- .aqi_pollutants[[name]]
-    expect_equal(r$bp, as.numeric(unlist(py$breakpoints)), info = name)
+    pairs <- as.vector(rbind(c(0, utils::head(r$tops, -1)), r$tops))
+    expect_equal(pairs, as.numeric(unlist(py$breakpoints)), info = name)
     expect_equal(r$hours, py$hours, info = name)
     expect_equal(r$unit, substr(sub("µ", "u", py$unit), 1, 2), info = name)
   }
-  expect_equal(.aqi_bands, as.numeric(unlist(parity$aqi_categories)))
+  tops <- unname(.aqi_categories)
+  expect_equal(as.vector(rbind(c(0, utils::head(tops, -1) + 1), tops)), as.numeric(unlist(parity$aqi_categories)))
 })
 
 test_that("pollutant labels resolve like Python", {
@@ -186,6 +188,13 @@ test_that("compute_us_aqi matches Python", {
     expect_equal(value, .vec(want[[col]]) %||% value[0], info = paste(info, col))
   }
 }
+
+test_that("daily_us_aqi matches Python", {
+  long <- utils::read.csv(test_path("fixtures", "daily_aqi_input.csv"), fileEncoding = "UTF-8")
+  for (end in names(parity$daily_us_aqi)) {
+    .expect_columns(daily_us_aqi(long, day_ends_at = as.integer(end)), parity$daily_us_aqi[[end]], end)
+  }
+})
 
 test_that("live data reshape like Python", {
   case <- parity$live

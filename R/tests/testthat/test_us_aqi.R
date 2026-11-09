@@ -1,4 +1,8 @@
-# hand-computed EPA-454/B-24-002 values; test_parity.R only compares R with Python
+# hand-computed EPA-403/B-26-003 values; test_parity.R only compares R with Python
+
+test_that("a mass pollutant in ppb has no AQI, like Python", {
+  expect_true(is.na(us_aqi_sub_index("PM2.5 (ppb)", 20)))
+})
 
 test_that("US AQI sub-indices match the EPA tables", {
   expect_equal(us_aqi_sub_index("PM2.5", c(9.0, 9.05, 9.1, 35.4)), c(50, 50, 51, 100))
@@ -35,6 +39,27 @@ test_that("compute_us_aqi follows the EPA rules", {
   expect_equal(c(so2$aqi, so2$sub_indices[["SO2"]]), c(200, 200))
   expect_true(is.na(compute_us_aqi(c(Benzene = 3))$aqi))
   expect_error(us_aqi_sub_index("NH3", 10), "not a US AQI pollutant")
+})
+
+test_that("8-hour O3 above 0.200 ppm without a 1-hour value gives no AQI", {
+  expect_warning(r <- compute_us_aqi(c(O3 = 0.25, "PM2.5" = 10)), "0.200 ppm")
+  expect_true(is.na(r$aqi))
+  expect_true(is.na(r$category))
+  expect_true(is.na(r$dominant_pollutant))
+  expect_named(r$sub_indices, "PM2.5")
+  expect_false("o3_above_table" %in% names(r))
+  # 0.2004 truncates to 0.200, inside the table
+  expect_no_warning(r <- compute_us_aqi(c(O3 = 0.2004)))
+  expect_equal(r$aqi, 300L)
+  expect_no_warning(r <- compute_us_aqi(c(O3 = 0.25, O3_1h = 0.21)))
+  expect_equal(r$dominant_pollutant, "O3_1h")
+  expect_warning(r <- compute_us_aqi(c(O3 = 0.25, O3_1h = 0.1)), "0.200 ppm")
+  expect_true(is.na(r$aqi))
+})
+
+test_that("a PM label in mg/m3 converts to ug/m3", {
+  expect_equal(us_aqi_sub_index("PM2.5 (mg/m3)", 0.0354), us_aqi_sub_index("PM2.5", 35.4))
+  expect_equal(us_aqi_sub_index("PM10 (mg/m³)", 0.154), us_aqi_sub_index("PM10", 154))
 })
 
 test_that("US AQI colors match EPA Tables 2 and 3", {
