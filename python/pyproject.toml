@@ -76,6 +76,9 @@ dev = [
 plot = [
     "matplotlib>=3.5",
 ]
+parquet = [
+    "pyarrow",
+]
 docs = [
     "myst-nb>=1.3.0",
     "sphinx>=8.2.3",

@@ -14,7 +14,7 @@ from .cli_readings import (
     index_feed,
     reading_from_feed,
 )
-from .cli_results import CPCB_DOWN, CommandResult
+from .cli_results import CPCB_DOWN, CommandResult, write_rows
 from .commands_shared import unresolved_place
 from .exceptions import CPCBError
 from .utils import station_distances
@@ -49,8 +49,42 @@ def _source(client: Any) -> Optional[str]:
     return getattr(client, "station_list_source", None)
 
 
+def _reading_row(reading: LiveReading) -> Dict[str, Any]:
+    """One flat row of a reading, for a saved file."""
+    station = reading.station.to_dict()
+    row: Dict[str, Any] = {
+        "station_id": station["id"],
+        "station_name": station["name"],
+        "city": station["city"],
+        "state": station["state"],
+        "latitude": station["latitude"],
+        "longitude": station["longitude"],
+        "status": reading.status,
+        "aqi": reading.aqi,
+        "category": reading.category,
+        "dominant_pollutant": reading.dominant,
+        "collected_at": reading.collected_at,
+        "age_minutes": reading.age_minutes,
+        "source": reading.source,
+    }
+    for pollutant in reading.pollutants:
+        row[f"{pollutant.name}_average_24h"] = pollutant.average_24h
+        row[f"{pollutant.name}_latest_hour"] = pollutant.latest_hour
+        row[f"{pollutant.name}_lowest_hour"] = pollutant.lowest_hour
+        row[f"{pollutant.name}_highest_hour"] = pollutant.highest_hour
+    return row
+
+
+def _save_readings(readings: List[LiveReading], save: str) -> Optional[str]:
+    """Write the readings if a file was asked for; return its path."""
+    if not save:
+        return None
+    write_rows([_reading_row(r) for r in readings], save)
+    return save
+
+
 def live_place(
-    client: Any, place: PlaceResult, now: Optional[datetime] = None
+    client: Any, place: PlaceResult, now: Optional[datetime] = None, save: str = ""
 ) -> CommandResult:
     """The live reading of a station, or of every station in a city.
 
@@ -58,6 +92,7 @@ def live_place(
         client: A CPCBLive.
         place: The result of lookup_place.
         now: The current time, timezone-aware.
+        save: Optional .csv, .json or .parquet file.
 
     Returns:
         The result; data has reading for a station, readings for a city.
@@ -85,7 +120,15 @@ def live_place(
         return CommandResult(
             "live",
             _RESULT_OF_READING[reading.status],
-            {"place": "station", "reading": reading.to_dict()},
+            {
+                "place": "station",
+                "reading": reading.to_dict(),
+                "saved": (
+                    None
+                    if reading.status == "fetch_failed"
+                    else _save_readings(readings, save)
+                ),
+            },
             _MESSAGE_OF_READING[reading.status],
         )
 
@@ -99,6 +142,7 @@ def live_place(
         "city": place.city.city,
         "state": place.city.state,
         "readings": [r.to_dict() for r in readings],
+        "saved": _save_readings(readings, save),
     }
     if has_data:
         return CommandResult("live", "ok", data)
@@ -110,6 +154,7 @@ def live_near(
     client: Any,
     coords: Optional[Tuple[float, float]] = None,
     now: Optional[datetime] = None,
+    save: str = "",
 ) -> CommandResult:
     """The live reading of the nearest station with one.
 
@@ -117,6 +162,7 @@ def live_near(
         client: A CPCBLive.
         coords: (latitude, longitude). If None, the IP address decides.
         now: The current time, timezone-aware.
+        save: Optional .csv, .json or .parquet file.
 
     Returns:
         The result: status location_unknown if the IP lookup failed, and
@@ -155,6 +201,7 @@ def live_near(
                 "source": source,
                 "distance_km": round(km, 1),
                 "reading": reading.to_dict(),
+                "saved": _save_readings([reading], save),
             }
             return CommandResult("live", "ok", data, note)
     return CommandResult("live", "no_data", message="No station has a reading now.")

@@ -92,27 +92,27 @@ def _lookup(
     return _settle(ctx, place)
 
 
-def _live_for(ctx: _Context, place: PlaceResult) -> CommandResult:
+def _live_for(ctx: _Context, place: PlaceResult, save: str) -> CommandResult:
     """The live reading of a resolved place."""
     with _busy(ctx, "Fetching the latest reading..."):
-        return commands.live_place(CPCBLive(), place)
+        return commands.live_place(CPCBLive(), place, save=save)
 
 
 def _live(ctx: _Context, args: argparse.Namespace) -> CommandResult:
     if args.words or args.city:
-        return _live_for(ctx, _lookup(ctx, args, args.words or [args.city]))
+        return _live_for(ctx, _lookup(ctx, args, args.words or [args.city]), args.save)
     if args.state:
         raise UsageError("--state narrows a place; give a place too")
     if (args.lat is None) != (args.lon is None):
         raise UsageError("--lat and --lon go together")
     coords = None if args.lat is None else (args.lat, args.lon)
     with _busy(ctx, "Finding the nearest station..."):
-        result = commands.live_near(CPCBLive(), coords)
+        result = commands.live_near(CPCBLive(), coords, save=args.save)
     if result.status != "location_unknown" or not ctx.interactive:
         return result
     ctx.err.print(result.message, markup=False)
     reply = Prompt.ask("Which place? (station or city)", console=ctx.err).split()
-    return _live_for(ctx, _lookup(ctx, args, reply)) if reply else result
+    return _live_for(ctx, _lookup(ctx, args, reply), args.save) if reply else result
 
 
 def _report_request(args: argparse.Namespace, year: Optional[int]) -> ReportRequest:

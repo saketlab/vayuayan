@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Mapping
 
 import requests
 
+from . import http_client
 from .exceptions import (
     AmbiguousMatchError,
     CityNotFoundError,
@@ -33,6 +34,21 @@ EXIT_CODES: Dict[str, int] = {
 }
 
 CPCB_DOWN = "Could not reach CPCB. Check your internet connection and try again."
+
+
+SAVE_SUFFIXES = (".csv", ".json", ".parquet")
+_SORT_ORDER = (
+    "state",
+    "city",
+    "station_name",
+    "station_id",
+    "year",
+    "month",
+    "date",
+    "Timestamp",
+    "timestamp",
+    "pollutant",
+)
 
 
 @dataclass(frozen=True)
@@ -101,14 +117,32 @@ def error_result(command: str, error: BaseException) -> CommandResult:
 
 
 def write_table(table: Any, path: str) -> None:
-    """Write a table as CSV, creating the folder if needed."""
+    """Write a table sorted ascending; the extension of path sets the format.
+
+    Args:
+        table: The DataFrame to write.
+        path: A .csv, .json or .parquet file. Its folder is created if needed.
+    """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    table.to_csv(target, index=False)
+    keys = [column for column in _SORT_ORDER if column in table.columns]
+    ordered = (
+        table.sort_values(keys, ignore_index=True, kind="mergesort") if keys else table
+    )
+    suffix = target.suffix.lower()
+    with http_client.atomic_path(target) as part:
+        if suffix == ".json":
+            ordered.to_json(
+                part, orient="records", date_format="iso", indent=2, force_ascii=False
+            )
+        elif suffix == ".parquet":
+            ordered.to_parquet(part, index=False)
+        else:
+            ordered.to_csv(part, index=False)
 
 
 def write_rows(rows: List[Dict[str, Any]], path: str) -> None:
-    """Write plain rows as CSV, creating the folder if needed."""
+    """Write plain rows; see write_table."""
     import pandas as pd
 
     write_table(pd.DataFrame(rows), path)

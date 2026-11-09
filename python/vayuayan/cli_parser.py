@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import importlib.util
 from datetime import datetime, timedelta
+from pathlib import PurePath
 from typing import NoReturn, Optional
 
 from . import __version__
+from .cli_results import SAVE_SUFFIXES
 from .commands_report import FREQUENCIES
 from .pm25_versions import PM25_VERSIONS
 
@@ -92,6 +95,24 @@ class _Parser(argparse.ArgumentParser):
         raise UsageError(message, self.format_usage())
 
 
+_SAVE_HELP = "write a .csv, .json or .parquet file, sorted ascending"
+
+
+def save_path(text: str) -> str:
+    """A file to save to, checked before any data is fetched."""
+    # argparse also passes the empty default through this check
+    if not text:
+        return text
+    suffix = PurePath(text).suffix.lower()
+    if suffix not in SAVE_SUFFIXES:
+        raise argparse.ArgumentTypeError("use a .csv, .json or .parquet file")
+    if suffix == ".parquet" and importlib.util.find_spec("pyarrow") is None:
+        raise argparse.ArgumentTypeError(
+            '.parquet needs pyarrow: pip install "vayuayan[parquet]"'
+        )
+    return text
+
+
 def month_number(text: str) -> int:
     """A month number from 1-12 or a name."""
     value = _MONTHS.get(text.lower()) or (int(text) if text.isdigit() else 0)
@@ -158,7 +179,9 @@ def _add_history_options(cmd: argparse.ArgumentParser) -> None:
         default="india",
         help="india (published, default) or us (computed from raw readings)",
     )
-    cmd.add_argument("--save", default="", metavar="FILE", help="write a CSV")
+    cmd.add_argument(
+        "--save", default="", type=save_path, metavar="FILE", help=_SAVE_HELP
+    )
     cmd.add_argument(
         "--computed",
         action="store_true",
@@ -213,6 +236,9 @@ def build_parser() -> argparse.ArgumentParser:
     cmd.add_argument("--state", default="", help="only this state")
     cmd.add_argument("--lat", type=float, help="latitude, instead of your IP location")
     cmd.add_argument("--lon", type=float, help="longitude, with --lat")
+    cmd.add_argument(
+        "--save", default="", type=save_path, metavar="FILE", help=_SAVE_HELP
+    )
 
     _add_history_options(
         add("history", "Daily AQI of a place for a year or a period", _HISTORY_EPILOG)
@@ -222,7 +248,9 @@ def build_parser() -> argparse.ArgumentParser:
         "find", "Find stations by name", "Example:\n  vayuayan find anand vihar\n"
     )
     cmd.add_argument("words", nargs="+", metavar="QUERY", help="name, city or ID")
-    cmd.add_argument("--save", default="", metavar="FILE", help="write a CSV")
+    cmd.add_argument(
+        "--save", default="", type=save_path, metavar="FILE", help=_SAVE_HELP
+    )
 
     cmd = add(
         "stations",
@@ -231,7 +259,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cmd.add_argument("--city", default="", help="only this city")
     cmd.add_argument("--state", default="", help="only this state")
-    cmd.add_argument("--save", default="", metavar="FILE", help="write a CSV")
+    cmd.add_argument(
+        "--save", default="", type=save_path, metavar="FILE", help=_SAVE_HELP
+    )
     cmd.add_argument("--limit", type=int, default=40, help="rows to show (default: 40)")
     cmd.add_argument("--all", action="store_true", help="show every station")
 

@@ -123,7 +123,7 @@ Options:
   differ. Needs one station.
 - ``--bulletin``: use days that end at 4 PM, like CPCB's daily bulletin. Implies
   ``--computed``.
-- ``--save FILE``: write the days as a CSV.
+- ``--save FILE``: write the days to a ``.csv``, ``.json`` or ``.parquet`` file, sorted ascending. Parquet needs ``pip install "vayuayan[parquet]"``. ``live``, ``find`` and ``stations`` take ``--save`` too.
 
 **Readings for any period.** With ``--from`` and ``--to``, the command gives
 measured concentrations from CPCB's report export, for one station or for all
