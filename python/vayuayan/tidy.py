@@ -11,7 +11,7 @@ from __future__ import annotations
 import calendar
 import re
 from datetime import date
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -27,7 +27,8 @@ TIDY_COLUMNS = [
     "value",
 ]
 
-_LABEL_RE = re.compile(r"^\s*(.*?)\s*(?:\((.*?)\))?\s*$")
+# The unit is the last parenthesised group; earlier groups stay in the name
+_LABEL_RE = re.compile(r"^\s*(.*?)\s*(?:\(([^()]*)\))?\s*$")
 
 
 def split_label(label: str) -> Tuple[str, str]:
@@ -48,20 +49,54 @@ _TIMESTAMP_FORMATS = (
 )
 
 
+# A UTC offset after a time of day, not the "-01" of a date
+_UTC_OFFSET = r"(\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)\s*(?:Z|[+-]\d{2}(?::?\d{2})?)$"
+_HOUR_24 = r"\d{4}-\d{2}-\d{2}[ T]24:00(?::00(?:\.0+)?)?"
+
+
+def _finite_numeric(values: pd.Series) -> pd.Series:
+    """Numbers of a column; text, infinities and missing values are NaN."""
+    import numpy as np
+    import pandas as pd
+
+    numeric = pd.to_numeric(values, errors="coerce").astype(float)
+    return numeric.replace([np.inf, -np.inf], np.nan)
+
+
+def _finite_rows(df: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
+    """Rows with a finite value in every column."""
+    import numpy as np
+
+    infinite = df[list(columns)].isin([np.inf, -np.inf]).any(axis=1)
+    return df[~infinite].dropna(subset=list(columns))
+
+
+def _mean_duplicates(df: pd.DataFrame, keys: Sequence[str], value: str) -> pd.DataFrame:
+    """One row per key with the mean value; rows with a missing key are left out."""
+    return df.groupby(list(keys), as_index=False, sort=False)[value].mean()
+
+
 def parse_timestamps(values: pd.Series) -> pd.Series:
     """Timestamps of CPCB data, NaT where no format matches.
 
     Each value is parsed on its own, so one value in another format does not
-    turn the others into NaT, as pandas' format inference can.
+    turn the others into NaT, as pandas' format inference can. A time zone or
+    UTC offset is dropped and the local wall-clock time is kept, as CPCB data
+    are in local time; "24:00" is 00:00 of the next day.
     """
     import pandas as pd
 
     if pd.api.types.is_datetime64_any_dtype(values):
-        return values
+        return values.dt.tz_localize(None) if values.dt.tz is not None else values
     text = values.astype("string").str.strip()
+    text = text.str.replace(_UTC_OFFSET, r"\1", regex=True)
     out = pd.Series(pd.NaT, index=values.index, dtype="datetime64[ns]")
+    midnight = text.str.fullmatch(_HOUR_24).fillna(False).astype(bool)
+    out[midnight] = pd.to_datetime(
+        text[midnight].str.slice(0, 10), format="%Y-%m-%d", errors="coerce"
+    ) + pd.Timedelta(days=1)
     for fmt in _TIMESTAMP_FORMATS:
-        missing = out.isna() & text.notna()
+        missing = out.isna() & text.notna() & ~midnight
         if not missing.any():
             break
         out[missing] = pd.to_datetime(text[missing], format=fmt, errors="coerce")
@@ -106,7 +141,7 @@ def cpcb_raw_to_long(
     long = wide.melt(
         id_vars=["timestamp"], value_vars=labels, var_name="label", value_name="value"
     )
-    long["value"] = pd.to_numeric(long["value"], errors="coerce")
+    long["value"] = _finite_numeric(long["value"])
     long = long.dropna(subset=["value"])
 
     parsed = {label: split_label(label) for label in labels}
@@ -139,12 +174,16 @@ def daily_aqi_workbook_to_long(workbook: pd.DataFrame, year: int) -> pd.DataFram
     """
     import pandas as pd
 
+    if "Day" not in workbook.columns:
+        return pd.DataFrame(columns=["date", "aqi"])
     months = [c for c in workbook.columns if c != "Day"]
     long = workbook.melt(
         id_vars=["Day"], value_vars=months, var_name="month", value_name="aqi"
     )
-    long["aqi"] = pd.to_numeric(long["aqi"], errors="coerce")
-    long = long.dropna(subset=["aqi"])
+    long["aqi"] = _finite_numeric(long["aqi"])
+    # Footer rows ("Minimum", "Maximum", blanks) have no day number
+    long["Day"] = _finite_numeric(long["Day"])
+    long = long.dropna(subset=["Day", "aqi"])
     dates = pd.to_datetime(
         long["Day"].astype(int).astype(str)
         + " "
@@ -173,13 +212,15 @@ def cpcb_tidy_daily(sheet: pd.DataFrame, year: Optional[int] = None) -> pd.DataF
     import pandas as pd
 
     months = {name: i for i, name in enumerate(calendar.month_name) if name}
+    if sheet.shape[1] == 0:
+        return pd.DataFrame(columns=["day", "month", "value"])
     day = pd.to_numeric(sheet.iloc[:, 0], errors="coerce")
     frames = [
         pd.DataFrame(
             {
                 "day": day,
                 "month": months[column],
-                "value": pd.to_numeric(sheet[column], errors="coerce"),
+                "value": _finite_numeric(sheet[column]),
             }
         )
         for column in sheet.columns[1:]
@@ -228,7 +269,7 @@ def live_to_long(aqi_data: Mapping[str, Any], station_id: str = "") -> pd.DataFr
     ]
     long = pd.DataFrame(rows, columns=["timestamp", "pollutant", "value"])
     long["timestamp"] = parse_timestamps(long["timestamp"])
-    long["value"] = pd.to_numeric(long["value"], errors="coerce")
+    long["value"] = _finite_numeric(long["value"])
     long.insert(0, "station_id", station_id or aqi_data.get("station_id", ""))
     return long.dropna(subset=["timestamp", "value"]).sort_values(
         ["pollutant", "timestamp"], ignore_index=True
@@ -258,5 +299,5 @@ def live_metrics(aqi_data: Mapping[str, Any]) -> pd.DataFrame:
         columns=["pollutant", "avg", "min", "max", "period"],
     )
     for column in ("avg", "min", "max"):
-        table[column] = pd.to_numeric(table[column], errors="coerce")
+        table[column] = _finite_numeric(table[column])
     return table

@@ -29,6 +29,7 @@ import requests
 from . import http_client
 from .exceptions import AuthenticationError, DataParsingError, NetworkError
 from .oaq_records import RECORD_COLUMNS, RECORD_TOLERANCE, compare_daily_records
+from .tidy import _finite_numeric
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -47,6 +48,9 @@ Providers = Union[str, Iterable[str]]
 Sensors = Union[str, Iterable[str]]
 # Sensors fetched at the same time when several are asked for
 OAQ_WORKERS = 8
+
+# A signed URL that stopped working; every later request would fail the same way
+_SESSION_EXPIRED = ("401", "403")
 
 
 class OAQClient:
@@ -99,8 +103,14 @@ class OAQClient:
             )
         except requests.RequestException as e:
             # The URL carries the signature, so name only the path and reason
-            raise NetworkError(
-                f"OAQ request failed for {path} ({http_client.failure_reason(e)})"
+            reason = http_client.failure_reason(e)
+            if reason in _SESSION_EXPIRED:
+                raise AuthenticationError(
+                    f"OAQ session expired or refused for {path} (HTTP {reason}); "
+                    "start a new OAQClient"
+                ) from None
+            raise _OAQRequestError(
+                f"OAQ request failed for {path} ({reason})", reason
             ) from None
         try:
             return response.json()
@@ -198,7 +208,7 @@ class OAQClient:
             try:
                 data = self.get_annual(provider, sensor_id, year)
             except (NetworkError, DataParsingError) as e:
-                logger.debug("OAQ %s %s: %s", sensor_id, year, e)
+                _note_failure(f"{sensor_id} {year}", e)
                 continue
             rows = pd.DataFrame(data.get("data") if isinstance(data, dict) else None)
             if rows.empty or "date" not in rows:
@@ -206,7 +216,7 @@ class OAQClient:
             day = pd.to_datetime(
                 rows["date"].astype(str).str.slice(0, 10), errors="coerce"
             )
-            values = rows.drop(columns="date").apply(pd.to_numeric, errors="coerce")
+            values = rows.drop(columns="date").apply(_finite_numeric)
             frames.append(values.assign(sensor_id=sensor_id, date=day.dt.date))
         if not frames:
             return pd.DataFrame(columns=["sensor_id", "date"])
@@ -316,7 +326,7 @@ class OAQClient:
             try:
                 data = self.get_daily(provider, sensor_id, day.year, day.month, day.day)
             except (NetworkError, DataParsingError) as e:
-                logger.debug("OAQ %s %s: %s", sensor_id, day, e)
+                _note_failure(f"{sensor_id} {day}", e)
                 continue
             rows = pd.DataFrame(data.get("data") if isinstance(data, dict) else None)
             if rows.empty or "date" not in rows:
@@ -327,7 +337,7 @@ class OAQClient:
                 format="%Y-%m-%dT%H:%M:%S",
                 errors="coerce",
             )
-            values = rows.drop(columns="date").apply(pd.to_numeric, errors="coerce")
+            values = rows.drop(columns="date").apply(_finite_numeric)
             frames.append(values.assign(sensor_id=sensor_id, timestamp=timestamp))
         if not frames:
             return pd.DataFrame(columns=["sensor_id", "timestamp"])
@@ -376,7 +386,7 @@ class OAQClient:
             try:
                 data = self.get_daily(provider, sensor_id, day.year, day.month, day.day)
             except (NetworkError, DataParsingError) as e:
-                logger.debug("OAQ %s %s: %s", sensor_id, day, e)
+                _note_failure(f"{sensor_id} {day}", e)
                 continue
             readings = pd.DataFrame(
                 data.get("data") if isinstance(data, dict) else None
@@ -385,7 +395,7 @@ class OAQClient:
                 continue
             row: Dict[str, Any] = {"sensor_id": sensor_id, "date": day}
             for column in readings.columns.drop("date", errors="ignore"):
-                values = pd.to_numeric(readings[column], errors="coerce").dropna()
+                values = _finite_numeric(readings[column]).dropna()
                 row[f"n_{column}"] = len(values)
                 row[column] = values.mean() if len(values) >= min_readings else math.nan
             rows.append(row)
@@ -446,7 +456,7 @@ class OAQClient:
                     try:
                         data = self.get_monthly(p, sid, year, month).get("data")
                     except (NetworkError, DataParsingError) as e:
-                        logger.debug("OAQ %s %s: %s", sid, month, e)
+                        _note_failure(f"{sid} {month}", e)
                         continue
                     if data:
                         records.append(pd.DataFrame(data).assign(station_id=sid))
@@ -582,6 +592,22 @@ def _today_ist() -> date:
     return datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
 
 
+class _OAQRequestError(NetworkError):
+    """A failed OAQ request; status is the HTTP status or the error type."""
+
+    def __init__(self, message: str, status: str) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def _note_failure(what: str, error: Exception) -> None:
+    """Warn about a file that could not be read; a 404 only means no data."""
+    if getattr(error, "status", None) == "404":
+        logger.debug("OAQ has no file for %s: %s", what, error)
+    else:
+        logger.warning("OAQ data for %s left out: %s", what, error)
+
+
 def _as_list(provider: Providers) -> list:
     return [provider] if isinstance(provider, str) else list(provider)
 
@@ -594,5 +620,5 @@ def _numeric(df: pd.DataFrame) -> pd.DataFrame:
     for column in out.columns:
         converted = pd.to_numeric(out[column], errors="coerce")
         if converted.notna().sum() == out[column].notna().sum():
-            out[column] = converted
+            out[column] = _finite_numeric(converted)
     return out

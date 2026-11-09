@@ -13,6 +13,8 @@ import math
 from datetime import date
 from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Sequence, Union
 
+from .tidy import _finite_numeric, _finite_rows, _mean_duplicates
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -30,6 +32,15 @@ EPA_PM25_TARGETS: Dict[str, Any] = {
 
 READINGS_PER_DAY = 96  # 15-minute readings
 HUMIDITY_BREAKS = (0, 40, 50, 60, 70, 80, 90, 100)
+
+
+def _usable_readings(
+    readings: pd.DataFrame, value: str, id_col: str, time_col: str
+) -> pd.DataFrame:
+    """Readings with a time and a finite value, one row per sensor and time."""
+    valid = _finite_rows(readings.dropna(subset=[time_col]), [value])
+    # A timestamp repeated in the data is one reading, not several
+    return _mean_duplicates(valid, [id_col, time_col], value)
 
 
 def readings_mean(
@@ -62,7 +73,7 @@ def readings_mean(
         need = math.ceil(EPA_PM25_TARGETS["completeness"] * per)
     else:
         need = min_readings
-    df = readings[[id_col, time_col, value]].dropna(subset=[time_col, value])
+    df = _usable_readings(readings, value, id_col, time_col)
     period = df[time_col].dt.date if by == "day" else df[time_col].dt.floor("h")
     key = "date" if by == "day" else "hour"
     out = (
@@ -100,7 +111,7 @@ def sensor_completeness(
     import pandas as pd
 
     days = pd.date_range(start, end).date
-    df = readings.dropna(subset=[time_col, value])
+    df = _usable_readings(readings, value, id_col, time_col)
     df = df[(df[time_col].dt.date >= days[0]) & (df[time_col].dt.date <= days[-1])]
     per_day = df.groupby([id_col, df[time_col].dt.date]).size()
     need = math.ceil(EPA_PM25_TARGETS["completeness"] * READINGS_PER_DAY)
@@ -153,7 +164,8 @@ def sensor_plausibility(
     import pandas as pd
 
     rows = []
-    for sensor, g in readings.dropna(subset=[time_col, value]).groupby(id_col):
+    usable = _usable_readings(readings, value, id_col, time_col)
+    for sensor, g in usable.groupby(id_col):
         v = g.sort_values(time_col, kind="stable")[value].reset_index(drop=True)
         run = v.groupby((v != v.shift()).cumsum()).transform("size")
         around = v.rolling(spike_window, center=True, min_periods=spike_window // 2 + 1)
@@ -190,7 +202,7 @@ def collocated_precision(
         DataFrame with date_col, sensors, mean, sd (sample standard deviation
         across the sensors) and cv_pct, per day with enough sensors.
     """
-    g = daily.dropna(subset=[value]).groupby(date_col)[value]
+    g = _finite_rows(daily, [value]).groupby(date_col)[value]
     out = g.agg(sensors="size", mean="mean", sd="std").reset_index()
     out["cv_pct"] = 100 * out["sd"] / out["mean"]
     return out[out["sensors"] >= min_sensors].reset_index(drop=True)
@@ -215,11 +227,15 @@ def peer_ratio(
     """
     import pandas as pd
 
-    wide = daily.pivot_table(index=date_col, columns=id_col, values=value)
+    wide = _finite_rows(daily, [value]).pivot_table(
+        index=date_col, columns=id_col, values=value
+    )
     wide = wide[wide.notna().sum(axis=1) >= min_sensors]
     rows = []
     for sensor in wide.columns:
-        ratio = (wide[sensor] / wide.drop(columns=sensor).median(axis=1)).dropna()
+        ratio = wide[sensor] / wide.drop(columns=sensor).median(axis=1)
+        # A peer median of zero gives an infinite ratio, which says nothing
+        ratio = _finite_numeric(ratio).dropna()
         rows.append(
             {
                 id_col: sensor,
@@ -258,7 +274,7 @@ def sensor_accuracy(
 
     t = EPA_PM25_TARGETS
     rows = []
-    for sid, g in paired.dropna(subset=[sensor, reference]).groupby(id_col):
+    for sid, g in _finite_rows(paired, [sensor, reference]).groupby(id_col):
         if len(g) < min_days:
             continue
         x, y = g[reference], g[sensor]
@@ -301,15 +317,16 @@ def ratio_by_humidity(
     unstable there.
 
     Returns:
-        DataFrame with band ("40-50" for 40 < RH <= 50), hours, median_ratio,
-        q25 and q75, one row per band with hours.
+        DataFrame with band ("40-50" for 40 < RH <= 50; the first band
+        includes its lower bound), hours, median_ratio, q25 and q75, one row
+        per band with hours.
     """
     import pandas as pd
 
-    df = hourly.dropna(subset=[sensor, reference, rh])
+    df = _finite_rows(hourly, [sensor, reference, rh])
     df = df[df[reference] >= min_reference]
     labels = [f"{lo:g}-{hi:g}" for lo, hi in zip(breaks[:-1], breaks[1:])]
-    band = pd.cut(df[rh], list(breaks), labels=labels)
+    band = pd.cut(df[rh], list(breaks), labels=labels, include_lowest=True)
     ratio = (df[sensor] / df[reference]).groupby(band, observed=True)
     out = pd.DataFrame(
         {

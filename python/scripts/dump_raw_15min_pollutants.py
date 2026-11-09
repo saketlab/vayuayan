@@ -12,8 +12,10 @@ The script does these steps:
     year, date, time, station_name, station_id, city, pollutant_name
 
 You can stop the script and run it again. On the next run, the script skips
-the station-year shards, the station parquet files, and the `.empty` markers
-that exist.
+the shards and the .empty markers of past years, and the station parquet
+files that are newer than their shards. Shards of a date range are kept apart
+from full-year shards, in a ranges folder. The script ends with a summary, and
+exits with 1 if anything failed or nothing was found.
 
 Examples:
 
@@ -39,6 +41,7 @@ import argparse
 import re
 import sys
 import time
+from collections import Counter
 from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable
@@ -48,7 +51,8 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 from vayuayan import CPCBHistorical
-from vayuayan.exceptions import DataNotFoundError
+from vayuayan.exceptions import CPCBError, DataNotFoundError
+from vayuayan.http_client import atomic_path
 from vayuayan.tidy import cpcb_raw_to_long
 
 SORT_COLUMNS = [
@@ -134,6 +138,20 @@ def iter_master_stations(
         }
 
 
+def range_label(start_date: date | None, end_date: date | None) -> str | None:
+    """The name of a date range, or None for full years."""
+    if start_date is None and end_date is None:
+        return None
+    start_label = start_date.isoformat() if start_date is not None else "start"
+    end_label = end_date.isoformat() if end_date is not None else "end"
+    return f"{start_label}_to_{end_label}"
+
+
+def is_past_year(year: int) -> bool:
+    """A past year's file does not change, so its shard or marker is final."""
+    return year < date.today().year
+
+
 def shard_paths(
     cache: Path,
     station_id: str,
@@ -142,12 +160,10 @@ def shard_paths(
     end_date: date | None = None,
 ) -> tuple[Path, Path]:
     station_dir = cache / safe_name(station_id)
-    suffix = str(year)
-    if start_date is not None or end_date is not None:
-        start_label = start_date.isoformat() if start_date is not None else "start"
-        end_label = end_date.isoformat() if end_date is not None else "end"
-        suffix = f"{year}_{start_label}_to_{end_label}"
-    return station_dir / f"{suffix}.parquet", station_dir / f"{suffix}.empty"
+    label = range_label(start_date, end_date)
+    suffix = str(year) if label is None else f"{year}_{label}"
+    folder = station_dir if label is None else station_dir / "ranges"
+    return folder / f"{suffix}.parquet", folder / f"{suffix}.empty"
 
 
 def dump_station_year(
@@ -162,10 +178,11 @@ def dump_station_year(
     shard, empty_marker = shard_paths(
         cache, station["station_id"], year, start_date, end_date
     )
-    if not overwrite and shard.exists():
-        return "cached"
-    if not overwrite and empty_marker.exists():
-        return "empty-cached"
+    if not overwrite and is_past_year(year):
+        if shard.exists():
+            return "cached"
+        if empty_marker.exists():
+            return "empty-cached"
 
     shard.parent.mkdir(parents=True, exist_ok=True)
     # A NetworkError propagates, so an outage never writes an .empty marker
@@ -187,12 +204,16 @@ def dump_station_year(
         empty_marker.touch()
         return "empty"
 
-    long.to_parquet(shard, index=False)
+    with atomic_path(shard) as part:
+        long.to_parquet(part, index=False)
     empty_marker.unlink(missing_ok=True)
     return f"written:{len(long)}"
 
 
-def collect_parquet_files(root: Path) -> list[str]:
+def collect_parquet_files(root: Path, label: str | None = None) -> list[str]:
+    """Parquet files under root; with a label, the shards of that date range."""
+    if label is not None:
+        return sorted(str(p) for p in root.glob(f"*/ranges/*_{label}.parquet"))
     return sorted(
         str(p) for p in list(root.glob("*.parquet")) + list(root.glob("*/*.parquet"))
     )
@@ -295,8 +316,15 @@ def write_sorted_parquet_by_month(
     tmp_out.replace(out)
 
 
-def station_parquet_path(station_out_dir: Path, station_id: str) -> Path:
-    return station_out_dir / f"{safe_name(station_id)}.parquet"
+def range_root(root: Path, label: str | None) -> Path:
+    """The folder under root for a date range; root itself for full years."""
+    return root if label is None else root / "ranges" / label
+
+
+def station_parquet_path(
+    station_out_dir: Path, station_id: str, label: str | None = None
+) -> Path:
+    return range_root(station_out_dir, label) / f"{safe_name(station_id)}.parquet"
 
 
 def build_station_parquet(
@@ -306,17 +334,24 @@ def build_station_parquet(
     overwrite: bool = False,
     temp_dir: Path | None = None,
     memory_limit: str | None = None,
+    label: str | None = None,
 ) -> str:
-    out = station_parquet_path(station_out_dir, station_id)
-    if out.exists() and not overwrite:
-        return "cached"
-
+    out = station_parquet_path(station_out_dir, station_id, label)
     station_cache = cache / safe_name(station_id)
-    shards = sorted(str(p) for p in station_cache.glob("*.parquet"))
+    found = (
+        station_cache.glob("*.parquet")
+        if label is None
+        else (station_cache / "ranges").glob(f"*_{label}.parquet")
+    )
+    shards = sorted(found)
+    if out.exists() and not overwrite:
+        built = out.stat().st_mtime
+        if not any(p.stat().st_mtime > built for p in shards):
+            return "cached"
     if not shards:
         return "empty"
 
-    write_sorted_parquet(shards, out, temp_dir, memory_limit)
+    write_sorted_parquet([str(p) for p in shards], out, temp_dir, memory_limit)
     return f"written:{len(shards)} shards"
 
 
@@ -326,8 +361,9 @@ def finalize_sorted_parquet(
     temp_dir: Path | None = None,
     memory_limit: str | None = None,
     by_month: bool = True,
+    label: str | None = None,
 ) -> None:
-    shards = collect_parquet_files(input_dir)
+    shards = collect_parquet_files(input_dir, label)
     if not shards:
         raise RuntimeError(f"No parquet files found under {input_dir}")
     if by_month:
@@ -410,7 +446,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
+def print_summary(tally: Counter) -> None:
+    counts = ", ".join(f"{tally[name]} {name}" for name in sorted(tally)) or "nothing"
+    print(f"summary: {counts}", flush=True)
+
+
+def main() -> int:
     args = parse_args()
     cache = Path(args.cache)
     station_out_dir = Path(args.station_out_dir)
@@ -424,12 +465,17 @@ def main() -> None:
     if args.start_date and args.end_date and args.start_date > args.end_date:
         raise SystemExit("--start-date must be <= --end-date")
 
+    label = range_label(args.start_date, args.end_date)
+    tally: Counter = Counter()
     stations = []
     if not args.skip_download or not args.skip_station_parquet:
         station_ids = set(args.station_id or []) or None
-        stations = list(
-            iter_master_stations(client, args.state, args.city, station_ids)
-        )
+        try:
+            stations = list(
+                iter_master_stations(client, args.state, args.city, station_ids)
+            )
+        except CPCBError as exc:  # for example a city in several states
+            raise SystemExit(str(exc)) from exc
         if args.limit_stations is not None:
             stations = stations[: args.limit_stations]
 
@@ -460,6 +506,7 @@ def main() -> None:
                     print(f"{prefix}: {status}", flush=True)
                 except Exception as exc:
                     print(f"{prefix}: failed: {exc}", file=sys.stderr, flush=True)
+                tally[status.split(":")[0]] += 1
                 if status not in {"cached", "empty-cached"}:
                     time.sleep(args.sleep)
 
@@ -472,36 +519,47 @@ def main() -> None:
                     args.overwrite_station_parquet,
                     duckdb_temp_dir,
                     args.duckdb_memory_limit,
+                    label,
                 )
                 print(f"station {station['station_id']}: {status}", flush=True)
             except Exception as exc:
+                tally["station-failed"] += 1
                 print(
                     f"station {station['station_id']}: failed: {exc}",
                     file=sys.stderr,
                     flush=True,
                 )
 
-    final_input_dir = station_out_dir
-    if args.skip_station_parquet and not collect_parquet_files(station_out_dir):
-        final_input_dir = cache
+    final_input_dir = range_root(station_out_dir, label)
+    shard_label = None
+    if args.skip_station_parquet and not collect_parquet_files(final_input_dir):
+        final_input_dir, shard_label = cache, label
+    nothing_written = False
     if not args.skip_final:
-        if not collect_parquet_files(final_input_dir):
+        if collect_parquet_files(final_input_dir, shard_label):
+            print(f"writing sorted parquet -> {out}", flush=True)
+            finalize_sorted_parquet(
+                final_input_dir,
+                out,
+                duckdb_temp_dir,
+                args.duckdb_memory_limit,
+                by_month=not args.global_final_sort,
+                label=shard_label,
+            )
+            print(f"wrote {out}", flush=True)
+        else:
+            nothing_written = True
             print(
                 f"no parquet written: no parquet files under {final_input_dir}",
                 file=sys.stderr,
                 flush=True,
             )
-            return
-        print(f"writing sorted parquet -> {out}", flush=True)
-        finalize_sorted_parquet(
-            final_input_dir,
-            out,
-            duckdb_temp_dir,
-            args.duckdb_memory_limit,
-            by_month=not args.global_final_sort,
-        )
-        print(f"wrote {out}", flush=True)
+
+    print_summary(tally)
+    failed = tally["failed"] or tally["station-failed"]
+    nothing_found = not args.skip_download and not (tally["written"] + tally["cached"])
+    return 1 if failed or nothing_found or nothing_written else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

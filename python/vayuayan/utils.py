@@ -37,7 +37,8 @@ from .constants import (
     DEFAULT_TIMEOUT,
     RSS_URL_WITH_COORDINATES,
 )
-from .exceptions import DataProcessingError, NetworkError, StationNotFoundError
+from .exceptions import AmbiguousMatchError, DataProcessingError, NetworkError
+from .tidy import _finite_numeric
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -127,6 +128,8 @@ def sort_station_data(data: List[Dict]) -> List[Dict]:
 
 def parse_cpcb_rss_station_data(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Convert CPCB RSS JSON station data to the package station shape."""
+    if not isinstance(data, dict):
+        raise ValueError("CPCB RSS feed is not a JSON object")
     cities: List[Dict[str, Any]] = []
 
     for state in data.get("country", []):
@@ -147,6 +150,10 @@ def parse_cpcb_rss_station_data(data: Dict[str, Any]) -> List[Dict[str, Any]]:
                     aqi = {"value": avg}
                 station_id = station.get("siteId") or station.get("stationName", "")
                 station_name = station.get("stationName", "")
+                # CPCB sends the text NA for a station with no update
+                last_update = station.get("lastUpdate") or ""
+                if str(last_update).strip().upper() == "NA":
+                    last_update = ""
 
                 stations.append(
                     {
@@ -156,9 +163,9 @@ def parse_cpcb_rss_station_data(data: Dict[str, Any]) -> List[Dict[str, Any]]:
                         "stationName": station_name,
                         "latitude": station.get("latitude"),
                         "longitude": station.get("longitude"),
-                        "live": bool(station.get("lastUpdate")),
+                        "live": bool(last_update),
                         "avg": avg,
-                        "lastUpdate": station.get("lastUpdate", ""),
+                        "lastUpdate": last_update,
                         "pollutants": station.get("pollutants", []),
                         "airQualityIndex": aqi,
                     }
@@ -228,10 +235,10 @@ def iter_station_coords(
 ) -> Iterator[Tuple[Dict[str, Any], float, float]]:
     """Yield (station, latitude, longitude), skipping stations without coordinates."""
     for _, station in iter_city_stations(cities):
-        try:
-            yield station, float(station["latitude"]), float(station["longitude"])
-        except (KeyError, TypeError, ValueError):
-            continue
+        lat = _safe_float_conversion(station.get("latitude"))
+        lon = _safe_float_conversion(station.get("longitude"))
+        if math.isfinite(lat) and math.isfinite(lon):
+            yield station, lat, lon
 
 
 T = TypeVar("T")
@@ -248,7 +255,8 @@ def find_station(query: str, stations: Iterable[Tuple[str, str, T]]) -> Optional
         The item of the matching station, or None if no station matches.
 
     Raises:
-        StationNotFoundError: If query is part of the names of more than one station.
+        AmbiguousMatchError: If query is part of the names of more than one
+            station; its candidates are their names.
     """
     target = query.strip().lower()
     if not target:
@@ -260,9 +268,25 @@ def find_station(query: str, stations: Iterable[Tuple[str, str, T]]) -> Optional
         if target in name.lower():
             partial.setdefault(station_id.lower(), (name, item))
     if len(partial) > 1:
-        names = "; ".join(sorted(name for name, _ in partial.values()))
-        raise StationNotFoundError(f"'{query}' matches more than one station: {names}")
+        names = sorted(name for name, _ in partial.values())
+        raise AmbiguousMatchError(
+            f"'{query}' matches more than one station: {'; '.join(names)}", names
+        )
     return next((item for _, item in partial.values()), None)
+
+
+def station_has_reading(station: Dict[str, Any]) -> bool:
+    """True if a station is reporting and has a current AQI."""
+    return bool(station.get("live")) and math.isfinite(
+        _safe_float_conversion(station.get("avg"))
+    )
+
+
+def _station_status(live: Any, avg_aqi: float) -> str:
+    """Live, No Reading (reporting but no AQI) or Offline."""
+    if not live:
+        return "Offline"
+    return "Live" if math.isfinite(avg_aqi) else "No Reading"
 
 
 def station_distances(
@@ -287,7 +311,7 @@ def get_aqi_category(aqi_value: float) -> str:
     """
     import pandas as pd
 
-    if pd.isna(aqi_value):
+    if pd.isna(aqi_value) or math.isinf(float(aqi_value)):
         return "No Data"
     return next(
         (name for name, band in AQI_CATEGORIES.items() if aqi_value <= band["max"]),
@@ -308,9 +332,10 @@ def _safe_float_conversion(value: Any, default: float = float("nan")) -> float:
     if value == "" or value is None:
         return default
     try:
-        return float(value)
+        number = float(value)
     except (ValueError, TypeError):
         return default
+    return number if math.isfinite(number) else default
 
 
 def stations_to_dataframe(data: List[Dict]) -> pd.DataFrame:
@@ -322,7 +347,8 @@ def stations_to_dataframe(data: List[Dict]) -> pd.DataFrame:
     Returns:
         DataFrame with columns: city_name, city_id, state_id, station_id,
                                station_name, longitude, latitude, live, avg_aqi,
-                               status ("Live"/"Offline"), aqi_category.
+                               status ("Live", "No Reading" or "Offline"),
+                               aqi_category.
     """
     import pandas as pd
 
@@ -347,12 +373,27 @@ def stations_to_dataframe(data: List[Dict]) -> pd.DataFrame:
                     "latitude": _safe_float_conversion(station.get("latitude")),
                     "live": live,
                     "avg_aqi": avg_aqi,
-                    "status": "Live" if live else "Offline",
+                    "status": _station_status(live, avg_aqi),
                     "aqi_category": get_aqi_category(avg_aqi),
                 }
             )
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "city_name",
+            "city_id",
+            "state_id",
+            "station_id",
+            "station_name",
+            "longitude",
+            "latitude",
+            "live",
+            "avg_aqi",
+            "status",
+            "aqi_category",
+        ],
+    )
 
 
 def stations_to_city_summary(data: List[Dict]) -> pd.DataFrame:
@@ -422,8 +463,10 @@ def stations_to_coordinates_dataframe(data: List[Dict]) -> pd.DataFrame:
     for city in data:
         for station in city.get("stationsInCity", []):
             try:
-                longitude = float(station["longitude"])
-                latitude = float(station["latitude"])
+                longitude = _safe_float_conversion(station["longitude"])
+                latitude = _safe_float_conversion(station["latitude"])
+                if math.isnan(longitude) or math.isnan(latitude):
+                    continue
                 avg_aqi = _safe_float_conversion(station.get("avg"))
 
                 rows.append(
@@ -436,7 +479,7 @@ def stations_to_coordinates_dataframe(data: List[Dict]) -> pd.DataFrame:
                         "latitude": latitude,
                         "live": station.get("live", False),
                         "avg_aqi": avg_aqi,
-                        "status": "Live" if station.get("live", False) else "Offline",
+                        "status": _station_status(station.get("live", False), avg_aqi),
                         "aqi_category": get_aqi_category(avg_aqi),
                     }
                 )
@@ -689,7 +732,7 @@ def aqi_category_index(aqi_values: Iterable[float]) -> Any:
     import numpy as np
     import pandas as pd
 
-    numeric = pd.to_numeric(pd.Series(list(aqi_values), dtype=object), errors="coerce")
+    numeric = _finite_numeric(pd.Series(list(aqi_values), dtype=object))
     values = numeric.to_numpy(dtype=float)
     # a value on a bound belongs to the lower band
     upper = [band["max"] for band in AQI_CATEGORIES.values()][:-1]

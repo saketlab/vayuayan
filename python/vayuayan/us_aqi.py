@@ -2,7 +2,9 @@
 The US EPA Air Quality Index (AQI), from pollutant concentrations.
 
 Breakpoints, categories and colors are from the EPA "Technical Assistance
-Document for the Reporting of Daily Air Quality" (EPA-454/B-24-002, May 2024):
+Document for the Reporting of Daily Air Quality" (EPA-403/B-26-003, May 2026,
+which that URL now serves; the calculation is that of EPA-454/B-24-002, May
+2024), and 40 CFR Part 58 Appendix G:
 https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf
 
 - Concentrations are truncated to the precision of the table (PM2.5 0.1
@@ -11,8 +13,9 @@ https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-d
 - O3 uses 8-hour averages up to 0.200 ppm, and 1-hour averages from 0.125
   ppm. SO2 uses 1-hour averages up to 304 ppb, and 24-hour averages from 305
   ppb. If you give both, the higher sub-index counts. If the 1-hour SO2 is
-  305 ppb or more and the 24-hour SO2 is below 305 ppb, the SO2 sub-index is
-  200.
+  305 ppb or more and the 24-hour SO2 is below 305 ppb or missing, the SO2
+  sub-index is 200. Without a 1-hour value, 8-hour O3 above 0.200 ppm gives no
+  AQI, because the 8-hour table stops at 300.
 - Above the highest breakpoint, the sub-index continues on the slope of the
   301-500 band, so it can be more than 500. All values above 300 are
   Hazardous.
@@ -22,12 +25,16 @@ https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-d
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
-from typing import Dict, Mapping, Optional, Tuple
+from typing import Dict, List, Mapping, Optional, Tuple
 
-from .aqi import AQIResult, _key, _mass_unit, _round_half_up
+from .aqi import AQIResult, _key, _missing, _qualifier_free_key, _round_half_up
+from .aqi_units import unit_factor
 from .tidy import split_label
+
+logger = logging.getLogger(__name__)
 
 # AQI value range of each category; Hazardous has no upper limit
 US_AQI_CATEGORIES: Dict[str, Tuple[float, float]] = {
@@ -96,9 +103,6 @@ US_POLLUTANTS: Dict[str, USPollutant] = {
     )
 }  # fmt: skip
 
-# litres per mole at 25 °C, the EPA's conversion
-_MOLAR_VOLUME = 24.45
-
 # the EPA switches to 1-hour O3 and 24-hour SO2 above these tables
 _NO_EXTRAPOLATION = {"O3", "SO2"}
 
@@ -113,9 +117,10 @@ _NAMES = {
 def us_pollutant_name(label: str) -> Optional[str]:
     """The US AQI name of a pollutant label, or None if it is not one.
 
-    Matches labels such as "PM2.5 (µg/m³)", "Ozone", "O3_1h" and "SO2 24h".
+    Matches labels such as "PM2.5 (µg/m³)", "Ozone", "O3_1h", "SO2 24h" and
+    "SO2 (24h) (ppb)".
     """
-    return _NAMES.get(_key(label))
+    return _NAMES.get(_key(label)) or _NAMES.get(_qualifier_free_key(label))
 
 
 def us_sub_index(pollutant: str, concentration: Optional[float]) -> float:
@@ -124,15 +129,18 @@ def us_sub_index(pollutant: str, concentration: Optional[float]) -> float:
     Args:
         pollutant: A pollutant label (see us_pollutant_name). A label with a
             mass unit, such as "O3 (µg/m³)" or "CO (mg/m³)", is converted to
-            ppm or ppb at 25 °C. Without a unit, the value must be in the unit
-            of US_POLLUTANTS[name].
+            ppm or ppb at 25 °C and 760 mm Hg, and ppb and ppm to the one the
+            table uses. "PM2.5 (mg/m³)" is converted to µg/m³, and PM in ppb
+            or ppm gives NaN, because a mass pollutant cannot be in them.
+            Without a unit, the value must be in the unit of
+            US_POLLUTANTS[name].
         concentration: The average for the averaging time of the pollutant.
 
     Returns:
         The sub-index. Above the highest breakpoint it continues on the slope
-        of the 301-500 band. NaN for a missing value, and for a value outside
-        the table of a pollutant with two averaging times (for example 8-hour
-        O3 above 0.200 ppm).
+        of the 301-500 band. NaN for a missing, negative or infinite value,
+        and for a value outside the table of a pollutant with two averaging
+        times (for example 8-hour O3 above 0.200 ppm).
 
     Raises:
         ValueError: If the pollutant is not a US AQI pollutant.
@@ -142,18 +150,7 @@ def us_sub_index(pollutant: str, concentration: Optional[float]) -> float:
         raise ValueError(
             f"{pollutant!r} is not a US AQI pollutant: {', '.join(US_POLLUTANTS)}"
         )
-    p = US_POLLUTANTS[name]
-    if concentration is None or math.isnan(float(concentration)):
-        return math.nan
-    unit = split_label(str(pollutant))[1]
-    c = _truncate(_to_epa_unit(p, unit, float(concentration)), p.decimals)
-    last = len(p.bands) - 1
-    for i, (c_lo, c_hi, i_lo, i_hi) in enumerate(p.bands):
-        above = i == last and c > c_hi and name not in _NO_EXTRAPOLATION
-        if c_lo <= c <= c_hi or above:
-            return (i_hi - i_lo) / (c_hi - c_lo) * (c - c_lo) + i_lo
-    # Below the table of 1-hour O3 or 24-hour SO2, the other average applies
-    return math.nan
+    return _band_sub_index(name, _table_value(name, pollutant, concentration))
 
 
 def us_aqi_category(aqi_value: Optional[float]) -> str:
@@ -163,7 +160,7 @@ def us_aqi_category(aqi_value: Optional[float]) -> str:
         >>> us_aqi_category(120)
         'Unhealthy for Sensitive Groups'
     """
-    if aqi_value is None or math.isnan(float(aqi_value)):
+    if aqi_value is None or _missing(aqi_value):
         return "No Data"
     return next(
         (name for name, (_, hi) in US_AQI_CATEGORIES.items() if aqi_value <= hi),
@@ -200,41 +197,86 @@ def compute_us_aqi(concentrations: Mapping[str, Optional[float]]) -> AQIResult:
 
     Returns:
         The AQI, its category and main pollutant, and all sub-indices that
-        have a value. The AQI is None if no pollutant has a sub-index.
+        have a value. The AQI is None if no pollutant has a sub-index
+        (status "no_sub_index"), and, with a warning, if 8-hour O3 is above
+        0.200 ppm without a 1-hour value (status "o3_beyond_table").
 
     Example:
         >>> compute_us_aqi({"PM2.5": 35.4, "O3": 0.060}).aqi
         100
     """
+    result, o3_beyond_table = _evaluate(concentrations)
+    if o3_beyond_table:
+        _warn_o3_beyond_table("8-hour O3 above 0.200 ppm")
+    return result
+
+
+def _warn_o3_beyond_table(what: str) -> None:
+    logger.warning(
+        "%s has no 8-hour sub-index and no 1-hour value was given, so no AQI "
+        "is reported",
+        what,
+    )
+
+
+def _evaluate(
+    concentrations: Mapping[str, Optional[float]],
+) -> Tuple[AQIResult, bool]:
+    """The AQI of the concentrations, and whether 8-hour O3 prevented one."""
     subs: Dict[str, float] = {}
-    outside = set()  # pollutants with a value outside their table
+    o3_beyond_table = False
+    so2: Dict[str, List[float]] = {"SO2": [], "SO2_24h": []}
     for label, value in concentrations.items():
         name = us_pollutant_name(label)
-        if name is None or value is None or math.isnan(float(value)):
+        if name is None:
             continue
-        sub = us_sub_index(label, value)
-        if math.isnan(sub):
-            outside.add(name)
-        else:
+        c = _table_value(name, label, value)
+        if math.isnan(c):
+            continue
+        sub = _band_sub_index(name, c)
+        if not math.isnan(sub):
             subs[name] = max(sub, subs.get(name, -math.inf))
-    # EPA: 1-hour SO2 >= 305 ppb with 24-hour < 305 ppb gives 200
-    if {"SO2", "SO2_24h"} <= outside:
+        if name == "O3" and c > US_POLLUTANTS["O3"].bands[-1][1]:
+            o3_beyond_table = True
+        if name in so2:
+            so2[name].append(c)
+    # EPA TAD: 200 if the 24-hour is below 305; AQS aqi_breakpoints.csv: also if none
+    highest_1h = max(so2["SO2"], default=-math.inf)
+    if highest_1h >= 305 and max(so2["SO2_24h"], default=-math.inf) < 305:
         subs["SO2"] = max(200.0, subs.get("SO2", -math.inf))
+    # 40 CFR 58 App G note 2: the 8-hour table does not define the index above 300
+    if o3_beyond_table and "O3_1h" not in subs:
+        return AQIResult(None, None, None, subs, "o3_beyond_table"), True
     if not subs:
-        return AQIResult(None, None, None, subs)
-    dominant = max(subs, key=lambda name: subs[name])
+        return AQIResult(None, None, None, subs, "no_sub_index"), False
+    # Ties go to the first pollutant in US_POLLUTANTS order
+    dominant = max(
+        (name for name in US_POLLUTANTS if name in subs), key=lambda name: subs[name]
+    )
     value = int(_round_half_up(subs[dominant]))  # the EPA rounds half up
-    return AQIResult(value, us_aqi_category(value), dominant, subs)
+    return AQIResult(value, us_aqi_category(value), dominant, subs), False
 
 
-def _to_epa_unit(p: USPollutant, unit: Optional[str], value: float) -> float:
-    """A concentration in µg/m³ or mg/m³ converted to ppm or ppb at 25 °C."""
-    prefix = _mass_unit(unit or "")
-    if p.molar_mass is None or not prefix:
-        return value
-    mg_per_m3 = value / 1000 if prefix == "µg" else value
-    ppm = mg_per_m3 * _MOLAR_VOLUME / p.molar_mass
-    return ppm * 1000 if p.unit == "ppb" else ppm
+def _table_value(name: str, label: str, value: Optional[float]) -> float:
+    """A concentration in the unit and precision of the table, or NaN if invalid."""
+    if value is None or _missing(value) or value < 0:
+        return math.nan
+    p = US_POLLUTANTS[name]
+    factor = unit_factor(split_label(str(label))[1], p.unit, p.molar_mass)
+    scaled = float(value) * factor
+    return scaled if math.isnan(scaled) else _truncate(scaled, p.decimals)
+
+
+def _band_sub_index(name: str, c: float) -> float:
+    """Sub-index of a table value; NaN if it is NaN or outside the table of name."""
+    p = US_POLLUTANTS[name]
+    last = len(p.bands) - 1
+    for i, (c_lo, c_hi, i_lo, i_hi) in enumerate(p.bands):
+        above = i == last and c > c_hi and name not in _NO_EXTRAPOLATION
+        if c_lo <= c <= c_hi or above:
+            return (i_hi - i_lo) / (c_hi - c_lo) * (c - c_lo) + i_lo
+    # Below the table of 1-hour O3 or 24-hour SO2, the other average applies
+    return math.nan
 
 
 def _truncate(value: float, decimals: int) -> float:

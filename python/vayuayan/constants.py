@@ -15,7 +15,6 @@ BASE_URL = "https://airquality.cpcb.gov.in"
 RSS_URL_WITH_COORDINATES = f"{BASE_URL}/caaqms/iit_rss_feed_with_coordinates"
 
 # API Endpoints
-DOWNLOAD_URL = f"{BASE_URL}/dataRepository/download_file?file_name=Raw_data"
 ALL_STATION_URL = f"{BASE_URL}/aqi_dashboard/aqi_station_all_india"
 ALL_PARAMETERS_URL = f"{BASE_URL}/aqi_dashboard/aqi_all_Parameters"
 

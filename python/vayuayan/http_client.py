@@ -12,7 +12,7 @@ import time
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Iterator, Optional, Set
+from typing import Any, Callable, FrozenSet, Iterator, Optional, Set
 from urllib.parse import urlsplit
 
 import requests
@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 _INSECURE_HOSTS: Set[str] = set()
 
 Sender = Callable[..., requests.Response]
+
+
+def insecure_hosts() -> FrozenSet[str]:
+    """The hosts that fell back to unverified TLS in this process."""
+    return frozenset(_INSECURE_HOSTS)
 
 
 def request(

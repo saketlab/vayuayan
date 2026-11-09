@@ -2,23 +2,24 @@
 The Indian National Air Quality Index (NAQI) of CPCB, from pollutant
 concentrations.
 
-Breakpoints and rules are from CPCB, "About National Air Quality Index" and
-"How is AQI calculated?" (cpcb.gov.in). Where CPCB documents differ (Pb
-0.5-1.0 here, 0.6-1.0 in the 2014 NAQI report), vayuayan follows the About
-page:
+Rules are from CPCB, "National Air Quality Index" (CUPS/82/2014-15), "About
+National Air Quality Index", "How is AQI calculated?" and AQI-Calculator.xls.
+CPCB's documents differ; docs/aqi_standards.rst lists where and why:
 
-- A sub-index is a linear function of the concentration within a breakpoint
-  band. Concentrations are 24-hour averages, and 8-hour averages for CO and O3.
+- A sub-index is continuous and piecewise linear: each band starts at the top
+  of the band below, at the sub-index of that top, as in CPCB's calculator and
+  CUPS/82 p.37. For example PM2.5 30-60 maps to 50-100. Concentrations are
+  24-hour averages, and 8-hour averages for CO and O3, also for O3 above 208.
 - A sub-index needs at least 16 hours of data.
 - The overall AQI is the highest sub-index. It needs at least three pollutants,
   one of them PM2.5 or PM10; otherwise the data are insufficient.
 
-CPCB gives no upper concentration for the Severe band (401-500). vayuayan
-extends it by the width of the Very Poor band, as common open
-implementations do (for example PM2.5 250-380). Above that, the sub-index
-continues on the same slope, as in CPCB's AQI calculator (AQI-Calculator.xls),
-so it can be more than 500. The AQI is rounded half up, as the calculator
-shows it.
+CPCB gives no upper concentration for the Severe band (400-500). vayuayan
+uses the width of the Very Poor band, which is the calculator's slope (for
+example PM2.5 250-380). O3 stays on its published 208-748 and 748-1288 bands,
+because the calculator's own O3 formula is wrong there. Above the last band
+the sub-index continues on the same slope, so it can be more than 500. The
+AQI is rounded half up, as the calculator shows it.
 """
 
 from __future__ import annotations
@@ -28,6 +29,16 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Mapping, Optional, Tuple
 
+from .aqi_units import (
+    DAILY_COLUMNS,
+    _warn_volume_units,
+    by_day,
+    day_shift,
+    hourly_means,
+    in_short_days,
+    rolling_8h,
+    unit_factor,
+)
 from .constants import AQI_CATEGORIES
 from .tidy import split_label
 from .utils import get_aqi_category
@@ -37,54 +48,40 @@ if TYPE_CHECKING:
     import pandas as pd
     from numpy.typing import ArrayLike
 
-# AQI value range of each category, Good to Severe
-AQI_BANDS: List[Tuple[int, int]] = [
-    (b["min"], b["max"]) for b in AQI_CATEGORIES.values()
-]
+# Sub-index at the top of each band, Good to Severe
+_SUB_INDEX_TOPS = tuple(float(band["max"]) for band in AQI_CATEGORIES.values())
 
 
 @dataclass(frozen=True)
 class Pollutant:
-    """One NAQI pollutant: its unit, averaging time and breakpoints."""
+    """One NAQI pollutant: its unit, averaging time and band tops."""
 
     name: str
     unit: str
     averaging_hours: int
-    # (low, high) concentration of each AQI band, Good to Severe
-    breakpoints: Tuple[Tuple[float, float], ...]
+    # Concentration at the top of each AQI band, Good to Severe
+    tops: Tuple[float, ...]
 
-    def points(self) -> Tuple[List[float], List[float]]:
-        """(concentrations, sub-indices) to interpolate, increasing."""
-        xs: List[float] = []
-        ys: List[float] = []
-        for (c_lo, c_hi), (i_lo, i_hi) in zip(self.breakpoints, AQI_BANDS):
-            if xs and c_lo <= xs[-1]:
-                # Bands that share a boundary (Pb 0.5, CO 10): the boundary
-                # belongs to the lower band
-                c_lo = xs[-1] + 1e-9
-            xs += [c_lo, c_hi]
-            ys += [float(i_lo), float(i_hi)]
-        return xs, ys
+    @property
+    def breakpoints(self) -> Tuple[Tuple[float, float], ...]:
+        """(low, high) of each band; the first starts at 0, the others at the last top."""
+        return tuple(zip((0, *self.tops[:-1]), self.tops))
 
 
-# CPCB breakpoints; CO in mg/m3, the others in µg/m3. The last band is the
-# Severe extension described in the module docstring.
+# CPCB band tops as continuous bands; CO in mg/m3, others in µg/m3; last is the Severe extension
 POLLUTANTS: Dict[str, Pollutant] = {
     p.name: p
     for p in (
-        Pollutant("PM10", "µg/m³", 24, ((0, 50), (51, 100), (101, 250), (251, 350), (351, 430), (430, 510))),
-        Pollutant("PM2.5", "µg/m³", 24, ((0, 30), (31, 60), (61, 90), (91, 120), (121, 250), (250, 380))),
-        Pollutant("NO2", "µg/m³", 24, ((0, 40), (41, 80), (81, 180), (181, 280), (281, 400), (400, 520))),
-        Pollutant("O3", "µg/m³", 8, ((0, 50), (51, 100), (101, 168), (169, 208), (209, 748), (748, 1288))),
-        Pollutant("CO", "mg/m³", 8, ((0, 1.0), (1.1, 2.0), (2.1, 10), (10, 17), (17, 34), (34, 51))),
-        Pollutant("SO2", "µg/m³", 24, ((0, 40), (41, 80), (81, 380), (381, 800), (801, 1600), (1600, 2400))),
-        Pollutant("NH3", "µg/m³", 24, ((0, 200), (201, 400), (401, 800), (801, 1200), (1200, 1800), (1800, 2400))),
-        Pollutant("Pb", "µg/m³", 24, ((0, 0.5), (0.5, 1.0), (1.1, 2.0), (2.1, 3.0), (3.1, 3.5), (3.5, 3.9))),
+        Pollutant("PM10", "µg/m³", 24, (50, 100, 250, 350, 430, 510)),
+        Pollutant("PM2.5", "µg/m³", 24, (30, 60, 90, 120, 250, 380)),
+        Pollutant("NO2", "µg/m³", 24, (40, 80, 180, 280, 400, 520)),
+        Pollutant("O3", "µg/m³", 8, (50, 100, 168, 208, 748, 1288)),
+        Pollutant("CO", "mg/m³", 8, (1.0, 2.0, 10, 17, 34, 51)),
+        Pollutant("SO2", "µg/m³", 24, (40, 80, 380, 800, 1600, 2400)),
+        Pollutant("NH3", "µg/m³", 24, (200, 400, 800, 1200, 1800, 2400)),
+        Pollutant("Pb", "µg/m³", 24, (0.5, 1.0, 2.0, 3.0, 3.5, 4.0)),
     )
-}  # fmt: skip
-
-# Interpolation points of each pollutant, computed once
-_POINTS = {name: p.points() for name, p in POLLUTANTS.items()}
+}
 
 
 def _key(label: str) -> str:
@@ -93,11 +90,14 @@ def _key(label: str) -> str:
     return re.sub(r"[^a-z0-9]", "", name)
 
 
+def _qualifier_free_key(label: str) -> str:
+    """_key without parenthesised qualifiers: "CO (8hr) (mg/m³)" -> "co"."""
+    name = re.sub(r"\([^()]*\)", "", split_label(str(label))[0])
+    return _key(name)
+
+
 _NAMES = {_key(name): name for name in POLLUTANTS}
 _NAMES.update({"ozone": "O3", "lead": "Pb"})
-
-# Unit factors to the unit of POLLUTANTS (µg and mg, with either mu character)
-_MASS_FACTORS = {("µg", "mg"): 1e-3, ("mg", "µg"): 1e3}
 
 MIN_HOURS = 16
 MIN_POLLUTANTS = 3
@@ -122,23 +122,34 @@ WHO_PM25_GUIDELINES: Dict[str, float] = {"annual": 5.0, "24-hour": 15.0}
 def pollutant_name(name: str) -> Optional[str]:
     """The NAQI name of a pollutant label, or None if it is not a NAQI pollutant.
 
-    Matches labels such as "PM2.5 (µg/m³)", "pm25", "Ozone" and "CO (mg/m³)".
+    Matches labels such as "PM2.5 (µg/m³)", "pm25", "Ozone", "CO (mg/m³)" and
+    "CO (8hr) (mg/m³)".
     """
-    return _NAMES.get(_key(name))
+    return _NAMES.get(_key(name)) or _NAMES.get(_qualifier_free_key(name))
 
 
 def sub_index(pollutant: str, concentration: float) -> float:
     """The NAQI sub-index of one concentration, or NaN for a missing value.
 
     Args:
-        pollutant: A pollutant label (see pollutant_name).
+        pollutant: A pollutant label (see pollutant_name). A mass unit in the
+            label ("CO (µg/m³)") is converted to the unit of POLLUTANTS. A
+            label in ppb or ppm gives NaN and a warning: converting a gas to
+            mass needs its temperature and pressure.
         concentration: 24-hour average (8-hour for CO and O3), in the unit
-            of POLLUTANTS[pollutant] (mg/m3 for CO, µg/m3 for the others).
+            of the label, or without one in the unit of POLLUTANTS[pollutant]
+            (mg/m3 for CO, µg/m3 for the others). Negative values and
+            infinities give NaN.
 
     Raises:
         ValueError: If the pollutant is not a NAQI pollutant.
     """
-    return float(_interpolate(_require(pollutant), concentration))
+    in_volume_units: List[str] = []
+    sub = _label_sub_index(
+        _require(pollutant).name, pollutant, concentration, in_volume_units
+    )
+    _warn_volume_units(in_volume_units)
+    return sub
 
 
 def health_impact(aqi_value: float) -> str:
@@ -173,19 +184,23 @@ class AQIResult:
     category: Optional[str]
     dominant_pollutant: Optional[str]
     sub_indices: Dict[str, float] = field(default_factory=dict)
+    # ok, or why there is no AQI: no_pm, too_few_pollutants, no_sub_index, o3_beyond_table
+    status: str = "ok"
 
     @property
     def sufficient(self) -> bool:
-        """True if the data meet the CPCB minimum for an overall AQI."""
-        return self.aqi is not None
+        """True if the data meet the minimum for an overall AQI."""
+        return self.status == "ok"
 
 
 def compute_aqi(concentrations: Mapping[str, float]) -> AQIResult:
     """The overall NAQI of a set of averaged concentrations.
 
     Args:
-        concentrations: Pollutant label -> averaged concentration. Labels that
-            are not NAQI pollutants, and missing values, are ignored.
+        concentrations: Pollutant label -> averaged concentration, in the
+            unit of the label as for sub_index. Labels that are not NAQI
+            pollutants, missing, negative or infinite values, and labels in
+            ppb or ppm (with a warning) are ignored.
 
     Returns:
         The AQI, its category and dominant pollutant, and all sub-indices. The
@@ -197,15 +212,19 @@ def compute_aqi(concentrations: Mapping[str, float]) -> AQIResult:
         80
     """
     subs: Dict[str, float] = {}
+    in_volume_units: List[str] = []
     for label, value in concentrations.items():
         name = pollutant_name(label)
-        if name is None or value is None or math.isnan(float(value)):
+        if name is None or _missing(value):
             continue
-        sub = float(_interpolate(POLLUTANTS[name], float(value)))
-        # A pollutant given twice (for example "PM10" and "pm10") counts once
-        subs[name] = max(sub, subs.get(name, -math.inf))
-    if not _sufficient(subs):
-        return AQIResult(None, None, None, subs)
+        sub = _label_sub_index(name, label, float(value), in_volume_units)
+        if not math.isnan(sub):
+            # A pollutant given twice (for example "PM10" and "pm10") counts once
+            subs[name] = max(sub, subs.get(name, -math.inf))
+    _warn_volume_units(in_volume_units)
+    status = _subs_status(subs)
+    if status != "ok":
+        return AQIResult(None, None, None, subs, status)
     # Ties go to the first pollutant in POLLUTANTS order
     dominant = max(
         (name for name in POLLUTANTS if name in subs), key=lambda name: subs[name]
@@ -233,7 +252,10 @@ def daily_aqi(
     Args:
         long: Tidy data with columns timestamp, pollutant, value, and
             optionally station_id and unit (see vayuayan.tidy). Values in
-            µg/m3 or mg/m3 are converted to the unit of POLLUTANTS.
+            µg/m3 or mg/m3, by the unit column or the unit in the pollutant
+            label, are converted to the unit of POLLUTANTS. Rows in ppb or ppm
+            are left out, with one warning. Negative and infinite values are
+            left out; readings repeated for one time are averaged first.
         min_hours: Minimum hours with data for a sub-index (CPCB: 16).
         day_ends_at: Hour (1-24) at which each day's 24 hours end. 24 means
             calendar days; 16 matches CPCB's 4 PM bulletin. The date of a row
@@ -241,53 +263,31 @@ def daily_aqi(
 
     Returns:
         One row per station and date: station_id, date, aqi (nullable integer),
-        category, dominant_pollutant, n_pollutants, and one <pollutant>_sub_index
-        column per pollutant with data. aqi, category and dominant_pollutant
-        are missing when the data are insufficient.
+        category, dominant_pollutant, n_pollutants, aqi_status, and one
+        <pollutant>_sub_index column per pollutant with data. aqi, category and
+        dominant_pollutant are missing when the data are insufficient.
+        aqi_status says why: "too_few_hours" if a pollutant had readings but
+        too few hours, else "no_pm", else "too_few_pollutants"; "ok" with an AQI.
     """
-    if not 1 <= day_ends_at <= 24:
-        raise ValueError("day_ends_at must be an hour from 1 to 24")
+    shift = day_shift(day_ends_at)
     import numpy as np
     import pandas as pd
 
-    shift = pd.Timedelta(hours=24 - day_ends_at)
-    hourly = _hourly_means(long)
-    columns = [
-        "station_id",
-        "date",
-        "aqi",
-        "category",
-        "dominant_pollutant",
-        "n_pollutants",
-    ]
+    hourly = hourly_means(long, pollutant_name, _naqi_factor)
     if hourly.empty:
-        return pd.DataFrame(columns=columns)
+        return pd.DataFrame(columns=DAILY_COLUMNS)
 
     daily_parts = []
     for name, group in hourly.groupby("pollutant", sort=False):
-        group = group.sort_values(["station_id", "hour"])
         eight_hour = POLLUTANTS[name].averaging_hours == 8
         if eight_hour:
-            # groupby keeps the (station, hour) order of the sorted group
-            rolled = (
-                group.set_index("hour")
-                .groupby("station_id")["value"]
-                .rolling("8h", min_periods=6)
-                .mean()
-            )
-            group = group.assign(value=rolled.to_numpy())
-        # An hour is labelled by its start, so the hour that starts at
-        # day_ends_at belongs to the next day
-        group = group.assign(day=(group["hour"] + shift).dt.normalize())
-        stats = group.groupby(["station_id", "day"]).agg(
-            value=("value", "max" if eight_hour else "mean"),
-            hours=("hour", "size"),  # hours are unique per station already
-        )
-        value = stats["value"].where(stats["hours"] >= min_hours)
+            group = rolling_8h(group, min(6, min_hours))
+        # Hours are unique per station already, so every row is an hour with data
+        value = by_day(group, "max" if eight_hour else "mean", min_hours, shift, "size")
         daily_parts.append(
             pd.Series(
                 _interpolate(POLLUTANTS[name], value.to_numpy()),
-                index=stats.index,
+                index=value.index,
                 name=f"{name}_sub_index",
             )
         )
@@ -296,6 +296,7 @@ def daily_aqi(
     # fixed order so ties match R
     order = [f"{name}_sub_index" for name in POLLUTANTS]
     daily = daily[[c for c in order if c in daily.columns]].reset_index()
+    short_days = in_short_days(daily, daily_parts)
     daily["date"] = daily.pop("day").dt.date
     subs = daily.filter(like="_sub_index")
     present = subs.notna()
@@ -304,12 +305,18 @@ def daily_aqi(
     ].any(axis=1)
     daily["n_pollutants"] = present.sum(axis=1)
     ok = (daily["n_pollutants"] >= MIN_POLLUTANTS) & has_pm
+    status = np.where(
+        ~has_pm,
+        "no_pm",
+        np.where(daily["n_pollutants"] < MIN_POLLUTANTS, "too_few_pollutants", "ok"),
+    )
+    daily["aqi_status"] = np.where(~ok & np.array(short_days), "too_few_hours", status)
     # Half up, as compute_aqi; Series.round() rounds half to even
     daily["aqi"] = np.floor(subs.max(axis=1).where(ok) + 0.5).astype("Int64")
     dominant = subs[ok].idxmax(axis=1).str.removesuffix("_sub_index")
     daily["dominant_pollutant"] = dominant.reindex(daily.index)
     daily["category"] = daily["aqi"].map(get_aqi_category, na_action="ignore")
-    return daily[columns + list(subs.columns)].sort_values(
+    return daily[DAILY_COLUMNS + list(subs.columns)].sort_values(
         ["station_id", "date"], ignore_index=True
     )
 
@@ -323,58 +330,50 @@ def _require(pollutant: str) -> Pollutant:
     return POLLUTANTS[name]
 
 
-def _interpolate(pollutant: Pollutant, concentrations: ArrayLike) -> np.ndarray:
-    """Sub-indices of concentrations (array); NaN stays NaN. Above the last
-    breakpoint the slope of the last band continues."""
+def _interpolate(
+    pollutant: Pollutant, concentrations: ArrayLike, factor: float = 1.0
+) -> np.ndarray:
+    """Sub-indices of concentrations (array); NaN, infinite and negative values
+    give NaN. Above the last breakpoint the slope of the last band continues."""
     import numpy as np
 
-    xs, ys = _POINTS[pollutant.name]
-    c = np.asarray(concentrations, dtype=float)
+    xs, ys = (0.0, *pollutant.tops), (0.0, *_SUB_INDEX_TOPS)
+    c = np.asarray(concentrations, dtype=float) * factor
+    invalid = ~np.isfinite(c) | (c < 0)
     slope = (ys[-1] - ys[-2]) / (xs[-1] - xs[-2])
     above = ys[-1] + (c - xs[-1]) * slope
     sub = np.where(c > xs[-1], above, np.interp(c, xs, ys))
-    return np.where(np.isnan(c), np.nan, sub)
+    return np.where(invalid, np.nan, sub)
 
 
 def _round_half_up(x: float) -> float:
     """Round half up, as Excel shows CPCB's calculator; round() rounds half to even."""
-    return x if math.isnan(x) else float(math.floor(x + 0.5))
+    return x if not math.isfinite(x) else float(math.floor(x + 0.5))
 
 
-def _sufficient(subs: Mapping[str, float]) -> bool:
-    return len(subs) >= MIN_POLLUTANTS and ("PM2.5" in subs or "PM10" in subs)
+def _missing(value: Optional[float]) -> bool:
+    """True for None, NaN and infinities."""
+    return value is None or not math.isfinite(float(value))
 
 
-def _hourly_means(long: pd.DataFrame) -> pd.DataFrame:
-    """Hourly means of the NAQI pollutants in tidy data, in the NAQI units."""
-    import pandas as pd
-
-    # Labels repeat on every row; resolve each distinct label once
-    names = {label: pollutant_name(label) for label in long["pollutant"].unique()}
-    data = long.assign(
-        pollutant=long["pollutant"].map(names),
-        value=pd.to_numeric(long["value"], errors="coerce").astype(float),
-    )
-    data = data.dropna(subset=["pollutant", "value"])
-    if "station_id" not in data:
-        data = data.assign(station_id="")
-    if "unit" in data:
-        for (name, unit), rows in data.groupby(["pollutant", "unit"]).groups.items():
-            factor = _MASS_FACTORS.get(
-                (_mass_unit(unit), _mass_unit(POLLUTANTS[name].unit))
-            )
-            if factor:
-                data.loc[rows, "value"] *= factor
-    timestamps = data["timestamp"]
-    if not pd.api.types.is_datetime64_any_dtype(timestamps):
-        timestamps = pd.to_datetime(timestamps)
-    data = data.assign(hour=timestamps.dt.floor("h"))
-    return data.groupby(["station_id", "pollutant", "hour"], as_index=False)[
-        "value"
-    ].mean()
+def _subs_status(subs: Mapping[str, float]) -> str:
+    """ok, or which CPCB minimum the sub-indices miss; PM is checked first."""
+    if "PM2.5" not in subs and "PM10" not in subs:
+        return "no_pm"
+    return "ok" if len(subs) >= MIN_POLLUTANTS else "too_few_pollutants"
 
 
-def _mass_unit(unit: str) -> str:
-    """ "µg" or "mg" for a concentration unit such as "µg/m³", else ""."""
-    prefix = str(unit).strip().lower().replace("μ", "µ").replace("ug", "µg")[:2]
-    return prefix if prefix in ("µg", "mg") else ""
+def _naqi_factor(name: str, unit: str) -> float:
+    """Factor from unit to the NAQI unit of the pollutant; NaN for ppb and ppm."""
+    return unit_factor(unit, POLLUTANTS[name].unit)
+
+
+def _label_sub_index(
+    name: str, label: str, value: float, in_volume_units: List[str]
+) -> float:
+    """Sub-index of a value in the unit of its label; a ppb or ppm label gives NaN
+    and goes in in_volume_units, so that callers can warn once."""
+    factor = _naqi_factor(name, split_label(str(label))[1])
+    if math.isnan(factor):
+        in_volume_units.append(str(label))
+    return float(_interpolate(POLLUTANTS[name], value, factor))

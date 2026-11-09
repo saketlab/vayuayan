@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar
 import requests
 
 from . import http_client
-from .exceptions import CPCBError
+from .exceptions import CPCBError, DataNotFoundError
 from .utils import decode_b64_json_response, fetch_cpcb_rss_station_data, url_encode
 
 logger = logging.getLogger(__name__)
@@ -29,8 +29,9 @@ def send(method: str, url: str, **kwargs: Any) -> requests.Response:
         method: HTTP method ('get' or 'post').
         url: Request URL.
         **kwargs: Arguments for http_client.request, such as headers, data,
-            session, timeout (default 30 seconds) or retries (default 3 for
-            GET: CPCB often times out on one request; POST is not retried).
+            session, timeout (default 30 seconds), retries (default 3 for
+            GET: CPCB often times out on one request; POST is not retried) or
+            ssl_fallback (default True; False for requests with credentials).
 
     Raises:
         requests.RequestException: If the request fails.
@@ -38,12 +39,28 @@ def send(method: str, url: str, **kwargs: Any) -> requests.Response:
     kwargs.setdefault("timeout", 30)
     if method.lower() == "get":
         kwargs.setdefault("retries", 3)
-    return http_client.request(method, url, ssl_fallback=True, **kwargs)
+    kwargs.setdefault("ssl_fallback", True)
+    return http_client.request(method, url, **kwargs)
 
 
 # The errors of a data source that is down or answers garbage. Other errors
 # are bugs, so they propagate.
 SOURCE_ERRORS: Tuple[Type[BaseException], ...] = (requests.RequestException, ValueError)
+
+
+def is_outage(error: BaseException) -> bool:
+    """Whether a failure is a timeout, a failed connection or an HTTP 5xx.
+
+    A report that CPCB could not build (HTTP 500) is a DataNotFoundError, so it
+    is not an outage.
+    """
+    if isinstance(error, DataNotFoundError):
+        return False
+    cause = error.__cause__ or error
+    if isinstance(cause, (requests.Timeout, requests.ConnectionError)):
+        return True
+    status = getattr(getattr(cause, "response", None), "status_code", None)
+    return isinstance(status, int) and 500 <= status < 600
 
 
 def attempt(
@@ -92,6 +109,7 @@ class RSSFeed:
     """Mixin for the public CPCB RSS station feed, fetched at most once per client."""
 
     _rss_cache: Optional[List[Dict[str, Any]]] = None
+    _rss_failure_level: int = logging.WARNING
 
     def _rss_cities(self) -> List[Dict[str, Any]]:
         """The RSS feed in the package station shape, or [] if it is unavailable."""
@@ -100,7 +118,7 @@ class RSSFeed:
                 attempt(
                     lambda: fetch_cpcb_rss_station_data(timeout=30),
                     "CPCB RSS feed unavailable (%s)",
-                    logging.WARNING,
+                    self._rss_failure_level,
                     SOURCE_ERRORS + (CPCBError,),
                 )
                 or []

@@ -4,6 +4,10 @@ Exception classes of the vayuayan package.
 Each class identifies one type of failure, so that callers can catch it.
 """
 
+from typing import Iterable
+
+import requests
+
 
 class CPCBError(Exception):
     """Base class for all vayuayan exceptions.
@@ -50,11 +54,30 @@ class StationNotFoundError(CPCBError):
     """
 
 
+class AmbiguousMatchError(StationNotFoundError):
+    """Error when a name matches several places and none can be chosen.
+
+    Attributes:
+        candidates: The station names, or for a city the state names, to pick from.
+    """
+
+    def __init__(self, message: str, candidates: Iterable[str] = ()) -> None:
+        super().__init__(message)
+        self.candidates = list(candidates)
+
+
 class DataNotFoundError(CPCBError):
     """Error when CPCB answers, but has no data for the request.
 
     For example, there is no file for the station and year. A network failure
     raises NetworkError instead, so callers can tell the two apart.
+    """
+
+
+class PM25DownloadError(requests.RequestException, CPCBError):
+    """Error when every download source of a PM2.5 file fails.
+
+    Its message explains the manual download.
     """
 
 

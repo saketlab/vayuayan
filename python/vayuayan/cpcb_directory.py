@@ -6,6 +6,8 @@ The directory is live when the CPCB_* credentials are set, else it is the
 snapshot bundled in vayuayan/data, plus the RSS feed for newer stations.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import re
@@ -14,21 +16,38 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from importlib import resources
 from itertools import chain
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    FrozenSet,
+    Iterable,
+    Iterator,
+    List,
+    NoReturn,
+    Optional,
+    Set,
+    Tuple,
+    cast,
+)
 
 import requests
 
 from . import cpcb_common, http_client
 from .constants import BASE_URL, LEGACY_FORM_HEADERS, get_cpcb_credentials
 from .cpcb_common import RSSFeed
-from .exceptions import AuthenticationError
+from .exceptions import AmbiguousMatchError, AuthenticationError
 from .utils import find_station, iter_city_stations, station_data_to_dropdown
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 # Parallel requests of a live directory walk; few, to go easy on CPCB
 PREFETCH_WORKERS = 8
 
+CityEntry = Tuple[Dict[str, Any], Dict[str, Any]]
 StationEntry = Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]
 
 # level -> (custom query name, filter field) for the CPCB station directory
@@ -49,8 +68,18 @@ def _station_directory() -> Dict[str, Any]:
     return cast(Dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
 
 
+@lru_cache(maxsize=1)
+def _snapshot_station_ids() -> FrozenSet[str]:
+    """IDs of every station in the bundled snapshot."""
+    stations = _station_directory()["stations"].values()
+    return frozenset(str(st["station_id"]) for st in chain.from_iterable(stations))
+
+
 class CPCBDirectory(RSSFeed):
     """Base class of CPCBHistorical: authentication and the station directory."""
+
+    # The directory answers without the feed, so its absence is not a problem
+    _rss_failure_level = logging.INFO
 
     def __init__(self) -> None:
         """Set up the CPCB session and the station directory caches."""
@@ -64,6 +93,19 @@ class CPCBDirectory(RSSFeed):
         self.custom_query_base = f"{self.base_url}/projectworkflow/client/custom/query"
         self._live_directory = get_cpcb_credentials() is not None
         self._directory_cache: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+        self._directory_sources: Set[str] = set()
+
+    @property
+    def directory_source(self) -> str:
+        """Where the directory rows came from: "live", "snapshot" or "mixed".
+
+        Before the first lookup it says what will be tried.
+        """
+        if len(self._directory_sources) > 1:
+            return "mixed"
+        if self._directory_sources:
+            return next(iter(self._directory_sources))
+        return "live" if self._live_directory else "snapshot"
 
     def _get_access_token(self) -> str:
         """The CPCB OAuth token, requested once per client.
@@ -73,8 +115,9 @@ class CPCBDirectory(RSSFeed):
                 give a token. The message never has the token URL, which carries
                 the credentials.
         """
-        if self._access_token:
-            return self._access_token
+        token = self._access_token
+        if token:
+            return token
         creds = get_cpcb_credentials()
         if creds is None:
             raise AuthenticationError("CPCB credentials are not set")
@@ -87,8 +130,11 @@ class CPCBDirectory(RSSFeed):
                 params={"grant_type": "password", **creds},
                 headers={"Content-Type": "application/json"},
                 json={},
+                # the password must never cross a connection that is not verified
+                ssl_fallback=False,
             )
-            token = response.json().get("access_token")
+            body = response.json()
+            token = body.get("access_token") if isinstance(body, dict) else None
         except (requests.RequestException, ValueError) as e:
             reason = http_client.failure_reason(e)
             raise AuthenticationError(f"CPCB token request failed ({reason})") from None
@@ -113,16 +159,28 @@ class CPCBDirectory(RSSFeed):
         json_data: Optional[Dict[str, Any]] = None,
         auth: bool = False,
     ) -> Any:
-        response = cpcb_common.send(
-            method,
-            url,
-            session=self.session,
-            headers=self._new_api_headers(auth),
-            params=params,
-            json=json_data,
-            timeout=30,
-            retries=0,  # callers fall back to the snapshot or the legacy API
-        )
+        def send() -> requests.Response:
+            return cpcb_common.send(
+                method,
+                url,
+                session=self.session,
+                headers=self._new_api_headers(auth),
+                params=params,
+                json=json_data,
+                timeout=30,
+                retries=0,  # callers fall back to the snapshot or the legacy API
+                # the bearer token gets the same protection as the password
+                ssl_fallback=not auth,
+            )
+
+        try:
+            response = send()
+        except requests.HTTPError as e:
+            if not auth or http_client.failure_reason(e) != "401":
+                raise
+            # an expired token: ask for a new one and try once more
+            self._access_token = None
+            response = send()
         # CPCB answers 204 with an empty body when a query matches nothing
         if not response.content:
             return None
@@ -153,17 +211,25 @@ class CPCBDirectory(RSSFeed):
             rows: List[Dict[str, Any]] = []
             if self._live_directory:
                 query_name, field = DIRECTORY_QUERIES[level]
-                live = cpcb_common.attempt(
-                    lambda: self._custom_query(
-                        query_name, f"{field} IS '{code}'" if field else ""
-                    ),
-                    "CPCB station directory unavailable (%s); using snapshot",
-                    logging.WARNING,
-                    cpcb_common.SOURCE_ERRORS + (AuthenticationError,),
-                )
+                live: Optional[List[Dict[str, Any]]]
+                try:
+                    live = cpcb_common.attempt(
+                        lambda: self._custom_query(
+                            query_name, f"{field} IS '{code}'" if field else ""
+                        ),
+                        "CPCB station directory unavailable (%s); using snapshot",
+                        logging.WARNING,
+                    )
+                except AuthenticationError as e:
+                    # its text is written to carry no URL or credentials
+                    logger.warning(
+                        "CPCB station directory unavailable (%s); using snapshot", e
+                    )
+                    live = None
                 if live is None:
                     self._live_directory = False
                 rows = live or []
+            self._directory_sources.add("live" if rows else "snapshot")
             if not rows:
                 snapshot = _station_directory()[level]
                 rows = snapshot.get(code, []) if code else snapshot
@@ -207,31 +273,127 @@ class CPCBDirectory(RSSFeed):
             state_entry, city_entry = self._resolve_city(city, state)
             if not (state_entry and city_entry):
                 return
-            pairs: Iterable[Tuple[Dict[str, Any], Dict[str, Any]]] = [
-                (state_entry, city_entry)
-            ]
+            pairs: Iterable[CityEntry] = [(state_entry, city_entry)]
         else:
-            states = self._states(state)
-            self._prefetch("cities", [str(s.get("state_code", "")) for s in states])
-            pairs = [
-                (state_entry, city_entry)
-                for state_entry in states
-                for city_entry in self._new_city_list(
-                    str(state_entry.get("state_code", ""))
-                )
-            ]
-            self._prefetch("stations", [str(c.get("city_code", "")) for _, c in pairs])
+            pairs = self._matching_cities(state, "")
         for state_entry, city_entry in pairs:
             for station in self._new_station_list(str(city_entry.get("city_code", ""))):
                 yield state_entry, city_entry, station
 
+    def _matching_cities(self, state: str, city: str) -> List[CityEntry]:
+        """(state, city) entries for the filters, fetched before any station."""
+        states = self._states(state)
+        self._prefetch("cities", [str(s.get("state_code", "")) for s in states])
+        wanted = city.lower()
+        pairs = [
+            (state_entry, city_entry)
+            for state_entry in states
+            for city_entry in self._new_city_list(
+                str(state_entry.get("state_code", ""))
+            )
+            if not city
+            or wanted
+            in (
+                str(city_entry.get("city_name", "")).lower(),
+                str(city_entry.get("city_code", "")).lower(),
+            )
+        ]
+        self._prefetch("stations", [str(c.get("city_code", "")) for _, c in pairs])
+        return pairs
+
+    def _station_catalogue(
+        self, state: str = "", city: str = ""
+    ) -> Iterator[StationEntry]:
+        """Directory stations, then the stations only the RSS feed knows.
+
+        States and cities are filtered before stations are fetched, and the
+        feed is read only after the directory stations have been used, so an
+        exact match in the directory needs no feed.
+
+        Args:
+            state: State name or code. Empty means all states.
+            city: City name or code. Empty means all cities; a name can be in
+                several states.
+        """
+        pairs = self._matching_cities(state, city)
+        seen = set(_snapshot_station_ids())
+        for state_entry, city_entry in pairs:
+            for station in self._new_station_list(str(city_entry.get("city_code", ""))):
+                seen.add(str(station.get("station_id", "")))
+                yield state_entry, city_entry, station
+
+        # The feed has names only, so a code is matched through its directory name
+        states = {state.lower()} | {
+            str(s.get("state_name", "")).lower() for s in self._states(state)
+        }
+        cities = {city.lower()} | {
+            str(c.get("city_name", "")).lower() for _, c in pairs
+        }
+        for entry in self._rss_directory():
+            station_id = str(entry[2]["station_id"])
+            if (
+                station_id
+                and station_id not in seen
+                and (not state or str(entry[0]["state_name"]).lower() in states)
+                and (not city or str(entry[1]["city_name"]).lower() in cities)
+            ):
+                seen.add(station_id)
+                yield entry
+
+    def station_table(self, state: str = "", city: str = "") -> pd.DataFrame:
+        """Stations of the CPCB directory and the RSS feed, one row each.
+
+        Args:
+            state: State name or code. Empty means all states.
+            city: City name or code. Empty means all cities. Every city of
+                that name is included unless state is given.
+
+        Returns:
+            DataFrame with station_id, station_name, city, state, latitude
+            and longitude, sorted by state, city and station name. It has no
+            rows if nothing matches.
+        """
+        import pandas as pd
+
+        table = pd.DataFrame(
+            [
+                (
+                    station.get("station_id"),
+                    station.get("station_name"),
+                    city_entry.get("city_name"),
+                    state_entry.get("state_name"),
+                    station.get("latitude"),
+                    station.get("longitude"),
+                )
+                for state_entry, city_entry, station in self._station_catalogue(
+                    state, city
+                )
+            ],
+            columns=[
+                "station_id",
+                "station_name",
+                "city",
+                "state",
+                "latitude",
+                "longitude",
+            ],
+        )
+        for column in ("latitude", "longitude"):
+            table[column] = pd.to_numeric(table[column], errors="coerce")
+        return table.sort_values(["state", "city", "station_name"], ignore_index=True)
+
     def _rss_directory(self) -> Iterator[StationEntry]:
-        """RSS stations in directory shape, for stations newer than the snapshot."""
+        """RSS stations in directory shape, with their coordinates."""
         for city, st in iter_city_stations(self._rss_cities()):
             yield (
                 {"state_name": city.get("stateID", "")},
                 {"city_name": city.get("cityName", "")},
-                {"station_id": st.get("id", ""), "station_name": st.get("name", "")},
+                {
+                    "station_id": st.get("id", ""),
+                    "station_name": st.get("name", ""),
+                    "latitude": st.get("latitude"),
+                    "longitude": st.get("longitude"),
+                },
             )
 
     def _states(self, state: str = "") -> List[Dict[str, Any]]:
@@ -259,6 +421,7 @@ class CPCBDirectory(RSSFeed):
         city_lower = city.lower()
         states = self._states(state)
         self._prefetch("cities", [str(s.get("state_code", "")) for s in states])
+        found: List[CityEntry] = []
         for state_entry in states:
             state_code = str(state_entry.get("state_code", ""))
             for city_entry in self._new_city_list(state_code):
@@ -266,8 +429,13 @@ class CPCBDirectory(RSSFeed):
                     str(city_entry.get("city_name", "")).lower(),
                     str(city_entry.get("city_code", "")).lower(),
                 }:
-                    return state_entry, city_entry
-        return None, None
+                    found.append((state_entry, city_entry))
+                    break
+        if len(found) > 1:
+            _raise_ambiguous_city(
+                city, [str(s.get("state_name", "")) for s, _ in found]
+            )
+        return found[0] if found else (None, None)
 
     def _resolve_station(
         self,
@@ -278,15 +446,21 @@ class CPCBDirectory(RSSFeed):
     ) -> Tuple[
         Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[Dict[str, Any]]
     ]:
-        """Find a station by ID, name or part of a name; see utils.find_station."""
+        """Find a station by ID, name or part of a name; see utils.find_station.
+
+        state and city narrow the search, also among the stations of the feed.
+        The directory and the feed are searched together, so a part of a name
+        that fits a station of each is ambiguous.
+
+        Raises:
+            AmbiguousMatchError: If city is in several states and state is not
+                given, or part of a name fits several stations.
+        """
+        if city:
+            self._resolve_city(city, state)  # raises for a city in several states
 
         def entries() -> Iterator[Tuple[str, str, StationEntry]]:
-            # The state only narrows a city lookup; without a city every
-            # state is searched
-            directory = (
-                self.iter_stations(state, city) if city else self.iter_stations()
-            )
-            for entry in chain(directory, self._rss_directory()):
+            for entry in self._station_catalogue(state, city):
                 station = entry[2]
                 sid = str(station.get("station_id", ""))
                 yield sid, str(station.get("station_name", "")), entry
@@ -349,7 +523,7 @@ class CPCBDirectory(RSSFeed):
             if city.get("city_name")
         )
 
-    def get_station_list(self, city: str) -> List[Dict[str, str]]:
+    def get_station_list(self, city: str, state: str = "") -> List[Dict[str, str]]:
         """Get the list of stations in a city that have AQI data.
 
         The list has the directory stations of the city, and the stations of
@@ -357,26 +531,26 @@ class CPCBDirectory(RSSFeed):
 
         Args:
             city: City name or code.
+            state: State name or code, for cities with the same name.
 
         Returns:
             List of {"label": station name, "value": station ID}, sorted by name.
+
+        Raises:
+            AmbiguousMatchError: If the city is in several states and state is
+                not given.
         """
-        _, city_entry = self._resolve_city(city)
+        _, city_entry = self._resolve_city(city, state)
         if not city_entry:
             return []
-        city_code = str(city_entry.get("city_code", ""))
-        city_name = str(city_entry.get("city_name", "")).lower()
-        stations = {
-            str(st["station_id"]): str(st["station_name"])
-            for st in self._new_station_list(city_code)
-            if st.get("station_id") and st.get("station_name")
-        }
-        # Stations newer than the bundled snapshot are only in the RSS feed
-        for _, rss_city, st in self._rss_directory():
-            if str(rss_city.get("city_name", "")).lower() == city_name:
-                stations.setdefault(str(st["station_id"]), str(st["station_name"]))
+        # The code selects this one city, as a name could be in several states
+        catalogue = self._station_catalogue(city=str(city_entry.get("city_code", "")))
         return sorted(
-            ({"label": name, "value": sid} for sid, name in stations.items() if sid),
+            (
+                {"label": str(st["station_name"]), "value": str(st["station_id"])}
+                for _, _, st in catalogue
+                if st.get("station_id") and st.get("station_name")
+            ),
             key=lambda x: x["label"],
         )
 
@@ -397,8 +571,8 @@ class CPCBDirectory(RSSFeed):
             out.append({**station, "lat": _float(lat), "lon": _float(lon)})
         if any(row["lat"] is None for row in out):
             feed = {
-                str(s.get("id")): (s.get("latitude"), s.get("longitude"))
-                for _, s in iter_city_stations(self._rss_cities())
+                str(s["station_id"]): (s["latitude"], s["longitude"])
+                for _, _, s in self._rss_directory()
             }
             for row in out:
                 if row["lat"] is None and row["value"] in feed:
@@ -409,6 +583,20 @@ class CPCBDirectory(RSSFeed):
         found = sum(row["lat"] is not None for row in out)
         logger.info("%d/%d stations have coordinates", found, len(out))
         return out
+
+
+def _raise_ambiguous_city(city: str, states: Iterable[str]) -> NoReturn:
+    """Raise AmbiguousMatchError for a city name used in several states."""
+    names = sorted(states)
+    raise AmbiguousMatchError(
+        f"City '{city}' is in more than one state, give the state: {'; '.join(names)}",
+        names,
+    )
+
+
+def _state_key(state: Any) -> str:
+    """A state name as letters only; the feed can spell a directory state differently."""
+    return re.sub(r"[^a-z]", "", str(state).lower().replace("&", "and"))
 
 
 def _float(value: Any) -> Optional[float]:

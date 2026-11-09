@@ -3,7 +3,7 @@ Live CPCB data: the station list, the nearest station and the latest readings.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -17,7 +17,12 @@ from .constants import (
 )
 from .cpcb_common import RSSFeed
 from .exceptions import NetworkError, StationNotFoundError
-from .utils import find_station, iter_city_stations, station_distances
+from .utils import (
+    find_station,
+    iter_city_stations,
+    station_distances,
+    station_has_reading,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +39,12 @@ class CPCBLive(RSSFeed):
         self.headers = dict(LEGACY_FORM_HEADERS)
         self.cookies = dict(PUBLIC_COOKIES)
         self.session = requests.Session()
+        self._station_list_source: Optional[str] = None
+
+    @property
+    def station_list_source(self) -> Optional[str]:
+        """Where the last get_all_india came from: "dashboard", "rss" or None."""
+        return self._station_list_source
 
     def _make_request(self, url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """POST a payload to a dashboard endpoint and return the JSON response.
@@ -106,13 +117,18 @@ class CPCBLive(RSSFeed):
         return (data.get("lat"), data.get("lon"))
 
     def get_nearest_station(
-        self, coords: Optional[Tuple[float, float]] = None
+        self,
+        coords: Optional[Tuple[float, float]] = None,
+        prefer_reading: Optional[bool] = None,
     ) -> Tuple[str, str]:
         """Get the nearest air quality monitoring station.
 
         Args:
             coords: Optional tuple of (latitude, longitude). If None, the client
                 finds the location from the IP address.
+            prefer_reading: Take the nearest station that has a current
+                reading, if any has one. The default is True for the IP
+                location and False for coords, which keep distance order.
 
         Returns:
             Tuple of (station_id, station_name).
@@ -126,6 +142,10 @@ class CPCBLive(RSSFeed):
         candidates = station_distances(cities, lat, lon)
         if not candidates:
             raise StationNotFoundError("No stations found or invalid station data.")
+        if coords is None if prefer_reading is None else prefer_reading:
+            candidates = [
+                c for c in candidates if station_has_reading(c[0])
+            ] or candidates
         station, _ = min(candidates, key=lambda c: c[1])
         return (str(station.get("id", "")), str(station.get("name", "")))
 
@@ -144,11 +164,13 @@ class CPCBLive(RSSFeed):
         )
         stations = (response or {}).get("stations")
         if isinstance(stations, list) and stations:
+            self._station_list_source = "dashboard"
             return [s for s in stations if isinstance(s, dict)]
 
         cities = self._rss_cities()
         if not cities:
             raise NetworkError("No CPCB station list is available")
+        self._station_list_source = "rss"
         return cities
 
     def _station_id_by_name(self, name: str) -> str:
@@ -167,8 +189,8 @@ class CPCBLive(RSSFeed):
     ) -> Dict[str, Any]:
         """Get live air quality data for a specific station.
 
-        If the dashboard endpoint fails, the client uses the latest reading of
-        the station in the RSS feed instead.
+        If the dashboard endpoint fails or has no metrics, the client uses the
+        latest reading of the station in the RSS feed instead.
 
         Args:
             station_id: Station ID, name, or part of a name.
@@ -176,12 +198,15 @@ class CPCBLive(RSSFeed):
 
         Returns:
             Live air quality data dictionary. airQualityIndex["value"] is a
-            float, or None when CPCB has no AQI for the hour ("NA").
+            float, or None when CPCB has no AQI for the hour ("NA"). It also
+            has source ("dashboard" or "rss"), reading_state ("reading" or
+            "no_reading") and as_of (CPCB's text for the time, or None).
 
         Raises:
             ValueError: If a parameter is not valid.
             NetworkError: If both the dashboard and the RSS feed fail.
-            StationNotFoundError: If the RSS feed does not have the station.
+            StationNotFoundError: If neither source has the station, so an
+                unknown ID is not mistaken for a station that is offline.
         """
         if not station_id or not date_time:
             raise ValueError("Both station_id and date_time must be provided.")
@@ -194,15 +219,22 @@ class CPCBLive(RSSFeed):
             lambda: self._make_request(self.parameters_url, payload),
             "CPCB live parameters failed (%s)",
         )
-        if data is not None:
-            return _with_numeric_aqi(data)
+        if data is not None and data.get("metrics"):
+            return _tagged(data, "dashboard")
 
         cities = self._rss_cities()
         if not cities:
             raise NetworkError("No CPCB live data source is available")
         for _, station in iter_city_stations(cities):
             if station_id in (station.get("id"), station.get("name")):
-                return _with_numeric_aqi(
+                if not _is_current_hour(date_time):
+                    logger.warning(
+                        "CPCB dashboard failed: the RSS feed gives the current "
+                        "reading of %s, not the one for %s",
+                        station_id,
+                        date_time,
+                    )
+                return _tagged(
                     {
                         "station_id": station.get("id"),
                         "station_name": station.get("name"),
@@ -214,11 +246,12 @@ class CPCBLive(RSSFeed):
                                 "avg": pollutant.get("avg"),
                                 "min": pollutant.get("min"),
                                 "max": pollutant.get("max"),
-                                "avgDesc": station.get("lastUpdate", date_time),
+                                "avgDesc": station.get("lastUpdate"),
                             }
                             for pollutant in station.get("pollutants", [])
                         ],
-                    }
+                    },
+                    "rss",
                 )
         raise StationNotFoundError(f"Station {station_id} not in the CPCB RSS feed")
 
@@ -247,7 +280,10 @@ class CPCBLive(RSSFeed):
         """
         if hour is not None and not (0 <= hour <= 23):
             raise ValueError("Hour must be between 0 and 23")
-        station_id = station_id or self.get_nearest_station(coords)[0]
+        # a nearest station is for showing a reading, so one with a reading wins
+        station_id = (
+            station_id or self.get_nearest_station(coords, prefer_reading=True)[0]
+        )
 
         now = datetime.now()
         date_time = (
@@ -256,6 +292,30 @@ class CPCBLive(RSSFeed):
         )
         aqi_data = self.get_live_aqi_data_for_station(station_id, date_time)
         return self._clean_pollution_data(aqi_data)
+
+
+def _is_current_hour(date_time: str) -> bool:
+    """True if an ISO date and time is within an hour of now."""
+    try:
+        requested = datetime.fromisoformat(date_time.replace("Z", ""))
+    except ValueError:
+        return False
+    return abs(datetime.now() - requested.replace(tzinfo=None)) <= timedelta(hours=1)
+
+
+def _tagged(data: Dict[str, Any], source: str) -> Dict[str, Any]:
+    """A reading with its numeric AQI, source, reading_state and as_of."""
+    reading = _with_numeric_aqi(data)
+    return {
+        **reading,
+        "source": source,
+        "reading_state": (
+            "reading"
+            if reading["airQualityIndex"]["value"] is not None
+            else "no_reading"
+        ),
+        "as_of": data.get("lastUpdate") or None,
+    }
 
 
 def _with_numeric_aqi(data: Dict[str, Any]) -> Dict[str, Any]:

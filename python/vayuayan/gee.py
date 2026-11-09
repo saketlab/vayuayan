@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import sys
 import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
@@ -37,6 +38,10 @@ def is_available() -> bool:
 def setup_earth_engine(project_id: Optional[str] = None) -> bool:
     """Set up Google Earth Engine authentication with a Cloud project.
 
+    Credentials that already work are used as they are; a browser sign-in is
+    started only if they do not. Nothing asks for input when stdin is not a
+    terminal, so a script gets False instead of hanging.
+
     Args:
         project_id: Optional Google Cloud project ID. If None, the
                    function asks the user for the ID.
@@ -55,6 +60,11 @@ def setup_earth_engine(project_id: Optional[str] = None) -> bool:
         return False
 
     import ee
+
+    if not project_id and not sys.stdin.isatty():
+        print("✗ No project ID given and no terminal to ask for one.")
+        print("  Call setup_earth_engine('your-project-id') or set GEE_PROJECT.")
+        return False
 
     print("=" * 70)
     print("Google Earth Engine Setup")
@@ -102,15 +112,21 @@ def setup_earth_engine(project_id: Optional[str] = None) -> bool:
             return False
 
     print(f"\nUsing project: {project_id}")
-    print("\nAuthenticating with Earth Engine...")
-    print("(A browser window will open for authentication)")
-    print()
 
     try:
-        ee.Authenticate(force=True)
-
-        print(f"\nInitializing Earth Engine with project '{project_id}'...")
-        ee.Initialize(project=project_id)
+        try:
+            ee.Initialize(project=project_id)
+        except Exception:  # ee raises many unrelated error types
+            if not sys.stdin.isatty():
+                print("✗ Earth Engine is not signed in, and there is no terminal.")
+                print("  Run earthengine authenticate, then try again.")
+                return False
+            print("\nAuthenticating with Earth Engine...")
+            print("(A browser window will open for authentication)")
+            print()
+            ee.Authenticate(force=True)
+            print(f"\nInitializing Earth Engine with project '{project_id}'...")
+            ee.Initialize(project=project_id)
 
         print("\nTesting data access...")
         collection = ee.ImageCollection(PM25_VERSIONS["V6"].gee_monthly)
@@ -196,6 +212,12 @@ def initialize() -> bool:
             ee.Initialize(**kwargs)
         except Exception as e:  # ee raises many unrelated error types
             logger.debug("ee.Initialize(%s) failed: %s", kwargs, e)
+            if kwargs == {"project": gee_project}:
+                logger.warning(
+                    "GEE project %s failed (%s); trying the default project",
+                    gee_project,
+                    e,
+                )
             continue
         logger.info("Google Earth Engine initialized (%s)", kwargs or "default")
         return True

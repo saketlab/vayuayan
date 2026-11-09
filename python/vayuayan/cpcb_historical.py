@@ -7,9 +7,8 @@ from __future__ import annotations
 import io
 import logging
 import re
-import tempfile
-from concurrent.futures import ThreadPoolExecutor
 from datetime import date
+from enum import Enum, auto
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -21,17 +20,22 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    Union,
+    TypeVar,
     cast,
 )
 
 import requests
 
-from . import aqi, cpcb_common, http_client
+from . import aqi, cpcb_common, http_client, us_aqi_daily
 from .constants import get_cache_dir
-from .cpcb_directory import CPCBDirectory
+from .cpcb_batch import BATCH_ERRORS, _collect_stations
+from .cpcb_city_reports import (
+    CityReportsMixin,
+    _copy_is_final,
+    _first,
+    _save_csv,
+)
 from .exceptions import (
-    CPCBError,
     DataNotFoundError,
     NetworkError,
     StationNotFoundError,
@@ -45,12 +49,16 @@ logger = logging.getLogger(__name__)
 
 DOWNLOAD_WORKERS = 6
 
+T = TypeVar("T")
 
-# A four-digit year in a repository file path
-_YEAR = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+
+# a year segment (of 2020-2021 the later year) or a name ending _YYYY.ext; not site_2025
+_YEAR_SEGMENT = re.compile(r"(?:^|/)(?:(?:19|20)\d{2}-)?((?:19|20)\d{2})(?=/|$)")
+_YEAR_IN_FILE_NAME = re.compile(r"(?<!site)_((?:19|20)\d{2})\.[^./]+$", re.IGNORECASE)
 
 # Characters allowed in a cache path part
 _SAFE_PART = re.compile(r"[^A-Za-z0-9_.-]")
+_DOWNLOAD_TOKEN = re.compile(r"[A-Za-z0-9%+/=_-]+")
 
 # Frequency names of the package -> codes of the new CPCB file-path API
 _FREQUENCY_CODES = {
@@ -65,26 +73,59 @@ _FREQUENCY_CODES = {
     "1m": "1M",
     "15_minute": "15M",
     "15m": "15M",
+    "15min": "15M",
 }
 
 
-def _save_csv(df: pd.DataFrame, save_location: str) -> None:
-    """Write the DataFrame to save_location, if there is one."""
-    if save_location:
-        df.to_csv(save_location, index=False)
+def _entry_has_month(entry: Dict[str, Any], month: str) -> bool:
+    """Whether a file entry is for the month; station names can contain one."""
+    entry_month = str(entry.get("month") or "").lower()
+    if entry_month:
+        return entry_month.startswith(month)
+    return month in re.split(r"[^a-z]+", str(entry.get("filepath", "")).lower())
 
 
-def _file_entries(parsed: Any) -> Optional[List[Dict[str, Any]]]:
-    """Return the file entries of a successful file-path response, else None."""
+def _usable_body(body: bytes) -> bool:
+    """False for the empty bodies and error pages CPCB can send with HTTP 200."""
+    body = body.lstrip()
+    return bool(body) and body[:1] not in (b"<", b"{")
+
+
+class _Listing(Enum):
+    """What a file-path route answered, so a failure cannot pass for no files."""
+
+    FILES = auto()
+    NONE = auto()
+    FAILED = auto()
+
+
+def _read_listing(parsed: Any) -> Tuple[_Listing, List[Dict[str, Any]]]:
+    """The outcome and file entries of one route's parsed reply.
+
+    None is the empty body of HTTP 204, with which CPCB says it has nothing.
+    """
+    if parsed is None:
+        return _Listing.NONE, []
     if not isinstance(parsed, dict) or parsed.get("status") != "success":
-        return None
+        return _Listing.FAILED, []
     data = parsed.get("data", [])
     if not isinstance(data, list):
-        return None
-    return [cast(Dict[str, Any], entry) for entry in data if isinstance(entry, dict)]
+        return _Listing.FAILED, []
+    entries = [cast(Dict[str, Any], e) for e in data if isinstance(e, dict)]
+    return (_Listing.FILES if entries else _Listing.NONE), entries
 
 
-class CPCBHistorical(CPCBDirectory):
+def _repository_step(filepath: str, step: Callable[[], requests.Response]) -> Any:
+    """One request of a repository download: 404 is no such file, else the network."""
+    try:
+        return step()
+    except requests.RequestException as e:
+        if http_client.failure_reason(e) == "404":
+            raise DataNotFoundError(f"CPCB has no file {filepath}") from e
+        raise NetworkError(f"CPCB could not send {filepath}") from e
+
+
+class CPCBHistorical(CityReportsMixin):
     """Client that gets historical Air Quality Index (AQI) data from CPCB."""
 
     def __init__(self, cache_dir: Optional[str] = None, use_cache: bool = True) -> None:
@@ -103,12 +144,10 @@ class CPCBHistorical(CPCBDirectory):
             else None
         )
         self.file_path_endpoint = f"{self.data_repository}file_Path"
-        self.new_file_path_endpoint = (
-            f"{self.base_url}/caaqms-common/dataRepository/file-path"
-        )
-        self.new_download_endpoint = (
-            f"{self.base_url}/caaqms-common/dataRepository/download-excel-file"
-        )
+        new_api = f"{self.base_url}/caaqms-common/dataRepository"
+        self.new_file_path_endpoint = f"{new_api}/file-path"
+        self.new_download_link_endpoint = f"{new_api}/get-download-link"
+        self.new_download_endpoint = f"{new_api}/download-excel-fileEnc"
 
     def _normalize_frequency(self, frequency: str) -> str:
         return _FREQUENCY_CODES.get(frequency.lower(), frequency)
@@ -136,10 +175,12 @@ class CPCBHistorical(CPCBDirectory):
 
         Returns:
             List of file entries, each with a file path. The list is empty if
-            CPCB answers but has no files for the query.
+            CPCB says it has no files for the query.
 
         Raises:
-            NetworkError: If no CPCB endpoint answers.
+            NetworkError: If no route gives a definite answer.
+            AmbiguousMatchError: If the city is in several states and state is
+                not given, or the name fits several stations.
         """
         legacy_payload = {
             "station_id": station_id,
@@ -187,35 +228,64 @@ class CPCBHistorical(CPCBDirectory):
                 ),
             ),
         ]
-        # Not cpcb_common.attempt: a None answer (HTTP 204) means CPCB answered
-        # with no files, which must not look like a failure
-        answered = False
+        # Not cpcb_common.attempt: HTTP 204 means no files, which is not a failure
+        answered_no_files = False
+        failures: List[BaseException] = []
         for name, call in endpoints:
             try:
-                entries = _file_entries(call())
+                parsed = call()
             except (requests.RequestException, ValueError) as e:
                 logger.info("CPCB %s failed (%s)", name, http_client.failure_reason(e))
+                failures.append(e)
                 continue
-            answered = True
-            if entries is not None:
+            outcome, entries = _read_listing(parsed)
+            # HTTP 204 can mean only this route is empty, so the other route is asked
+            if outcome is _Listing.FILES or (
+                outcome is _Listing.NONE and parsed is not None
+            ):
                 return entries
-        if not answered:
-            raise NetworkError("CPCB file-path endpoints are unavailable")
-        return []
+            answered_no_files = answered_no_files or outcome is _Listing.NONE
+        if answered_no_files:
+            return []
+        # the outage, if any, decides how the batch loop reads this error
+        cause = next((e for e in failures if cpcb_common.is_outage(e)), None)
+        raise NetworkError("CPCB file-path endpoints are unavailable") from (
+            cause or (failures[-1] if failures else None)
+        )
 
     def _download_repository_file(self, filepath: str) -> io.BytesIO:
         cached = self._cache_path(filepath)
         if cached is not None and cached.exists():
-            logger.debug("Using cached %s", cached)
-            return io.BytesIO(cached.read_bytes())
-        response = cpcb_common.send(
-            "get",
-            self.new_download_endpoint,
-            session=self.session,
-            headers=self._new_api_headers(),
-            params={"file_name": filepath},
-            timeout=60,
+            body = cached.read_bytes()
+            if _usable_body(body):
+                logger.debug("Using cached %s", cached)
+                return io.BytesIO(body)
+        link = _repository_step(
+            filepath,
+            lambda: cpcb_common.send(
+                "get",
+                self.new_download_link_endpoint,
+                session=self.session,
+                headers=self._new_api_headers(),
+                params={"file_name": filepath},
+            ),
         )
+        token = link.content.decode("utf-8", "replace").strip()
+        if not _DOWNLOAD_TOKEN.fullmatch(token):
+            raise NetworkError(f"CPCB sent no download token for {filepath}")
+        # token is already URL-encoded; params would re-encode it (HTTP 400)
+        response = _repository_step(
+            filepath,
+            lambda: cpcb_common.send(
+                "get",
+                f"{self.new_download_endpoint}?file_name={token}",
+                session=self.session,
+                headers=self._new_api_headers(),
+                timeout=60,
+            ),
+        )
+        if not _usable_body(response.content):
+            raise NetworkError(f"CPCB sent no usable file for {filepath}")
         if cached is not None:
             cached.parent.mkdir(parents=True, exist_ok=True)
             with http_client.atomic_path(cached) as part:
@@ -225,10 +295,16 @@ class CPCBHistorical(CPCBDirectory):
     def _cache_path(self, filepath: str) -> Optional[Path]:
         """Cache file of a repository file, or None if it must not be cached.
 
-        Only files of past years are cached: the year is the largest
-        four-digit year in the path, and files of the current year change.
+        Only files of past years are cached: the year is the largest year in
+        the path (see _YEAR_SEGMENT), and files of the
+        current year change.
         """
-        years = [int(y) for y in _YEAR.findall(filepath)]
+        found = [
+            year
+            for pattern in (_YEAR_SEGMENT, _YEAR_IN_FILE_NAME)
+            for year in pattern.findall(filepath)
+        ]
+        years = [int(y) for y in found]
         if self.cache_dir is None or not years or max(years) >= date.today().year:
             return None
         parts = [
@@ -254,21 +330,12 @@ class CPCBHistorical(CPCBDirectory):
         year: str,
         month: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        # Entries of another year are never used; those without a year may be
+        candidates = [e for e in entries if not e.get("year") or str(e["year"]) == year]
         if month:
             month_lower = month.lower()
-            return [
-                entry
-                for entry in entries
-                if str(entry.get("month", "")).lower() == month_lower
-                or month_lower in str(entry.get("filepath", "")).lower()
-            ]
-
-        year_matches = [
-            entry for entry in entries if str(entry.get("year", "")) == year
-        ]
-        if year_matches:
-            return year_matches
-        return entries
+            return [e for e in candidates if _entry_has_month(e, month_lower)]
+        return candidates
 
     def _combine_repository_excels(
         self, entries: List[Dict[str, Any]], year: str, month: Optional[str] = None
@@ -303,7 +370,7 @@ class CPCBHistorical(CPCBDirectory):
     ) -> Optional[pd.DataFrame]:
         """Read the daily workbook of the year, or return None if there is none."""
         for entry in entries:
-            if str(entry.get("year")) == str(year):
+            if str(entry.get("year")) == str(year) and entry.get("filepath"):
                 df = self._read_repository_excel(str(entry["filepath"]))
                 return df.iloc[:31]  # Keep 31 rows: the maximum days in a month
         return None
@@ -327,7 +394,7 @@ class CPCBHistorical(CPCBDirectory):
             save_location: Path to save the CSV. If empty, no file is saved.
             frequency: Raw data interval. CPCB supports values such as
                 "15_minute", "1H", and "1D" for raw station files.
-            station_name: Optional station name. The client then does not look it up.
+            station_name: Optional station name, used if station_id does not match.
             city: Optional city name. The client then examines only this city.
             state: Optional state name, for cities with the same name.
             tidy: If True, return (and save) long rows with
@@ -337,6 +404,7 @@ class CPCBHistorical(CPCBDirectory):
             DataFrame with the raw station observations.
 
         Raises:
+            StationNotFoundError: If the station is not in the directory or the feed.
             DataNotFoundError: If CPCB has no raw file for the station and year.
             NetworkError: If CPCB does not answer.
         """
@@ -350,12 +418,12 @@ class CPCBHistorical(CPCBDirectory):
             frequency,
             "raw",
         )
-        if not data_file_paths:
+        candidates = self._select_repository_entry(data_file_paths, str(year))
+        if not candidates:
             raise DataNotFoundError(
                 f"Raw data not found for station {station_id} in year {year}"
             )
-
-        filepath = data_file_paths[0].get("filepath")
+        filepath = candidates[0].get("filepath")
         if not filepath:
             raise DataNotFoundError(
                 f"No downloadable raw file found for station {station_id}"
@@ -386,107 +454,172 @@ class CPCBHistorical(CPCBDirectory):
     def _station_info(
         self, station_id: str, station_name: str = "", city: str = "", state: str = ""
     ) -> Dict[str, str]:
-        """Station ID, name, city and state, from the directory where possible."""
-        return self._resolved_station(station_id, station_name, state, city) or {
-            "station_id": station_id,
-            "station_name": station_name,
-            "city": city,
-            "state": state,
-        }
+        """Station ID, name, city and state from the directory or the feed.
+
+        Raises:
+            StationNotFoundError: If no station matches.
+        """
+        info = self._resolved_station(station_id, station_name, state, city)
+        if not info:
+            raise StationNotFoundError(f"Station {station_id} not found")
+        return info
+
+    def _station_queries(
+        self,
+        station_ids: Optional[Iterable[str]],
+        year: Optional[int],
+        city: str,
+        state: str,
+    ) -> List[str]:
+        """The stations of a batch call: those given, else the stations of the city.
+
+        Raises:
+            ValueError: If the year is missing, or both stations and city are.
+            CityNotFoundError: If the city has no stations.
+        """
+        if year is None:
+            raise ValueError("year is required")
+        if isinstance(station_ids, str):
+            return [station_ids]
+        queries = list(station_ids or [])
+        if queries:
+            return queries
+        if not city:
+            raise ValueError("Give station_ids or a city")
+        return [str(s) for s in self._city_stations(city, state)["station_id"]]
 
     def raw_readings(
         self,
-        station_ids: Iterable[str],
-        year: int,
+        station_ids: Optional[Iterable[str]] = None,
+        year: Optional[int] = None,
         pollutants: Optional[Iterable[str]] = None,
+        city: str = "",
+        state: str = "",
     ) -> pd.DataFrame:
         """Raw 15-minute data of several stations as one long table.
 
         Stations without a raw file for the year are skipped with a warning.
+        An outage stops the run and keeps the stations already fetched. A
+        status for each station, by the ID given or the station ID for a city,
+        is in attrs["station_status"].
 
         Args:
-            station_ids: Station IDs or names (or one).
+            station_ids: Station IDs or names (or one). If None, every station
+                of city.
             year: Year.
             pollutants: Optional pollutant names to keep, such as ["PM2.5", "RH"].
+            city: City name or code. It narrows names given in station_ids.
+            state: State name or code, for cities that share a name.
 
         Returns:
             DataFrame with TIDY_COLUMNS (see cpcb_raw_to_long).
+
+        Raises:
+            ValueError: If the year is missing, or both stations and city are.
+            CityNotFoundError: If the city has no stations.
+            AmbiguousMatchError: If the city is in several states and state is
+                not given.
+            NetworkError: If an outage stopped the run before any station.
         """
         import pandas as pd
 
         from .tidy import TIDY_COLUMNS
 
-        ids = [station_ids] if isinstance(station_ids, str) else list(station_ids)
+        ids = self._station_queries(station_ids, year, city, state)
         keep = None if pollutants is None else set(pollutants)
-        skip: Tuple[Type[BaseException], ...] = (
-            DataNotFoundError, StationNotFoundError, *cpcb_common.SOURCE_ERRORS
-        )  # fmt: skip
-        frames = []
-        for station in ids:
-            try:
-                long = self.download_raw_aqi_data_station_level(
-                    station, str(year), "", tidy=True
-                )
-            except skip as e:
-                logger.warning("Skipped %s: %s", station, http_client.failure_reason(e))
-                continue
-            frames.append(long if keep is None else long[long["pollutant"].isin(keep)])
-        if not frames:
-            return pd.DataFrame(columns=TIDY_COLUMNS)
-        return pd.concat(frames, ignore_index=True)
+
+        def fetch(station: str) -> pd.DataFrame:
+            long = self.download_raw_aqi_data_station_level(
+                station, str(year), "", tidy=True, city=city, state=state
+            )
+            return long if keep is None else long[long["pollutant"].isin(keep)]
+
+        batch = _collect_stations(ids, fetch, str, BATCH_ERRORS, stop_on_outage=True)
+        batch.raise_if_unavailable()
+        if not batch.frames:
+            return batch.tagged(pd.DataFrame(columns=TIDY_COLUMNS))
+        return batch.tagged(pd.concat(batch.frames, ignore_index=True))
 
     def daily_aqi(
-        self, station_id: str, year: str, day_ends_at: int = 24
+        self,
+        station_id: str,
+        year: str,
+        day_ends_at: int = 24,
+        standard: str = "india",
+        city: str = "",
+        state: str = "",
     ) -> pd.DataFrame:
-        """Daily National AQI of a station, computed from its raw 15-minute data.
+        """Daily AQI of a station, computed from its raw 15-minute data.
 
         Args:
             station_id: Station ID, name, or part of a name.
             year: Year for data.
             day_ends_at: Hour at which each day's 24 hours end; 16 matches
                 CPCB's 4 PM bulletin (see vayuayan.aqi.daily_aqi).
+            standard: "india" for the National AQI (vayuayan.aqi.daily_aqi) or
+                "us" for the US AQI (vayuayan.us_aqi_daily.daily_us_aqi).
+            city: Optional city name or code, to narrow an ambiguous station name.
+            state: Optional state name or code, as city.
 
         Returns:
             One row per day: the AQI, its category, the dominant pollutant and
-            the sub-index of each pollutant.
+            the sub-index of each pollutant. With day_ends_at below 24, 1
+            January also uses 31 December of the previous year, if CPCB has it.
 
         Raises:
+            ValueError: If standard is not "india" or "us".
             DataNotFoundError: If CPCB has no raw file for the station and year.
             NetworkError: If CPCB does not answer.
         """
-        long = self.download_raw_aqi_data_station_level(station_id, year, "", tidy=True)
-        daily = aqi.daily_aqi(long, day_ends_at=day_ends_at)
+        by_standard: Dict[str, Callable[..., pd.DataFrame]] = {
+            "india": aqi.daily_aqi,
+            "us": us_aqi_daily.daily_us_aqi,
+        }
+        compute = by_standard.get(standard)
+        if compute is None:
+            raise ValueError('standard must be "india" or "us"')
+        long = self.download_raw_aqi_data_station_level(
+            station_id, year, "", tidy=True, city=city, state=state
+        )
+        if day_ends_at < 24:
+            long = self._with_previous_december_31(
+                long, station_id, int(year), city, state
+            )
+        daily = compute(long, day_ends_at=day_ends_at)
         # A window that ends on Jan 1 of the next year is not in this year
         in_year = [d.year == int(year) for d in daily["date"]]
-        return daily[in_year].reset_index(drop=True)
+        return daily.loc[in_year].reset_index(drop=True)
 
-    def download_hourly_aqi_data_city_level(
+    def _with_previous_december_31(
         self,
-        city: str,
-        year: str,
-        save_location: str,
-        month: Optional[str] = None,
+        long: pd.DataFrame,
+        station_id: str,
+        year: int,
+        city: str = "",
         state: str = "",
     ) -> pd.DataFrame:
-        """Download hourly AQI data for a city.
+        """long with 31 December of the year before, if its raw file is there."""
+        import pandas as pd
 
-        Args:
-            city: City name.
-            year: Year for data.
-            save_location: Path to save the combined CSV. If empty, no file is saved.
-            month: Optional month name, for example "January". If None, the
-                client combines all the monthly workbooks for the year.
-            state: Optional state name, for cities with the same name.
-
-        Returns:
-            DataFrame with hourly AQI data.
-        """
-        data_file_paths = self.get_file_path(
-            "", "", state, city, year, "hourly", "cityLevel"
+        previous = year - 1
+        errors: Tuple[Type[BaseException], ...] = (
+            DataNotFoundError, NetworkError, *cpcb_common.SOURCE_ERRORS
+        )  # fmt: skip
+        # attempt() formats the message with %, so a % in the station id is escaped
+        safe_id = station_id.replace("%", "%%")
+        earlier = cpcb_common.attempt(
+            lambda: self.download_raw_aqi_data_station_level(
+                station_id, str(previous), "", tidy=True, city=city, state=state
+            ),
+            f"No raw data of {safe_id} for {previous}, so 1 January of {year} has "
+            "no hours from 31 December: %s",
+            logging.WARNING,
+            errors,
         )
-        df = self._combine_repository_excels(data_file_paths, str(year), month)
-        _save_csv(df, save_location)
-        return df
+        if earlier is None:
+            return long
+        last_day = earlier[earlier["timestamp"] >= pd.Timestamp(previous, 12, 31)]
+        return pd.concat([last_day, long], ignore_index=True)
 
     def download_hourly_aqi_data_station_level(
         self,
@@ -506,7 +639,7 @@ class CPCBHistorical(CPCBDirectory):
             save_location: Path to save the combined CSV. If empty, no file is saved.
             month: Optional month name, for example "January". If None, the
                 client combines all the monthly workbooks for the year.
-            station_name: Optional station name. The client then does not look it up.
+            station_name: Optional station name, used if station_id does not match.
             city: Optional city name. The client then examines only this city.
             state: Optional state name, for cities with the same name.
 
@@ -526,32 +659,13 @@ class CPCBHistorical(CPCBDirectory):
         _save_csv(df, save_location)
         return df
 
-    def download_past_year_aqi_data_city_level(
-        self, city: str, year: str, save_location: str
-    ) -> pd.DataFrame:
-        """Download past AQI data for a specific city.
-
-        Args:
-            city: City name.
-            year: Year for data.
-            save_location: Path to save the downloaded data.
-
-        Returns:
-            DataFrame preview of the downloaded data.
-
-        Raises:
-            DataNotFoundError: If CPCB has no data for the city and year.
-            NetworkError: If CPCB does not answer.
-        """
-        data_file_paths = self.get_file_path("", "", "", city, "", "daily", "cityLevel")
-        df = self._read_year_excel(data_file_paths, year)
-        if df is None:
-            raise DataNotFoundError(f"Data not found for city {city} in year {year}")
-        _save_csv(df, save_location)
-        return df
-
     def download_past_year_aqi_data_station_level(
-        self, station_id: str, year: str, save_location: str
+        self,
+        station_id: str,
+        year: str,
+        save_location: str,
+        city: str = "",
+        state: str = "",
     ) -> pd.DataFrame:
         """Download past AQI data for a specific station.
 
@@ -559,16 +673,18 @@ class CPCBHistorical(CPCBDirectory):
             station_id: Station ID, name, or part of a name.
             year: Year for data.
             save_location: Path to save the downloaded data.
+            city: Optional city name or code, to narrow an ambiguous station name.
+            state: Optional state name or code, as city.
 
         Returns:
-            DataFrame preview of the downloaded data.
+            The daily data of the year.
 
         Raises:
             StationNotFoundError: If the station ID is not in the directory.
             DataNotFoundError: If CPCB has no data for the station and year.
             NetworkError: If CPCB does not answer.
         """
-        info = self._resolved_station(station_id)
+        info = self._resolved_station(station_id, "", state, city)
         if not info:
             raise StationNotFoundError(f"Station {station_id} not found")
 
@@ -587,120 +703,77 @@ class CPCBHistorical(CPCBDirectory):
             raise DataNotFoundError(
                 f"Data not found for station {station_id} in year {year}"
             )
-        df.to_csv(save_location, index=False)
-        return df.head()
-
-    def city_daily(
-        self,
-        cities: Iterable[str],
-        year: Union[int, Iterable[int]],
-        cache_dir: Optional[str] = None,
-    ) -> pd.DataFrame:
-        """Daily city AQI in long format.
-
-        Args:
-            cities: City names (or one name).
-            year: Year, or several years.
-            cache_dir: Optional directory for CSV copies of the sheets
-                (<city>_aqi_<year>.csv), read back on later calls. The default
-                is a temporary directory of this client.
-
-        Returns:
-            DataFrame with columns city, year, day, month, value and date
-            (datetime.date), sorted by city and date.
-        """
-        import pandas as pd
-
-        years = [int(year)] if isinstance(year, int) else [int(y) for y in year]
-        sheets = [
-            (city, y, self._csv_copy(cache_dir, f"{city.lower()}_aqi_{y}.csv"))
-            for city in ([cities] if isinstance(cities, str) else cities)
-            for y in years
-        ]
-        missing = [sheet for sheet in sheets if not sheet[2].exists()]
-        # one listing per city covers all its years
-        listings = {
-            city: self.get_file_path("", "", "", city, "", "daily", "cityLevel")
-            for city in dict.fromkeys(city for city, _, _ in missing)
-        }
-
-        def fetch(sheet: Tuple[str, int, Path]) -> None:
-            city, y, path = sheet
-            df = self._read_year_excel(listings[city], str(y))
-            if df is None:
-                raise DataNotFoundError(f"Data not found for city {city} in year {y}")
-            _save_csv(df, str(path))
-
-        # the shared Session is thread-safe for these cookie-less requests
-        with ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS) as pool:
-            list(pool.map(fetch, missing))
-        frames = [
-            cpcb_tidy_daily(pd.read_csv(path), y).assign(city=city, year=y)
-            for city, y, path in sheets
-        ]
-        return _first(pd.concat(frames, ignore_index=True), ["city", "year"])
+        _save_csv(df, save_location)
+        return df
 
     def station_daily(
-        self, station_ids: Iterable[str], year: int, cache_dir: Optional[str] = None
+        self,
+        station_ids: Optional[Iterable[str]] = None,
+        year: Optional[int] = None,
+        cache_dir: Optional[str] = None,
+        city: str = "",
+        state: str = "",
     ) -> pd.DataFrame:
         """Daily station AQI in long format.
 
         Stations that are not found or have no data are skipped with a warning.
+        An outage stops the run and keeps the stations already fetched. A
+        status for each station, by the ID given or the station ID for a city,
+        is in attrs["station_status"].
 
         Args:
-            station_ids: Station IDs or names (or one).
+            station_ids: Station IDs or names (or one). If None, every station
+                of city.
             year: Year.
-            cache_dir: Optional directory for CSV copies (<id>_<year>.csv).
+            cache_dir: Optional directory for CSV copies (<id>_<year>.csv), read
+                back on later calls for past years.
+            city: City name or code. It narrows names given in station_ids.
+            state: State name or code, for cities that share a name.
 
         Returns:
             DataFrame with columns station_id, station_name, day, month, value.
+
+        Raises:
+            ValueError: If the year is missing, or both stations and city are.
+            CityNotFoundError: If the city has no stations.
+            AmbiguousMatchError: If the city is in several states and state is
+                not given.
+            NetworkError: If an outage stopped the run before any station.
         """
         import pandas as pd
 
-        frames = []
-        ids = [station_ids] if isinstance(station_ids, str) else station_ids
-        for query in ids:
-            try:
-                info = self._resolved_station(query)
-                if not info:
-                    raise StationNotFoundError(f"Station {query} not found")
-                path = self._csv_copy(cache_dir, f"{info['station_id']}_{year}.csv")
-                if not path.exists():
+        def fetch(query: str) -> pd.DataFrame:
+            info = self._resolved_station(query, "", state, city)
+            if not info:
+                raise StationNotFoundError(f"Station {query} not found")
+            path = self._csv_copy(cache_dir, f"{info['station_id']}_{year}.csv")
+            if not _copy_is_final(path, year):
+                with http_client.atomic_path(path) as part:
                     self.download_past_year_aqi_data_station_level(
-                        info["station_id"], str(year), str(path)
+                        info["station_id"], str(year), str(part), city, state
                     )
-                frames.append(
-                    cpcb_tidy_daily(pd.read_csv(path)).assign(
-                        station_id=info["station_id"],
-                        station_name=info["station_name"],
-                    )
-                )
-            except (CPCBError, requests.RequestException, ValueError) as e:
-                logger.warning("Skipped %s: %s", query, http_client.failure_reason(e))
-        if not frames:
-            return pd.DataFrame(
-                columns=["station_id", "station_name", "day", "month", "value"]
+            return cpcb_tidy_daily(pd.read_csv(path)).assign(
+                station_id=info["station_id"],
+                station_name=info["station_name"],
             )
-        return _first(
-            pd.concat(frames, ignore_index=True), ["station_id", "station_name"]
+
+        batch = _collect_stations(
+            self._station_queries(station_ids, year, city, state),
+            fetch,
+            str,
+            BATCH_ERRORS,
+            stop_on_outage=True,
         )
-
-    _csv_tmp: Optional[Path] = None
-
-    def _csv_copy(self, cache_dir: Optional[str], name: str) -> Path:
-        """Path of a CSV copy in cache_dir, or in a temporary folder of this
-        client, so stale or planted files in the shared temporary directory
-        are never read."""
-        if cache_dir:
-            folder = Path(cache_dir)
-            folder.mkdir(parents=True, exist_ok=True)
-        else:
-            if self._csv_tmp is None:
-                self._csv_tmp = Path(tempfile.mkdtemp(prefix="vayuayan_"))
-            folder = self._csv_tmp
-        return folder / name
-
-
-def _first(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
-    """df with the columns moved to the front."""
-    return df[columns + [c for c in df.columns if c not in columns]]
+        batch.raise_if_unavailable()
+        if not batch.frames:
+            return batch.tagged(
+                pd.DataFrame(
+                    columns=["station_id", "station_name", "day", "month", "value"]
+                )
+            )
+        return batch.tagged(
+            _first(
+                pd.concat(batch.frames, ignore_index=True),
+                ["station_id", "station_name"],
+            )
+        )

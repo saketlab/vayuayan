@@ -5,7 +5,7 @@ and examines air quality data.
 CPCBHistorical and CPCBLive read data from the CPCB monitoring stations in
 India. OAQClient reads data from OAQ low-cost sensors. PM25Client reads WUSTL
 ACAG satellite PM2.5 data. compute_aqi and daily_aqi calculate the CPCB
-National AQI. compute_us_aqi calculates the US EPA AQI. The sensor_* functions
+National AQI. compute_us_aqi and daily_us_aqi calculate the US EPA AQI. The sensor_* functions
 compare sensor data with the US EPA targets for PM2.5 sensors.
 
 Usage:
@@ -44,6 +44,7 @@ from .cpcb_live import CPCBLive
 
 # Exceptions
 from .exceptions import (
+    AmbiguousMatchError,
     AuthenticationError,
     CityNotFoundError,
     ConfigurationError,
@@ -53,6 +54,7 @@ from .exceptions import (
     DataProcessingError,
     InvalidDataError,
     NetworkError,
+    PM25DownloadError,
     RateLimitError,
     StationNotFoundError,
 )
@@ -102,6 +104,7 @@ from .us_aqi import (
 )
 
 # Utility functions for users
+from .us_aqi_daily import daily_us_aqi
 from .utils import (
     analyze_station_data,
     aqi_color,
@@ -149,6 +152,7 @@ __all__ = [
     "WHO_PM25_GUIDELINES",
     # US EPA AQI
     "compute_us_aqi",
+    "daily_us_aqi",
     "us_sub_index",
     "us_pollutant_name",
     "us_aqi_category",
@@ -186,6 +190,8 @@ __all__ = [
     "DataProcessingError",
     "CityNotFoundError",
     "StationNotFoundError",
+    "AmbiguousMatchError",
+    "PM25DownloadError",
     "InvalidDataError",
     "AuthenticationError",
     "RateLimitError",

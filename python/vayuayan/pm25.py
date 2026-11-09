@@ -15,6 +15,7 @@ import requests
 
 from . import gee, http_client
 from .constants import SATPM_BASE_URL
+from .exceptions import PM25DownloadError
 from .pm25_raster import (
     EMPTY_STATS,
     calculate_stats,
@@ -33,6 +34,11 @@ if TYPE_CHECKING:
     import xarray as xr
 
 logger = logging.getLogger(__name__)
+
+# A smaller NetCDF is a partial download; not for a GEE .tif, whose India raster is smaller
+MIN_CACHED_BYTES = 1024 * 1024
+_GEE_REGIONS = ("GL", "AS")
+_CACHED_PATTERNS = ("*.nc", "*.tif")
 
 
 def _spec_property(field: str) -> Any:
@@ -128,6 +134,8 @@ class PM25Client:
         first, last = self.spec.gee_year_range
         if not (first <= year <= last):
             return f"Year {year} outside range ({first}-{last})"
+        if self.region not in _GEE_REGIONS:
+            return f"The GEE download is clipped to India, outside region {self.region}"
         if not self.gee_initialized:
             return "Not installed or not authenticated"
         return None
@@ -200,17 +208,24 @@ class PM25Client:
             Path to the downloaded NetCDF or GeoTIFF file.
 
         Raises:
-            requests.RequestException: If every download source fails. The
-                message explains the manual download.
+            PM25DownloadError: If every download source fails. The message
+                explains the manual download. It is a requests.RequestException.
             IOError: If the client cannot write the file.
         """
         cached_path = Path(self.get_netcdf_path(year, month))
         cached_tif_path = cached_path.with_suffix(".tif")  # from a GEE download
         if not force_download:
-            for path in (cached_path, cached_tif_path):
-                if path.exists():
-                    logger.info("Using cached file: %s", path)
-                    return str(path)
+            if cached_path.exists() and (cached_path.stat().st_size > MIN_CACHED_BYTES):
+                logger.info("Using cached file: %s", cached_path)
+                return str(cached_path)
+            if cached_tif_path.exists():
+                logger.warning(
+                    "Using cached %s, the coarse Google Earth Engine fallback "
+                    "(about 10 km), not the WUSTL NetCDF; force_download=True "
+                    "tries the NetCDF again",
+                    cached_tif_path.name,
+                )
+                return str(cached_tif_path)
 
         s3_url = self._get_aws_url(year, month)
         logger.info("Downloading %s", s3_url)
@@ -223,7 +238,7 @@ class PM25Client:
             size = http_client.stream_to_file(
                 response, cached_path, f"PM2.5 {self.version}"
             )
-            logger.info("Download complete: %.1f MB", size / (1024 * 1024))
+            logger.info("Download complete from S3: %.1f MB", size / (1024 * 1024))
             return str(cached_path)
         except requests.RequestException as e:
             s3_error = e
@@ -233,8 +248,9 @@ class PM25Client:
 
         gee_path = self._download_from_gee(year, month)
         if gee_path:
+            logger.warning("PM2.5 came from the coarse Google Earth Engine fallback")
             return gee_path
-        raise requests.RequestException(
+        raise PM25DownloadError(
             self._manual_download_message(year, month, s3_error)
         ) from s3_error
 
@@ -287,19 +303,22 @@ class PM25Client:
             pm25_var, ds = detect_pm25_variable(ds, self.spec.variable_name)
             lat_coord, lon_coord = detect_coordinates(ds)
 
-            try:
-                point_data = ds.sel(
-                    {lat_coord: latitude, lon_coord: longitude}, method="nearest"
-                )
-            except (KeyError, ValueError) as e:
-                raise ValueError(
-                    f"Point ({latitude}, {longitude}) is outside data bounds"
-                ) from e
+            for coord, value in ((lat_coord, latitude), (lon_coord, longitude)):
+                grid = ds[coord].values
+                half_cell = abs(float(grid[1] - grid[0])) / 2 if grid.size > 1 else 0.0
+                if not grid.min() - half_cell <= value <= grid.max() + half_cell:
+                    raise ValueError(
+                        f"Point ({latitude}, {longitude}) is outside data bounds"
+                    )
+
+            point_data = ds.sel(
+                {lat_coord: latitude, lon_coord: longitude}, method="nearest"
+            )
 
             values = point_data[pm25_var].values
             pm25_value = float(values.item() if hasattr(values, "item") else values)
 
-            if math.isnan(pm25_value):
+            if not math.isfinite(pm25_value):
                 raise ValueError(
                     f"No PM2.5 data available at ({latitude}, {longitude})"
                 )
@@ -453,25 +472,32 @@ class PM25Client:
         Returns:
             DataFrame with year and month columns, then the statistics (and
             the group columns) of get_pm25_stats. A month whose data cannot be
-            downloaded is left out, with a warning in the log.
+            downloaded is left out, with a warning in the log, and is listed
+            in attrs["failed_months"].
         """
         import pandas as pd
 
         frames = []
+        failed: List[int] = []
         for month in months or range(1, 13):
             try:
                 stats = self.get_pm25_stats(geojson_file, year, month, group_by)
             except requests.RequestException as e:
                 reason = http_client.failure_reason(e)
                 logger.warning("No PM2.5 data for %d-%02d: %s", year, month, reason)
+                failed.append(month)
                 continue
             frame = pd.DataFrame([stats]) if isinstance(stats, dict) else stats
             frame.insert(0, "month", month)
             frame.insert(0, "year", year)
             frames.append(frame)
-        if not frames:
-            return pd.DataFrame(columns=["year", "month", "mean", "std", "min", "max"])
-        return pd.concat(frames, ignore_index=True)
+        table = (
+            pd.concat(frames, ignore_index=True)
+            if frames
+            else pd.DataFrame(columns=["year", "month", "mean", "std", "min", "max"])
+        )
+        table.attrs["failed_months"] = failed
+        return table
 
     def get_pm25_stats_by_polygon(
         self,
@@ -534,11 +560,11 @@ class PM25Client:
         return pd.DataFrame(results)
 
     def clear_cache(self) -> None:
-        """Clear all cached NetCDF files."""
+        """Clear all cached PM2.5 files, NetCDF and GEE GeoTIFF."""
         if not self.cache_dir.exists():
             logger.info("Cache directory does not exist")
             return
-        for file in self.cache_dir.glob("*.nc"):
+        for file in self._cached_files():
             try:
                 file.unlink()
                 logger.info("Removed: %s", file)
@@ -547,15 +573,18 @@ class PM25Client:
         logger.info("Cache cleared: %s", self.cache_dir)
 
     def list_cached_files(self) -> List[str]:
-        """List all cached NetCDF files.
+        """List all cached PM2.5 files, NetCDF and GEE GeoTIFF.
 
         Returns:
             List of cached file paths.
         """
         if not self.cache_dir.exists():
             return []
-        cached_files = sorted(self.cache_dir.glob("*.nc"))
+        cached_files = self._cached_files()
         for file in cached_files:
             size_mb = file.stat().st_size / (1024 * 1024)
             logger.info("Cached: %s (%.1f MB)", file.name, size_mb)
         return [str(f) for f in cached_files]
+
+    def _cached_files(self) -> List[Path]:
+        return sorted(f for p in _CACHED_PATTERNS for f in self.cache_dir.glob(p))

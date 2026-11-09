@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .tidy import _finite_rows, _mean_duplicates
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -51,11 +53,13 @@ def compare_daily_records(
         maximum and median reading, the mean of the last 2 and last 4
         readings, record_is_<statistic> for each, and class: "mean", "last",
         "both" (equal to the mean and to the last reading) or "neither".
-        Missing and NaN readings are left out.
+        Missing, NaN and infinite readings are left out, and readings
+        repeated for one time are averaged first.
     """
     import pandas as pd
 
-    r = readings.dropna(subset=["timestamp", value]).sort_values(
+    r = _finite_rows(readings.dropna(subset=["timestamp"]), [value])
+    r = _mean_duplicates(r, ["sensor_id", "timestamp"], value).sort_values(
         ["sensor_id", "timestamp"], kind="stable"
     )
     if r.empty:
@@ -74,7 +78,7 @@ def compare_daily_records(
         }
     ).reset_index()
     rec = records[["sensor_id", "date", value]].rename(columns={value: "record"})
-    out = rec.dropna(subset=["record"]).merge(stats, on=["sensor_id", "date"])
+    out = _finite_rows(rec, ["record"]).merge(stats, on=["sensor_id", "date"])
     for stat in RECORD_STATISTICS:
         out[f"record_is_{stat}"] = (out["record"] - out[stat]).abs() <= tolerance
     out["class"] = "neither"

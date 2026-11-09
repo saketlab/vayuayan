@@ -22,6 +22,7 @@ from vayuayan import aqi, oaq, oaq_records, sensor_qa, tidy, us_aqi, utils
 from vayuayan.constants import AQI_CATEGORIES
 from vayuayan.cpcb_historical import CPCBHistorical
 from vayuayan.pm25_versions import PM25_VERSIONS
+from vayuayan.us_aqi_daily import daily_us_aqi
 
 FIXTURES = Path(__file__).resolve().parents[2] / "R" / "tests" / "testthat" / "fixtures"
 JSON_PATH = FIXTURES / "parity_python.json"
@@ -36,6 +37,7 @@ API = {
     "sub_index": "aqi_sub_index",
     "pollutant_name": "aqi_pollutant_name",
     "daily_aqi": "daily_aqi",
+    "daily_us_aqi": "daily_us_aqi",
     "health_impact": "aqi_health_impact",
     "pollutant_category": "aqi_pollutant_category",
     "compute_us_aqi": "compute_us_aqi",
@@ -66,6 +68,9 @@ API = {
     "CPCBHistorical.get_file_path": "cpcb_get_file_path",
     "CPCBHistorical.download_raw_aqi_data_station_level": "cpcb_download_raw_station_data",
     "CPCBHistorical.daily_aqi": "cpcb_station_daily_aqi",
+    "CPCBHistorical.download_station_report": "cpcb_download_station_report",
+    "CPCBHistorical.download_city_report": "cpcb_download_city_report",
+    "CPCBHistorical.station_table": "cpcb_station_table",
     "CPCBHistorical.download_hourly_aqi_data_city_level": "cpcb_download_hourly_city_data",
     "CPCBHistorical.download_hourly_aqi_data_station_level": "cpcb_download_hourly_station_data",
     "CPCBHistorical.download_past_year_aqi_data_city_level": "cpcb_download_city_data",
@@ -169,14 +174,15 @@ AQI_CASES: List[Dict[str, Optional[float]]] = [
 
 US_LABELS = [
     "PM2.5", "PM2.5 (µg/m³)", "pm25", "PM10 (ug/m3)", "Ozone", "O3", "O3_1h",
-    "O3 1h", "CO (mg/m3)", "NO2", "SO2", "SO2_24h", "SO2 24h", "NH3", "Benzene",
+    "O3 1h", "CO (mg/m3)", "NO2", "SO2", "SO2_24h", "SO2 24h", "SO2 (24h) (ppb)", "NH3",
+    "Benzene",
 ]  # fmt: skip
 
 US_UNIT_CASES = [
     ("O3 (µg/m³)", 100), ("O3 (ug/m3)", 108), ("O3_1h (µg/m³)", 300),
     ("NO2 (µg/m³)", 100), ("NO2 (ug/m3)", 101.9), ("SO2 (µg/m³)", 93),
     ("SO2_24h (µg/m³)", 1000), ("CO (mg/m³)", 5), ("CO (mg/m3)", 10.9),
-    ("PM2.5 (µg/m³)", 35.45), ("PM10 (ug/m3)", 154.9),
+    ("PM2.5 (µg/m³)", 35.45), ("PM10 (ug/m3)", 154.9), ("PM2.5 (mg/m³)", 0.0354),
 ]  # fmt: skip
 
 US_AQI_CASES: List[Dict[str, Optional[float]]] = [
@@ -192,6 +198,9 @@ US_AQI_CASES: List[Dict[str, Optional[float]]] = [
     {"PM2.5": 400, "PM10": None},
     {"PM2.5 (µg/m³)": 55.0, "O3 (µg/m³)": 150, "NO2 (µg/m³)": 90, "CO (mg/m³)": 4},
     {"Benzene": 3, "PM2.5": None},
+    {"O3": 0.25, "PM2.5": 10},
+    {"SO2": 400},
+    {"SO2": 400, "SO2_24h": None},
 ]
 
 CATEGORY_VALUES = [
@@ -475,6 +484,27 @@ def _aqi_case(
     }
 
 
+def _daily_us_cases() -> Dict[str, Any]:
+    """daily_us_aqi of daily_aqi_input.csv for both day ends."""
+    long = pd.read_csv(DAILY_INPUT, encoding="utf-8")
+    cases = {}
+    for end in (24, 16):
+        daily = daily_us_aqi(long, day_ends_at=end)
+        cases[str(end)] = _columns(
+            daily.assign(
+                date=daily["date"].astype(str),
+                aqi=daily["aqi"].astype(object).where(daily["aqi"].notna(), None),
+                category=daily["category"]
+                .astype(object)
+                .where(daily["category"].notna(), None),
+                dominant_pollutant=daily["dominant_pollutant"]
+                .astype(object)
+                .where(daily["dominant_pollutant"].notna(), None),
+            )
+        )
+    return cases
+
+
 def build() -> Dict[str, Any]:
     """All parity cases with the Python outputs."""
     historical = CPCBHistorical(cache_dir="cpcb")
@@ -553,6 +583,7 @@ def build() -> Dict[str, Any]:
         ],
         "us_sub_index": _us_sub_index_cases(),
         "compute_us_aqi": [_aqi_case(us_aqi.compute_us_aqi, c) for c in US_AQI_CASES],
+        "daily_us_aqi": _daily_us_cases(),
         "us_aqi_category": [
             {
                 "aqi": v,
