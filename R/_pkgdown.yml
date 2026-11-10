@@ -311,6 +311,12 @@ reference:
   - pm25_monthly
   - pm25_map
 
+- title: "Fires (NASA FIRMS)"
+  desc: "MODIS and VIIRS active fire detections, and daily fire counts near a point to set beside PM2.5"
+  contents:
+  - firms_fires
+  - fire_daily_counts
+
 - title: "Sensor Quality"
   desc: "Checks of sensor readings against the US EPA targets for PM2.5 sensors"
   contents:

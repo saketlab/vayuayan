@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 
-from vayuayan import aqi, oaq, oaq_records, sensor_qa, tidy, us_aqi, utils
+from vayuayan import aqi, fires, oaq, oaq_records, sensor_qa, tidy, us_aqi, utils
 from vayuayan.constants import AQI_CATEGORIES
 from vayuayan.cpcb_historical import CPCBHistorical
 from vayuayan.pm25_versions import PM25_VERSIONS
@@ -131,6 +131,8 @@ API = {
     "ratio_by_humidity": "ratio_by_humidity",
     "oaq_nearest_cpcb": "oaq_nearest_cpcb",
     "oaq_city_tally": "oaq_city_tally",
+    "firms_fires": "firms_fires",
+    "fire_daily_counts": "fire_daily_counts",
 }
 
 # Public names with no counterpart in the other package, and why
@@ -505,6 +507,36 @@ def _daily_us_cases() -> Dict[str, Any]:
     return cases
 
 
+FIRE_CSV = {
+    "modis": (
+        "latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,"
+        "instrument,confidence,version,bright_t31,frp,daynight,type\n"
+        "30.84,74.66,318,1.1,1,2023-11-01,0457,Terra,MODIS,72,61.03,305,23.6,D,0\n"
+        "30.20,76.50,318,1.1,1,2023-11-03,2010,Aqua,MODIS,50,61.03,305,10.0,N,0\n"
+        "28.70,77.10,318,1.1,1,2023-11-03,0800,Aqua,MODIS,90,61.03,305,99.5,D,0\n"
+        "12.00,80.00,318,1.1,1,2023-11-04,0800,Aqua,MODIS,90,61.03,305,7.0,D,0\n"
+    ),
+    "viirs": (
+        "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,"
+        "confidence,version,bright_ti5,frp,daynight\n"
+        "28.70,77.10,331.3,0.4,0.37,2026-11-05,825,N,nominal,2.0NRT,288.8,2.04,D\n"
+        "28.71,77.12,331.3,0.4,0.37,2026-11-05,1930,N20,l,2,288.8,3.5,N\n"
+        "29.90,76.80,331.3,0.4,0.37,2026-11-07,5,N,h,2,288.8,1.25,N\n"
+    ),
+}
+
+
+def _fire_cases() -> Dict[str, Any]:
+    """FIRMS CSV parsing and daily counts near a point."""
+    out: Dict[str, Any] = {"csv": FIRE_CSV, "parsed": {}, "counts": {}}
+    for name, text in FIRE_CSV.items():
+        table = fires._parse_firms_csv(text)
+        counts = fires.fire_daily_counts(table, 28.6, 77.2, radius_km=200)
+        out["parsed"][name] = _columns(table.assign(date=table["date"].astype(str)))
+        out["counts"][name] = _columns(counts.assign(date=counts["date"].astype(str)))
+    return out
+
+
 def build() -> Dict[str, Any]:
     """All parity cases with the Python outputs."""
     historical = CPCBHistorical(cache_dir="cpcb")
@@ -514,6 +546,7 @@ def build() -> Dict[str, Any]:
     workbook = tidy.daily_aqi_workbook_to_long(WORKBOOK, 2023)
     return {
         "api": API,
+        "fires": _fire_cases(),
         "r_only": R_ONLY,
         "pollutants": {
             name: {

@@ -58,6 +58,7 @@ from .exceptions import (
     RateLimitError,
     StationNotFoundError,
 )
+from .fires import fire_daily_counts, firms_fires
 from .gee import setup_earth_engine
 from .geo import india_boundary
 from .oaq import OAQClient, oaq_city_tally, oaq_nearest_cpcb
@@ -168,6 +169,9 @@ __all__ = [
     "daily_aqi_workbook_to_long",
     "cpcb_tidy_daily",
     "india_boundary",
+    # Fires
+    "firms_fires",
+    "fire_daily_counts",
     # Sensor quality
     "EPA_PM25_TARGETS",
     "readings_mean",

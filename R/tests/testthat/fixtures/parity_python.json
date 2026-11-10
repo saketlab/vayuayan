@@ -97,7 +97,148 @@
   "sensor_accuracy": "sensor_accuracy",
   "ratio_by_humidity": "ratio_by_humidity",
   "oaq_nearest_cpcb": "oaq_nearest_cpcb",
-  "oaq_city_tally": "oaq_city_tally"
+  "oaq_city_tally": "oaq_city_tally",
+  "firms_fires": "firms_fires",
+  "fire_daily_counts": "fire_daily_counts"
+ },
+ "fires": {
+  "csv": {
+   "modis": "latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_t31,frp,daynight,type\n30.84,74.66,318,1.1,1,2023-11-01,0457,Terra,MODIS,72,61.03,305,23.6,D,0\n30.20,76.50,318,1.1,1,2023-11-03,2010,Aqua,MODIS,50,61.03,305,10.0,N,0\n28.70,77.10,318,1.1,1,2023-11-03,0800,Aqua,MODIS,90,61.03,305,99.5,D,0\n12.00,80.00,318,1.1,1,2023-11-04,0800,Aqua,MODIS,90,61.03,305,7.0,D,0\n",
+   "viirs": "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,confidence,version,bright_ti5,frp,daynight\n28.70,77.10,331.3,0.4,0.37,2026-11-05,825,N,nominal,2.0NRT,288.8,2.04,D\n28.71,77.12,331.3,0.4,0.37,2026-11-05,1930,N20,l,2,288.8,3.5,N\n29.90,76.80,331.3,0.4,0.37,2026-11-07,5,N,h,2,288.8,1.25,N\n"
+  },
+  "parsed": {
+   "modis": {
+    "latitude": [
+     30.84,
+     30.2,
+     28.7,
+     12.0
+    ],
+    "longitude": [
+     74.66,
+     76.5,
+     77.1,
+     80.0
+    ],
+    "date": [
+     "2023-11-01",
+     "2023-11-03",
+     "2023-11-03",
+     "2023-11-04"
+    ],
+    "datetime": [
+     "2023-11-01 04:57:00",
+     "2023-11-03 20:10:00",
+     "2023-11-03 08:00:00",
+     "2023-11-04 08:00:00"
+    ],
+    "satellite": [
+     "Terra",
+     "Aqua",
+     "Aqua",
+     "Aqua"
+    ],
+    "confidence": [
+     72,
+     50,
+     90,
+     90
+    ],
+    "frp": [
+     23.6,
+     10.0,
+     99.5,
+     7.0
+    ],
+    "daynight": [
+     "D",
+     "N",
+     "D",
+     "D"
+    ]
+   },
+   "viirs": {
+    "latitude": [
+     28.7,
+     28.71,
+     29.9
+    ],
+    "longitude": [
+     77.1,
+     77.12,
+     76.8
+    ],
+    "date": [
+     "2026-11-05",
+     "2026-11-05",
+     "2026-11-07"
+    ],
+    "datetime": [
+     "2026-11-05 08:25:00",
+     "2026-11-05 19:30:00",
+     "2026-11-07 00:05:00"
+    ],
+    "satellite": [
+     "N",
+     "N20",
+     "N"
+    ],
+    "confidence": [
+     "nominal",
+     "low",
+     "high"
+    ],
+    "frp": [
+     2.04,
+     3.5,
+     1.25
+    ],
+    "daynight": [
+     "D",
+     "N",
+     "N"
+    ]
+   }
+  },
+  "counts": {
+   "modis": {
+    "date": [
+     "2023-11-01",
+     "2023-11-02",
+     "2023-11-03",
+     "2023-11-04"
+    ],
+    "n_fires": [
+     0,
+     0,
+     2,
+     0
+    ],
+    "frp_sum": [
+     0.0,
+     0.0,
+     109.5,
+     0.0
+    ]
+   },
+   "viirs": {
+    "date": [
+     "2026-11-05",
+     "2026-11-06",
+     "2026-11-07"
+    ],
+    "n_fires": [
+     2,
+     0,
+     1
+    ],
+    "frp_sum": [
+     5.54,
+     0.0,
+     1.25
+    ]
+   }
+  }
  },
  "r_only": {
   "pm25_map": "ggplot2 map",

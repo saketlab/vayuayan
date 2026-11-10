@@ -270,3 +270,12 @@ test_that("compare_daily_records and daily_record_summary match Python", {
   .expect_columns(compared, case$compared, "compared")
   .expect_columns(daily_record_summary(compared), case$summary, "summary")
 })
+
+test_that("FIRMS parsing and daily fire counts match Python", {
+  case <- parity$fires
+  for (name in names(case$csv)) {
+    parsed <- .firms_parse(case$csv[[name]])
+    .expect_columns(parsed, case$parsed[[name]], name)
+    .expect_columns(fire_daily_counts(parsed, 28.6, 77.2, radius_km = 200), case$counts[[name]], name)
+  }
+})

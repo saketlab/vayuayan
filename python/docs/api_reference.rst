@@ -75,6 +75,13 @@ Tidy Data
    :members:
    :no-index:
 
+Fires (NASA FIRMS)
+------------------
+
+.. automodule:: vayuayan.fires
+   :members: firms_fires, fire_daily_counts
+   :no-index:
+
 India Boundaries
 ----------------
 
