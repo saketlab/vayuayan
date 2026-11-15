@@ -6,14 +6,22 @@
   Ubuntu (devel, release, oldrel-1)
 * win-builder: R-devel, R-release
 
+## Submission
+
+This is an update of vayuayan 0.3.0 (on CRAN since 2026-11-03). It comes soon
+after that release because CPCB retired the file route that 0.3.0 downloads
+from: `cpcb_city_daily()`, `cpcb_station_daily()` and the other CPCB download
+functions of 0.3.0 now fail with HTTP 404. This version uses CPCB's new
+route. It also adds fire detections (NASA FIRMS, INSAT) and DPCC's hourly
+station data; see NEWS.md.
+
 ## R CMD check results
 
-0 errors | 0 warnings | 1 note
+0 errors | 0 warnings | 0 notes
 
-* This is a new submission.
-* "Possibly misspelled words in DESCRIPTION": CPCB (Central Pollution Control
-  Board) and OAQ (Open Air Quality) are acronyms of the data providers, spelled
-  out in the Description.
+The incoming checks may list CPCB, OAQ, DPCC, FIRMS and INSAT as possibly
+misspelled: they are names of the data providers, spelled out in the
+Description.
 
 The CPCB portal (airquality.cpcb.gov.in) refuses connections from outside
 India, so the Description does not link to it.
@@ -23,8 +31,8 @@ URLs were checked with `urlchecker::url_check()` and spelling with
 
 ## Internet resources
 
-The package wraps public web services (CPCB, OAQ, and the WUSTL ACAG bucket
-on the AWS Open Data registry). Examples that need the network use
+The package wraps public web services (CPCB, OAQ, DPCC, NASA FIRMS, MOSDAC and
+the WUSTL ACAG bucket on the AWS Open Data registry). Examples that need the network use
 `@examplesIf interactive()`, or `@examplesIf` on the `OAQ_API_KEY`
 environment variable for the key-protected OAQ API. Network tests call
 `skip_on_cran()` and `skip_if_offline()`. The vignette evaluates network

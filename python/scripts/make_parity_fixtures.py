@@ -10,15 +10,28 @@ daily_aqi_python.csv. tests/test_parity_fixtures.py fails when they are stale.
 
 from __future__ import annotations
 
+import datetime as dt
 import io
 import json
 import math
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 
-from vayuayan import aqi, fires, oaq, oaq_records, sensor_qa, tidy, us_aqi, utils
+from vayuayan import (
+    aqi,
+    dpcc,
+    fires,
+    insat,
+    oaq,
+    oaq_records,
+    sensor_qa,
+    tidy,
+    us_aqi,
+    utils,
+)
 from vayuayan.constants import AQI_CATEGORIES
 from vayuayan.cpcb_historical import CPCBHistorical
 from vayuayan.pm25_versions import PM25_VERSIONS
@@ -133,6 +146,13 @@ API = {
     "oaq_city_tally": "oaq_city_tally",
     "firms_fires": "firms_fires",
     "fire_daily_counts": "fire_daily_counts",
+    "dpcc_hourly": "dpcc_hourly",
+    "dpcc_stations": "dpcc_stations",
+    "parse_dpcc_page": "parse_dpcc_page",
+    "insat_fire_urls": "insat_fire_urls",
+    "insat_fires": "insat_fires",
+    "parse_insat_fire_array": "parse_insat_fire_array",
+    "parse_insat_fire_image": "parse_insat_fire_image",
 }
 
 # Public names with no counterpart in the other package, and why
@@ -537,6 +557,96 @@ def _fire_cases() -> Dict[str, Any]:
     return out
 
 
+DPCC_PAGES = [
+    "Search Result <script>categories: ['2026-11-09 01:00:00','2026-11-09 02:00:00','2026-11-09 03:00:00'],"
+    " /*data: [7.0, 6.9]*/ data: [3124.0, null, 2690.5]</script>",
+    "Search Result <script>categories: ['2026-11-09 01:00:00'], data: []</script>",
+    "Search Result of nothing",
+    "Search Result <script>categories: [], data: []</script>",
+]
+DPCC_NAMES = {
+    "station": [
+        "Mundka",
+        "jnu",
+        "Mandir Marg",
+        "R.K. Puram",
+        "NSUT (West Campus)",
+        "Gurugram",
+    ],
+    "parameter": ["PM2.5", "pm25", "Ozone", "O3", "NOx", "Benzene", "PM1"],
+}
+DPCC_WINDOWS = [
+    ("2026-11-09", "2026-11-09"),
+    ("2026-11-01", "2026-11-20"),
+    ("2025-01-01", "2025-01-06"),
+]
+
+
+def _maybe(f: Callable[[str], Any], x: str) -> Any:
+    """f(x), or None when it raises ValueError."""
+    try:
+        return f(x)
+    except ValueError:
+        return None
+
+
+def _dpcc_cases() -> Dict[str, Any]:
+    """DPCC page parsing (rows None on error), request windows and name lookup."""
+    lookups = {"station": dpcc._station_code, "parameter": dpcc._parameter_code}
+    windows = []
+    for a, b in DPCC_WINDOWS:
+        got = dpcc._windows(dt.date.fromisoformat(a), dt.date.fromisoformat(b))
+        windows.append([[f"{w:%Y-%m-%d %H:%M}" for w in pair] for pair in got])
+    return {
+        "stations": _columns(dpcc.dpcc_stations()),
+        "parsed": [
+            {"page": p, "rows": _maybe(dpcc.parse_dpcc_page, p)} for p in DPCC_PAGES
+        ],
+        "windows": [
+            {"first": a, "last": b, "windows": w}
+            for (a, b), w in zip(DPCC_WINDOWS, windows)
+        ],
+        "resolved": {
+            k: {n: _maybe(f, n) for n in DPCC_NAMES[k]} for k, f in lookups.items()
+        },
+    }
+
+
+# red rectangles are x0, y0, x1, y1 with exclusive ends
+INSAT_IMAGE = {
+    "size": [1260, 1495],
+    "graticule": [611, 777],
+    "red": [
+        [300, 400, 304, 403],
+        [304, 403, 306, 405],
+        [900, 1000, 901, 1002],
+        [10, 10, 20, 20],
+        [1100, 200, 1108, 201],
+    ],
+}
+
+
+def _insat_cases() -> Dict[str, Any]:
+    """INSAT URLs per satellite and blobs on a synthetic 3R image."""
+    w, h = INSAT_IMAGE["size"]
+    rgb = np.full((h, w, 3), 255, dtype=np.uint8)
+    gx, gy = INSAT_IMAGE["graticule"]
+    rgb[:, gx] = 90
+    rgb[gy, :] = 90
+    for x0, y0, x1, y1 in INSAT_IMAGE["red"]:
+        rgb[y0:y1, x0:x1] = (200, 20, 20)
+    name, blobs = insat.parse_insat_fire_array(rgb)
+    return {
+        "urls": {
+            s: insat.insat_fire_urls("2023-11-01", "2023-11-02", s)
+            for s in sorted(insat.INSAT_MINUTES)
+        },
+        "image": INSAT_IMAGE,
+        "layout": name,
+        "blobs": {k: [b[k] for b in blobs] for k in ("lon", "lat", "area_px")},
+    }
+
+
 def build() -> Dict[str, Any]:
     """All parity cases with the Python outputs."""
     historical = CPCBHistorical(cache_dir="cpcb")
@@ -547,6 +657,8 @@ def build() -> Dict[str, Any]:
     return {
         "api": API,
         "fires": _fire_cases(),
+        "dpcc": _dpcc_cases(),
+        "insat": _insat_cases(),
         "r_only": R_ONLY,
         "pollutants": {
             name: {
