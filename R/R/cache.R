@@ -78,3 +78,16 @@ vayuayan_cache_dir <- function() {
     "pm25_data"
   )
 }
+
+# this package's cache, then Python's
+.cache_dirs <- function(sub) file.path(c(vayuayan_cache_dir(), .python_cache_dir()), sub)
+
+# write path through a .part file, so path is never half written
+.cache_write <- function(path, write) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  part <- paste0(path, ".part")
+  on.exit(unlink(part))
+  write(part)
+  if (!file.rename(part, path)) file.copy(part, path, overwrite = TRUE) # rename fails on a locked target on Windows
+  invisible(path)
+}

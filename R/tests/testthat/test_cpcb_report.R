@@ -269,7 +269,8 @@ test_that("a city report joins its stations and skips those with no report", {
     data.frame(Timestamp = "2026-11-08 00:00:00", `PM2.5 (µg/m³)` = 50, check.names = FALSE)
   })
   out <- suppressMessages(cpcb_download_city_report(
-    "Delhi", "2026-11-08", "2026-11-09", save_location = out_file
+    "Delhi", "2026-11-08", "2026-11-09",
+    save_location = out_file
   ))
   expect_equal(names(out)[1:3], c("station_id", "station_name", "Timestamp"))
   expect_setequal(asked, cpcb_station_table(city = "Delhi")$station_id)

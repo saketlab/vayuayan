@@ -1,6 +1,13 @@
-# vayuayan (development version)
+# vayuayan 0.4.0
 
-* CPCB file downloads use the token route; the old route returns 404.
+* New `firms_fires()` and `fire_daily_counts()`: NASA FIRMS fire detections
+  (MODIS and VIIRS) and their daily count near a point. Past years and the
+  last 7 days need no key; other days need `FIRMS_MAP_KEY`.
+* New `insat_fires()`, `insat_fire_urls()`, `parse_insat_fire_image()` and
+  `parse_insat_fire_array()`: fires read off the INSAT preview images of
+  MOSDAC. 
+* New `dpcc_hourly()` and `dpcc_stations()`: hourly data of DPCC's Delhi
+  stations, which keep the values above 1,000 that CPCB's copies drop.
 * New `cpcb_download_station_report()` and `cpcb_download_city_report()`:
   recent readings, including the current month, with no login.
 * New `cpcb_station_table()`: station ID, name, city, state and coordinates.
@@ -8,29 +15,13 @@
   `cpcb_raw_readings()` and `cpcb_station_daily()` accept a city.
 * New `daily_us_aqi()` and `cpcb_station_daily_aqi(standard = "us")`.
 * `daily_aqi()` and `daily_us_aqi()` return `aqi_status`.
-* Batch downloads stop at a network failure and keep what they fetched.
-  `attr(x, "station_status")` records each station.
-* Negative and infinite readings are missing. Duplicate timestamps are averaged.
-* The NAQI uses the continuous bands of CPCB's calculator: PM2.5 31 gives 51.67.
 * `compute_us_aqi()` gives no AQI for 8-hour O3 above 0.200 ppm without a 1-hour
   value, and 200 for 1-hour SO2 of 305 ppb or more without a 24-hour value.
-* PM2.5 polygon statistics use cell centres, or the touched cells if no centre
-  is inside. A polygon outside the grid is an error.
-* CPCB requests retry without certificate verification when the certificate
-  fails.
-* An even `spike_window` in `sensor_plausibility()` matches Python.
-* Added `plot_aqi_radial()` to draw daily AQI as a radial calendar
-* New `plot_aqi_radial_hourly()`: hourly AQI on a 24-hour clock in IST.
-* CPCB repository downloads retry timeouts and 5xx errors.
-* `cpcb_get_live_aqi_data()` returns a numeric `airQualityIndex`, `NA` when
+* New `plot_aqi_radial_hourly()` `plot_aqi_radial()` for yearly and hourly AQI
   CPCB has no AQI for the hour.
-* New article "PM2.5 by hour of the day: Mumbai and Bengaluru (2023)".
 * `cpcb_city_daily()` returns `year` and `date` columns and takes several
   years at once.
 * Added `aqi_color()` for CPCB colour of an AQI value.
-* `cpcb_city_daily()` fetches each city's file list once and downloads
-  uncached workbooks in parallel. 
-* Imports curl (>= 5.0.0).
 
 # vayuayan 0.3.0
 

@@ -78,6 +78,17 @@ cases <- list(
   },
   pm25_stats = function() pm25_get_stats(polygon, 2020, region = "AS", cache_dir = pm25_dir)
 )
+punjab <- c(74, 29, 77, 32)
+cases$dpcc_hourly <- function() dpcc_hourly("Mundka", "2025-01-05")
+cases$firms_fires <- function() firms_fires("2024-11-08", bbox = punjab)
+cases$fire_daily_counts <- function() {
+  fire_daily_counts(firms_fires("2024-11-08", bbox = punjab), 30.9, 75.85)
+}
+# area_px depends on the JPEG library; test_online.py compares lon and lat to 0.02
+cases$insat_fires <- function() {
+  fires <- insat_fires("2024-11-05", bbox = c(70, 15, 90, 30))
+  fires[names(fires) != "area_px"]
+}
 if (nzchar(Sys.getenv("OAQ_API_KEY"))) {
   cases$oaq_providers <- function() oaq_list_providers(oaq_session())
   cases$oaq_stations <- function() oaq_stations_table(oaq_session(), "cpcb")

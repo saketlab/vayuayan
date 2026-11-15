@@ -7,11 +7,14 @@ values.
 
 import os
 import platform
+from datetime import timedelta, timezone
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 # Base URLs
 BASE_URL = "https://airquality.cpcb.gov.in"
+IST = "Asia/Kolkata"  # CPCB and OAQ times are IST clock times
+IST_TZ = timezone(timedelta(hours=5, minutes=30), "IST")  # needs no tzdata on Windows
 RSS_URL_WITH_COORDINATES = f"{BASE_URL}/caaqms/iit_rss_feed_with_coordinates"
 
 # API Endpoints

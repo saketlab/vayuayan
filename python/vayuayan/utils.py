@@ -7,6 +7,7 @@ old CPCB endpoints, convert station data, and analyze station data.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import math
@@ -701,6 +702,18 @@ def decode_b64_json_response(response: requests.Response) -> Any:
     if not response.content:
         raise ValueError("Response content is empty")
     return json.loads(b64decode(response.content))
+
+
+DateLike = Union[str, dt.date, dt.datetime]
+
+
+def _as_date(value: DateLike) -> dt.date:
+    """A date from a date, a datetime (its date) or "YYYY-MM-DD"."""
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    return dt.date.fromisoformat(str(value))
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

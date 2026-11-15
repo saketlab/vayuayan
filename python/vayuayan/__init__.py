@@ -13,7 +13,7 @@ Usage:
     >>> states = CPCBHistorical().get_state_list()
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __author__ = "Saket Choudhary"
 __email__ = "saketc@iitb.ac.in"
 __description__ = (
@@ -41,6 +41,7 @@ from .client import CPCBClient
 from .constants import get_cache_dir, get_config_dir, get_gee_project_file
 from .cpcb_historical import CPCBHistorical
 from .cpcb_live import CPCBLive
+from .dpcc import dpcc_hourly, dpcc_stations, parse_dpcc_page
 
 # Exceptions
 from .exceptions import (
@@ -61,6 +62,12 @@ from .exceptions import (
 from .fires import fire_daily_counts, firms_fires
 from .gee import setup_earth_engine
 from .geo import india_boundary
+from .insat import (
+    insat_fire_urls,
+    insat_fires,
+    parse_insat_fire_array,
+    parse_insat_fire_image,
+)
 from .oaq import OAQClient, oaq_city_tally, oaq_nearest_cpcb
 from .oaq_plots import (
     plot_daily_record_day,
@@ -172,6 +179,14 @@ __all__ = [
     # Fires
     "firms_fires",
     "fire_daily_counts",
+    "insat_fire_urls",
+    "insat_fires",
+    "parse_insat_fire_array",
+    "parse_insat_fire_image",
+    # DPCC
+    "dpcc_hourly",
+    "dpcc_stations",
+    "parse_dpcc_page",
     # Sensor quality
     "EPA_PM25_TARGETS",
     "readings_mean",

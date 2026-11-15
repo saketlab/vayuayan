@@ -3,7 +3,19 @@ History
 
 Releases and changes of vayuayan.
 
-v0.3.0 (unreleased)
+v0.4.0 (unreleased)
+-------------------
+
+* New ``firms_fires`` and ``fire_daily_counts``: NASA FIRMS fire detections
+  (MODIS and VIIRS) and their daily count near a point. Past years and the
+  last 7 days need no key; other days need ``FIRMS_MAP_KEY``.
+* New ``insat_fires``, ``insat_fire_urls``, ``parse_insat_fire_image`` and
+  ``parse_insat_fire_array``: fires read off the INSAT preview images of
+  MOSDAC. Needs the ``insat`` extra (pillow).
+* New ``dpcc_hourly`` and ``dpcc_stations``: hourly data of DPCC's Delhi
+  stations, which keep the values above 1,000 that CPCB's copies drop.
+
+v0.3.0 (2026-10-20)
 -------------------
 
 * New ``plot_aqi_radial_hourly``: hourly AQI on a 24-hour clock in IST.

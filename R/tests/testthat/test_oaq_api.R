@@ -90,7 +90,9 @@ test_that("oaq_fetch_monthly_stations filters cities and skips empty months", {
     oaq_get_monthly = function(session, provider, sensor_id, year, month) {
       asked <<- c(asked, paste(sensor_id, month))
       if (month == "01") stop(http_404_error())
-      if (month == "02") return(list(data = data.frame()))
+      if (month == "02") {
+        return(list(data = data.frame()))
+      }
       list(data = data.frame(date = "2026-03-01", pm25 = 10))
     }
   )

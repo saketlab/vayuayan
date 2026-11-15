@@ -412,4 +412,3 @@ test_that("daily_aqi accepts empty input with no station_id", {
   expect_equal(nrow(out), 0)
   expect_true("aqi_status" %in% names(out))
 })
-

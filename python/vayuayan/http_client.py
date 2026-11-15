@@ -118,7 +118,9 @@ def atomic_path(path: Path) -> Iterator[Path]:
     """Yield a temporary path to write; it becomes path only if the block succeeds.
 
     So path never holds a partly written file, also after an interruption.
+    The parent folder is created.
     """
+    path.parent.mkdir(parents=True, exist_ok=True)
     part = path.with_name(path.name + ".part")
     try:
         yield part

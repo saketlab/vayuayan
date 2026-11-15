@@ -72,12 +72,17 @@ dev = [
     "ruff",
     "mypy",
     "matplotlib>=3.5",
+    "pillow>=9.1",
 ]
 plot = [
     "matplotlib>=3.5",
 ]
 parquet = [
     "pyarrow",
+]
+# insat_fires reads the MOSDAC preview JPEGs
+insat = [
+    "pillow>=9.1",
 ]
 docs = [
     "myst-nb>=1.3.0",

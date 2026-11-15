@@ -279,3 +279,50 @@ test_that("FIRMS parsing and daily fire counts match Python", {
     .expect_columns(fire_daily_counts(parsed, 28.6, 77.2, radius_km = 200), case$counts[[name]], name)
   }
 })
+
+test_that("DPCC parsing, windows and name lookup match Python", {
+  case <- parity$dpcc
+  .expect_columns(dpcc_stations(), case$stations, "dpcc_stations")
+  for (p in case$parsed) {
+    if (is.null(p$rows)) {
+      expect_error(parse_dpcc_page(p$page), info = p$page)
+    } else {
+      got <- parse_dpcc_page(p$page)
+      expect_equal(got$hour, as.character(.vec(lapply(p$rows, `[[`, 1))), info = p$page)
+      expect_equal(got$value, as.numeric(.vec(lapply(p$rows, `[[`, 2))), info = p$page)
+    }
+  }
+  fmt <- function(x) format(x, "%Y-%m-%d %H:%M", tz = "UTC")
+  for (w in case$windows) {
+    got <- .dpcc_windows(as.Date(w$first), as.Date(w$last))
+    expect_equal(lapply(got, function(x) list(fmt(x[[1]]), fmt(x[[2]]))), w$windows, info = w$first)
+  }
+  lookups <- list(station = .dpcc_station_code, parameter = .dpcc_parameter_code)
+  for (k in names(lookups)) {
+    for (name in names(case$resolved[[k]])) {
+      got <- tryCatch(lookups[[k]](name), error = function(e) NA)
+      expect_equal(got, case$resolved[[k]][[name]] %||% NA, info = name)
+    }
+  }
+})
+
+test_that("INSAT URLs and blobs on a synthetic image match Python", {
+  case <- parity$insat
+  for (sat in names(case$urls)) {
+    expect_equal(insat_fire_urls("2023-11-01", "2023-11-02", sat), unlist(case$urls[[sat]]), info = sat)
+  }
+  img <- case$image
+  rgb <- array(255L, c(img$size[[2]], img$size[[1]], 3))
+  rgb[, img$graticule[[1]] + 1, ] <- 90L
+  rgb[img$graticule[[2]] + 1, , ] <- 90L
+  for (r in img$red) {
+    r <- unlist(r)
+    ys <- (r[2] + 1):r[4]
+    xs <- (r[1] + 1):r[3]
+    rgb[ys, xs, 1] <- 200L
+    rgb[ys, xs, 2:3] <- 20L
+  }
+  got <- parse_insat_fire_array(rgb)
+  expect_equal(got$layout, case$layout)
+  for (k in names(case$blobs)) expect_equal(got$blobs[[k]], .vec(case$blobs[[k]]), info = k)
+})

@@ -9,4 +9,8 @@ __pycache__/
 CLAUDE.md
 .claude/
 
+.DS_Store
+.env
+R/CRAN-SUBMISSION
+analysis/
 cpcb_credentials.txt

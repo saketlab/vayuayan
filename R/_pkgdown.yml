@@ -47,7 +47,7 @@ template:
         },
         "url": "https://vayuayan.saketlab.org/R/",
         "downloadUrl": "https://github.com/saketlab/vayuayan",
-        "softwareVersion": "0.3.0",
+        "softwareVersion": "0.4.0",
         "programmingLanguage": "R",
         "keywords": "air quality, PM2.5, CPCB, India pollution, AQI, satellite data, environmental data, OAQ, air pollution analysis"
       }
@@ -311,11 +311,22 @@ reference:
   - pm25_monthly
   - pm25_map
 
-- title: "Fires (NASA FIRMS)"
-  desc: "MODIS and VIIRS active fire detections, and daily fire counts near a point to set beside PM2.5"
+- title: "Fires (NASA FIRMS, ISRO INSAT)"
+  desc: "MODIS and VIIRS active fire detections, fires read off INSAT preview images, and daily fire counts near a point to set beside PM2.5"
   contents:
   - firms_fires
   - fire_daily_counts
+  - insat_fires
+  - insat_fire_urls
+  - parse_insat_fire_image
+  - parse_insat_fire_array
+
+- title: "DPCC (Delhi)"
+  desc: "Hourly data of the Delhi Pollution Control Committee's stations from DPCC's website, including the values above 1,000 that CPCB's records leave out"
+  contents:
+  - dpcc_stations
+  - dpcc_hourly
+  - parse_dpcc_page
 
 - title: "Sensor Quality"
   desc: "Checks of sensor readings against the US EPA targets for PM2.5 sensors"

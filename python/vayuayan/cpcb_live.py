@@ -210,7 +210,7 @@ class CPCBLive(RSSFeed):
         """
         if not station_id or not date_time:
             raise ValueError("Both station_id and date_time must be provided.")
-        # ponytail: CPCB IDs are site_<n>, so only other values cost a station list
+        # CPCB IDs are site_<n>, so only other values cost a station list
         if not station_id.startswith("site_"):
             station_id = self._station_id_by_name(station_id)
 

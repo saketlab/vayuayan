@@ -1,20 +1,24 @@
 Package: vayuayan
 Type: Package
 Title: Air Quality Data from Indian Monitoring Networks and Satellites
-Version: 0.3.0
+Version: 0.4.0
 Authors@R: c(
     person("Saket", "Choudhary", , "saketc@iitb.ac.in", role = c("aut", "cre", "cph")),
     person("Mahesh Kumar", "Prajapat", , "22b0433@iitb.ac.in", role = "aut"),
     person("Darakhshan", "Nehal", , "darakhshannehal@gmail.com", role = "ctb")
   )
-Description: Downloads and examines air quality data from three sources.
-    The Central Pollution Control Board (CPCB) of India operates more than
-    600 monitoring stations. Open Air Quality (OAQ) <https://oaq.notf.in>
-    collects data from low-cost sensor networks in India. The Atmospheric
-    Composition Analysis Group at Washington University in St. Louis gives
-    satellite estimates of fine particulate matter (PM2.5) for all areas of
-    the Earth <https://www.satpm.org>. The package calculates the CPCB
-    National Air Quality Index and the mean PM2.5 in an area.
+Description: Downloads and examines air quality data for India: monitoring
+    stations of the Central Pollution Control Board (CPCB) and the Delhi
+    Pollution Control Committee (DPCC), low-cost sensors collected by Open
+    Air Quality (OAQ) <https://oaq.notf.in>, satellite estimates of fine
+    particulate matter (PM2.5) from the Atmospheric Composition Analysis
+    Group at Washington University in St. Louis <https://www.satpm.org>,
+    and fire detections from the NASA Fire Information for Resource
+    Management System (FIRMS) <https://firms.modaps.eosdis.nasa.gov> and
+    from the fire images of the Indian National Satellite System (INSAT)
+    that the Meteorological and Oceanographic Satellite Data Archival
+    Centre (MOSDAC) <https://www.mosdac.gov.in> publishes. Calculates the 
+    CPCB National Air Quality Index and the mean PM2.5 in an area.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Language: en-US
@@ -35,13 +39,15 @@ Imports:
     utils
 Suggests:
     ggplot2,
+    jpeg,
     knitr,
     ncdf4,
     patchwork,
     rmarkdown,
     scales,
     testthat (>= 3.1.7),
-    tidyterra
+    tidyterra,
+    withr
 VignetteBuilder: knitr
 URL: https://vayuayan.saketlab.org/R/, https://github.com/saketlab/vayuayan
 BugReports: https://github.com/saketlab/vayuayan/issues

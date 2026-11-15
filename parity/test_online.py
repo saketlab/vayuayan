@@ -15,6 +15,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 COORDS = (28.61, 77.21)
+PUNJAB = (74, 29, 77, 32)
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("VAYUAYAN_ONLINE") != "1" or shutil.which("Rscript") is None,
@@ -46,8 +47,10 @@ def norm(x: Any) -> Any:
     return x
 
 
-def differences(py: Any, r: Any, where: str = "") -> Iterator[str]:
-    """Where py and r differ; numbers to a relative 1e-6."""
+def differences(
+    py: Any, r: Any, where: str = "", abs_tol: float = 1e-9
+) -> Iterator[str]:
+    """Where py and r differ; numbers to a relative 1e-6 or abs_tol."""
     # jsonlite writes length-1 vectors as scalars
     if isinstance(py, list) and len(py) == 1 and not isinstance(r, list):
         py = py[0]
@@ -60,16 +63,20 @@ def differences(py: Any, r: Any, where: str = "") -> Iterator[str]:
                 f"only in R {sorted(set(r) - set(py))}"
             )
         for k in sorted(set(py) & set(r)):
-            yield from differences(py[k], r[k], f"{where}.{k}")
+            yield from differences(py[k], r[k], f"{where}.{k}", abs_tol)
     elif isinstance(py, list) and isinstance(r, list):
         if len(py) != len(r):
             yield f"{where}: {len(py)} items in Python, {len(r)} in R"
-        bad = [i for i, (a, b) in enumerate(zip(py, r)) if any(differences(a, b))]
+        bad = [
+            i
+            for i, (a, b) in enumerate(zip(py, r))
+            if any(differences(a, b, abs_tol=abs_tol))
+        ]
         if bad:
             i = bad[0]
             yield f"{where}[{i}] (+{len(bad) - 1} more): Python {py[i]!r}, R {r[i]!r}"
     elif isinstance(py, (int, float)) and isinstance(r, (int, float)):
-        if not math.isclose(py, r, rel_tol=1e-6, abs_tol=1e-9):
+        if not math.isclose(py, r, rel_tol=1e-6, abs_tol=abs_tol):
             yield f"{where}: Python {py!r}, R {r!r}"
     elif py != r:
         yield f"{where}: Python {py!r}, R {r!r}"
@@ -137,6 +144,14 @@ def python_cases(cache: Path, polygon: Path) -> Dict[str, Callable[[], Any]]:
         "pm25_point": lambda: pm25.get_pm25_at_point(*COORDS, 2020),
         "pm25_point_monthly": lambda: pm25.get_pm25_at_point(*COORDS, 2020, month=1),
         "pm25_stats": lambda: pm25.get_pm25_stats(str(polygon), 2020),
+        "dpcc_hourly": lambda: v.dpcc_hourly("Mundka", "2025-01-05"),
+        "firms_fires": lambda: v.firms_fires("2024-11-08", bbox=PUNJAB),
+        "fire_daily_counts": lambda: v.fire_daily_counts(
+            v.firms_fires("2024-11-08", bbox=PUNJAB), 30.9, 75.85
+        ),
+        "insat_fires": lambda: v.insat_fires("2024-11-05", bbox=(70, 15, 90, 30)).drop(
+            columns="area_px"
+        ),
     }
     if os.environ.get("OAQ_API_KEY"):
         # jsonlite simplifies the records to a data frame, so compare as a table
@@ -204,6 +219,7 @@ CASE_NAMES = [
     "nearest_station", "nearest_stations", "nearest_within_radius",
     "all_india", "live_station",
     "india_boundary", "pm25_point", "pm25_point_monthly", "pm25_stats",
+    "dpcc_hourly", "firms_fires", "fire_daily_counts", "insat_fires",
 ]  # fmt: skip
 if os.environ.get("OAQ_API_KEY"):
     CASE_NAMES += [
@@ -214,6 +230,8 @@ if os.environ.get("OAQ_API_KEY"):
         "oaq_readings",
         "oaq_check_records",
     ]
+# JPEG libraries decode edge pixels differently, which moves a blob's centre
+ABS_TOL = {"insat_fires": 0.02}
 _ONLY = [p for p in os.environ.get("PARITY_ONLY", "").split(",") if p]
 if _ONLY:
     CASE_NAMES = [n for n in CASE_NAMES if n.startswith(tuple(_ONLY))]
@@ -232,5 +250,5 @@ def test_same_result(setup: Dict[str, Any], name: str) -> None:
         assert "error" in r, f"Python failed ({type(e).__name__}: {e}); R did not"
         pytest.fail(f"both failed: Python {type(e).__name__}: {e}; R {r['error']}")
     assert "error" not in r, f"R failed: {r['error']}"
-    diffs = list(differences(py, r["value"], name))
+    diffs = list(differences(py, r["value"], name, ABS_TOL.get(name, 1e-9)))
     assert not diffs, "\n".join(diffs[:20])

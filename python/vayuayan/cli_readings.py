@@ -8,16 +8,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, Literal, Mapping, Optional, Tuple
 
 from .cli_places import Station, coordinate
 from .cli_scale import INDIA
+from .constants import IST_TZ as IST
 from .utils import iter_city_stations
 
 ReadingStatus = Literal["live", "stale", "offline", "no_reading", "fetch_failed"]
 
-IST = timezone(timedelta(hours=5, minutes=30), "IST")
 # CPCB publishes hourly, so a reading more than a few hours old is out of date
 STALE_AFTER = timedelta(hours=3)
 

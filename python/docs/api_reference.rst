@@ -82,6 +82,20 @@ Fires (NASA FIRMS)
    :members: firms_fires, fire_daily_counts
    :no-index:
 
+Fires (ISRO INSAT previews)
+---------------------------
+
+.. automodule:: vayuayan.insat
+   :members: insat_fires, insat_fire_urls, parse_insat_fire_image, parse_insat_fire_array
+   :no-index:
+
+DPCC (Delhi)
+------------
+
+.. automodule:: vayuayan.dpcc
+   :members: dpcc_hourly, dpcc_stations, parse_dpcc_page
+   :no-index:
+
 India Boundaries
 ----------------
 

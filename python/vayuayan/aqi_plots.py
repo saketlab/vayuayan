@@ -10,7 +10,7 @@ import calendar
 import math
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from .constants import AQI_CATEGORIES, AQI_COLORS
+from .constants import AQI_CATEGORIES, AQI_COLORS, IST
 from .plot_theme import new_figure, theme_context
 from .utils import aqi_category_index
 
@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
 MISSING = "#d9d9d9"
-IST = "Asia/Kolkata"  # CPCB and OAQ times are IST clock times
 HOLE = 1.5  # empty centre, in rings, so the inner ring is not a point
 
 
